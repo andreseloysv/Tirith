@@ -29,9 +29,10 @@ pub(super) async fn next(
         return allow(&h, Json(json!({"on": false})));
     }
     let cmd = relay::next(&key, Duration::from_secs(POLL_S)).await;
+    let left_ms = until_s(&r).saturating_sub(crate::app::now_s()) * 1000;
     allow(
         &h,
-        Json(json!({"on": true, "until": until_s(&r) * 1000, "cmd": cmd})),
+        Json(json!({"on": true, "until": until_s(&r) * 1000, "left_ms": left_ms, "cmd": cmd})),
     )
 }
 /// The extension's answer to a step: `{id, ok, result, shot}` (the screenshot as a data URL).

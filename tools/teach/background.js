@@ -31,23 +31,24 @@ function call(method, path, body) {
   });
 }
 
-/** Keeps the recording state the pages read: on, and until when. */
-function setState(on, since) {
-  var until = on ? (Date.parse(since) || Date.now()) + MOST_MS : 0;
+/** Keeps the recording state the pages read: on, and until when (on this machine's clock: the daemon says how long is left). */
+function setState(on, leftMs) {
+  var until = on ? Date.now() + (typeof leftMs === 'number' ? leftMs : MOST_MS) : 0;
   if (on) chrome.alarms.create('teach-stop', { when: until }); else chrome.alarms.clear('teach-stop');
   return chrome.storage.local.set({ teach: { on: on, until: until } }).then(function () { return { on: on, until: until }; });
 }
 
 function sync() {
   lastSync = Date.now();
-  return call('GET', '').then(function (r) { return setState(!!r.on, r.since); });
+  return call('GET', '').then(function (r) { return setState(!!r.on, r.left_ms); });
 }
 
-function start() { return call('POST', '/start').then(function (r) { return setState(true, r.since); }); }
+function start() { return call('POST', '/start').then(function (r) { return setState(true, r.left_ms); }); }
 function stop() { return call('POST', '/stop').then(function () { return setState(false); }); }
 
 function step(s) {
-  return call('POST', '/events', s).then(function (r) { if (!r.on) return setState(false); return null; });
+  // `sent` lets the daemon time the step on its own clock, whatever this one says
+  return call('POST', '/events', Object.assign({}, s, { sent: new Date().toISOString() })).then(function (r) { if (!r.on) return setState(false); return null; });
 }
 
 function save(text) {

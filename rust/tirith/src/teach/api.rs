@@ -1,16 +1,14 @@
-//! The teach API: the recording read, started and stopped (by the page, or by the extension with the token), and the extension's steps.
+//! The teach API: the recording read, started and stopped (by the page, or by the extension with the token).
 use super::cors::{allow, from_extension, has_token, preflight, refused};
-use super::mask::kept;
 use super::record::{start_now, stop_now};
-use super::state::{live, now_ms, push, read, token};
+use super::state::{left_ms, live, read, token};
 use crate::app::Shared;
-use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde_json::{json, Value};
+use serde_json::json;
 /// The bot's conversation, if `id` is a bot and the caller may act for it: the page, or the extension with its token (`always`: the token is needed from anyone).
 pub(super) fn key(
     app: &Shared,
@@ -31,8 +29,13 @@ async fn show(State(app): State<Shared>, h: HeaderMap, Path(id): Path<String>) -
         Err(r) => return *r,
     };
     let mut rec = read(&app, &key);
+    if rec["on"] == true && !live(&rec) {
+        stop_now(&app, &key, ""); // its 10 minutes ran out while nobody was looking: handed over now, once
+        rec = read(&app, &key);
+    }
     rec["on"] = json!(live(&rec));
-    rec["rehearsals"] = json!(super::rehearsal::all(&app, &key));
+    rec["left_ms"] = json!(left_ms(&rec));
+    rec["rehearsals"] = json!(super::rehearsal::shown(&app, &key));
     let _ = (!from_extension(&h)).then(|| rec["token"] = json!(token(&app, &key)));
     allow(&h, Json(rec))
 }
@@ -48,39 +51,15 @@ async fn stop(State(app): State<Shared>, h: HeaderMap, Path(id): Path<String>) -
         Err(r) => *r,
     }
 }
-/// The extension's steps: one, or `{"steps": [...]}`; kept only while recording, each masked again here.
-async fn events(
-    State(app): State<Shared>,
-    h: HeaderMap,
-    Path(id): Path<String>,
-    body: Bytes,
-) -> Response {
-    let key = match key(&app, &h, &id, true) {
-        Ok(k) => k,
-        Err(r) => return *r,
-    };
-    let rec = read(&app, &key);
-    if rec["on"] == true && !live(&rec) {
-        stop_now(&app, &key, ""); // its 10 minutes are over
-    }
-    let b: Value = serde_json::from_slice(&body).unwrap_or_default();
-    let steps = b["steps"].as_array().cloned().unwrap_or_else(|| vec![b]);
-    let now = now_ms();
-    let took = steps
-        .iter()
-        .filter_map(|st| kept(st, &now))
-        .filter(|st| push(&app, &key, st.clone()))
-        .count();
-    let _ = (took > 0).then(|| app.emit("teach", json!({"bot": key})));
-    let on = live(&read(&app, &key));
-    allow(&h, Json(json!({"ok": true, "kept": took, "on": on})))
-}
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/teach/{id}", get(show).options(preflight))
         .route("/api/teach/{id}/start", post(start).options(preflight))
         .route("/api/teach/{id}/stop", post(stop).options(preflight))
-        .route("/api/teach/{id}/events", post(events).options(preflight))
+        .route(
+            "/api/teach/{id}/events",
+            post(super::events::events).options(preflight),
+        )
         .route("/api/teach/{id}/approve", post(super::approve::approve))
         .merge(super::rehearse_api::routes())
 }

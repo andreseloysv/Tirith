@@ -9,6 +9,6 @@
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "Tirith · Enseñar", "default_popup": "popup.html" },
   "content_scripts": [
-    { "matches": ["http://*/*", "https://*/*"], "js": ["mask.js", "content.js", "act.js"], "run_at": "document_idle" }
+    { "matches": ["http://*/*", "https://*/*"], "js": ["words.js", "outward.js", "mask.js", "content.js", "act.js"], "run_at": "document_idle" }
   ]
 }

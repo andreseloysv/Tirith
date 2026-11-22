@@ -101,6 +101,7 @@ done
         &app,
         &id,
         &json!({"memory": true, "shared": true, "text": "- the owner writes in Spanish\n"}),
+        false,
     )
     .unwrap();
     assert_eq!(git(&bots, &["log", "-1", "--format=%s"]).trim(), "library");
@@ -112,13 +113,20 @@ done
         &app,
         &id,
         &json!({"memory": true, "shared": true, "text": "- the owner writes in Spanish\n"}),
+        false,
     )
     .unwrap();
     assert_eq!(
         git(&bots, &["log", "--format=%s"]).lines().count(),
         before.lines().count() + 1
     );
-    super::library::learn(&app, &id, &json!({"name": "nueva", "text": "# nueva\n"})).unwrap();
+    super::library::learn(
+        &app,
+        &id,
+        &json!({"name": "nueva", "text": "# nueva\n"}),
+        false,
+    )
+    .unwrap();
     assert_eq!(git(&dir, &["log", "-1", "--format=%s"]).trim(), "library");
     assert!(git(&dir, &["ls-files"]).contains(".agents/skills/nueva/SKILL.md"));
     drop(app);

@@ -1,8 +1,8 @@
-// What a field is called, and whether it holds a secret: a password, a one-time code or a card (the daemon masks
-// the same fields again). Loaded before content.js in every page.
-/* exported teachLabel, teachSecret, MASK */
-var MASK = '•••';
-var WORDS = ['cvv', 'cvc', 'otp', 'pin', 'código', 'codigo', 'tarjeta'];
+// What a field is called, and whether it holds a secret: a password (also one shown as text since), a one-time code or a card
+// (words.js has the words; the daemon masks the same fields again). Loaded before content.js in every page.
+/* global teachNamed, teachSecretField */
+/* exported teachLabel, teachSecret */
+var wasPassword = new WeakSet();
 
 /** The field's label: its <label>, aria-label, placeholder or name. */
 function teachLabel(el) {
@@ -13,14 +13,16 @@ function teachLabel(el) {
   return text.replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
-function named(text) {
-  var t = String(text || '').toLowerCase();
-  return t.includes('card') || t.includes('password') || t.split(/[^\p{L}\p{N}]+/u).some(function (w) { return WORDS.includes(w); });
+/** Whether the field holds a password (it is one, or was one before the page showed it as text), a one-time code or a card. */
+function teachSecret(el) {
+  return teachSecretField({ type: el.type, revealed: wasPassword.has(el), autocomplete: el.getAttribute('autocomplete'),
+    name: el.name, id: el.id, label: teachLabel(el) });
 }
 
-/** Whether the field holds a password, a one-time code or a card. */
-function teachSecret(el) {
-  var auto = String(el.getAttribute('autocomplete') || '').toLowerCase();
-  return (el.type || '').toLowerCase() === 'password' || auto === 'one-time-code' || auto.startsWith('cc-')
-    || named(el.name) || named(el.id) || named(teachLabel(el));
-}
+// A password field the page turns into text («show password») stays a password: remembered when it is focused or changes type.
+function remember(el) { if (el && el.type === 'password') wasPassword.add(el); }
+document.addEventListener('focusin', function (ev) { remember(ev.target); }, true);
+document.querySelectorAll('input[type=password]').forEach(remember);
+new MutationObserver(function (list) {
+  list.forEach(function (m) { if (m.oldValue && m.oldValue.toLowerCase() === 'password') wasPassword.add(m.target); });
+}).observe(document, { subtree: true, attributes: true, attributeFilter: ['type'], attributeOldValue: true });

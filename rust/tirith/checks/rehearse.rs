@@ -135,6 +135,30 @@ async fn teach_approve_activates_the_skill() {
         |origin: &'static str| call(port, "POST", &path, origin, "", json!({"skill": "ofertas"}));
     // Not from the extension, even with its origin.
     assert_eq!(approve(EXT).await.0, 401);
+    // Not rehearsed yet: refused, and it stays a draft.
+    let (code, out, _) = approve("").await;
+    assert!(
+        code == 400 && out["error"].as_str().unwrap().contains("rehearsed"),
+        "{out}"
+    );
+    // A rehearsal still on, or with no step that worked, is not enough either.
+    super::rehearsal::begin(&app, &key, "ofertas");
+    assert_eq!(approve("").await.0, 400);
+    super::rehearsal::push(
+        &app,
+        &key,
+        json!({"kind": "click", "target": "x", "ok": false}),
+    );
+    super::rehearsal::end(&app, &key);
+    assert_eq!(approve("").await.0, 400);
+    super::rehearsal::begin(&app, &key, "ofertas");
+    super::rehearsal::push(
+        &app,
+        &key,
+        json!({"kind": "click", "target": "x", "ok": true}),
+    );
+    assert_eq!(approve("").await.0, 400, "still on");
+    super::rehearsal::end(&app, &key);
     let (code, out, _) = approve("").await;
     assert_eq!(code, 200, "{out}");
     let now = std::fs::read_to_string(&file).unwrap();

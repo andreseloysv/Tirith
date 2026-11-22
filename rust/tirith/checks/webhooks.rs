@@ -263,7 +263,7 @@ async fn webhook_starts_its_routine() {
             [],
             |r| r.get::<_, String>(0)
         ),
-        ["Webhook · github:issues.opened · A bug"]
+        ["Webhook · github:issues.opened · «A bug»"]
     );
     // GitHub's pull request opened: the routine runs, the event handed as data from outside.
     let out = read(4, &hook, &github("pull_request", "opened", "Fix the zoo"));
@@ -282,7 +282,7 @@ async fn webhook_starts_its_routine() {
         "{t}"
     );
     assert!(
-        t.contains("Review the pull request Fix the zoo at https://github.com/o/r/pull/7"),
+        regex::Regex::new(r"Review the pull request ⟦outside-data (\w+)⟧Fix the zoo⟦/outside-data \w+⟧ at ⟦outside-data \w+⟧https://github.com/o/r/pull/7⟦/outside-data \w+⟧").unwrap().is_match(t),
         "{t}"
     );
     assert!(

@@ -30,6 +30,11 @@ pub(super) fn change<T>(app: &App, key: &str, f: impl FnOnce(&mut Value) -> T) -
 pub(super) fn live(rec: &Value) -> bool {
     rec["on"] == true && now_s() < rec["since_s"].as_u64().unwrap_or(0) + MOST_S
 }
+/// How long a recording has left, in milliseconds on the daemon's own clock (the extension counts from its own now, whatever its clock says).
+pub(super) fn left_ms(rec: &Value) -> u64 {
+    let end = rec["since_s"].as_u64().unwrap_or(0) + MOST_S;
+    end.saturating_sub(now_s()) * 1000
+}
 /// Adds a step or the owner's words to a live recording; false when none is on.
 pub(super) fn push(app: &App, key: &str, entry: Value) -> bool {
     change(app, key, |rec| {

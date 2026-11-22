@@ -1,43 +1,35 @@
-// The Library's mail recipe: a short Google Apps Script, with the bot's webhook address already in it, that sends the
-// owner's new mail labelled tirith/<bot name> to the bot every 5 minutes and marks it read.
+// The Library's mail recipe: the script (mailtext.js) with the bot's webhook address in it, and one button that makes the
+// address and the routine that reads what the script sends (an event from outside whose `when` is mail:*).
 import { html, useState } from '../../../vendor/preact-htm.js';
+import { api } from '../../store.js';
 import { useWebhook, useCopy } from './webhook.js';
+import { mailScript } from './mailtext.js';
 
-/** The script for `url` and the label `tirith/<name>`. */
-export const mailScript = (url, name) => `// Sends the new mail labelled tirith/${name} to ${name}, in Tirith, every 5 minutes, and marks it read.
-const HOOK = ${JSON.stringify(url)};
-const LABEL = ${JSON.stringify(`tirith/${name}`)};
-
-function sendToTirith() {
-  const label = GmailApp.getUserLabelByName(LABEL);
-  if (!label) return;
-  label.getThreads(0, 50).forEach((thread) => thread.getMessages().filter((m) => m.isUnread()).forEach((m) => {
-    UrlFetchApp.fetch(HOOK, { method: 'post', contentType: 'application/json', payload: JSON.stringify({
-      title: m.getSubject(), url: thread.getPermalink(), from: m.getFrom(), subject: m.getSubject(),
-      date: m.getDate().toISOString(), text: m.getPlainBody().slice(0, 15000) }) });
-    m.markRead();
-  }));
-}
-
-// Run once: every 5 minutes from now on.
-function install() {
-  ScriptApp.getProjectTriggers().forEach((t) => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('sendToTirith').timeBased().everyMinutes(5).create();
-}
-`;
+const TASK = 'A new e-mail reached you: {title}. Its sender, date and text:\n{text}\nTell me in a few lines what it is and what needs my attention. When it needs nothing, answer with one line that starts with ∅.';
 
 export function MailScript({ bot }) {
-  const [hook] = useWebhook(bot);
+  const [hook, reload] = useWebhook(bot);
   const [fail, setFail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
   const [copied, copy] = useCopy(setFail);
   const [open, setOpen] = useState(false);
+  const base = `/api/bots/${encodeURIComponent(bot.id)}`;
   const text = hook && hook.url ? mailScript(hook.url, bot.name) : '';
+  const has = (bot.routines || []).some((r) => r.trigger === 'webhook' && /^(mail|\*)/.test(r.when || '')); /* one already listens for mail: not changed */
+  const setup = () => {
+    setBusy(true);
+    api('POST', `${base}/webhook`, {}).then(() => has || api('POST', `${base}/routines`, { title: `Mail to ${bot.name}`, prompt: TASK, trigger: 'webhook', when: 'mail:*' }))
+      .then(() => { setFail(''); setDone(true); reload(); }, (e) => setFail(e.message)).finally(() => setBusy(false));
+  };
   return html`<div class="bmail">
     <h4><span>Mail to ${bot.name}</span>${text ? html`<button type="button" class="blink" onClick=${() => setOpen(!open)}>${open ? 'Hide' : 'Show the script'}</button>` : null}</h4>
-    ${!text ? html`<p class="bnote">Make the webhook address in Routines (a routine on an event from outside) and the script to send ${bot.name} your mail appears here.</p>`
+    ${!text ? html`<p class="bnote">${bot.name} reads your mail labelled <b>tirith/${bot.name}</b> every 5 minutes, with no mail server.</p>
+        <button type="button" class="bbtn pri" disabled=${busy} onClick=${setup}>${busy ? 'Setting up…' : 'Set it up'}</button>`
     : html`<p class="bnote">1. In script.google.com, a new project: paste this, save, and run <b>install</b> once (allow it to read your Gmail).<br />
-        2. In Gmail, label the mail for ${bot.name} <b>tirith/${bot.name}</b> (a filter does it by itself): the new ones reach its event routines (when <b>*</b>) every 5 minutes.</p>
+        2. In Gmail, label the mail for ${bot.name} <b>tirith/${bot.name}</b> (a filter does it by itself).${done ? ' The routine «Mail to ' + bot.name + '» is ready in Routines: Probar sends it a sample e-mail.' : ''}</p>
       ${open ? html`<pre class="bscript">${text}</pre>` : null}
-      <button type="button" class="bbtn" onClick=${() => copy(text)}>${copied ? 'Copied' : 'Copy the script'}</button>`}
+      <button type="button" class="bbtn pri" onClick=${() => copy(text)}>${copied ? 'Copied' : 'Copy the script'}</button>
+      ${done || has ? null : html`<button type="button" class="blink" disabled=${busy} onClick=${setup}>Make the routine</button>`}`}
     ${fail ? html`<p class="berr">${fail}</p>` : null}</div>`;
 }

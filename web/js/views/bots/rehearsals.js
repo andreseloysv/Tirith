@@ -4,7 +4,6 @@
 import { html, useState } from '../../../vendor/preact-htm.js';
 import { api } from '../../store.js';
 
-const MOST_MS = 10 * 60 * 1000;
 const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const what = (s) => (s.kind === 'open' ? `Open ${s.target}` : s.kind === 'click' ? `Click «${s.target}»` : `Type «${s.value}» in «${s.target}»`);
 const title = (skill) => (skill ? skill.charAt(0).toUpperCase() + skill.slice(1).replace(/-/g, ' ') : 'Taught task');
@@ -20,7 +19,8 @@ function Step({ s, path }) {
 function Rehearsal({ r, path, onRoutine }) {
   const [said, setSaid] = useState(''); /* '', 'approved', or why it could not */
   const steps = r.steps || [];
-  const live = r.on && Date.now() < Date.parse(r.since) + MOST_MS;
+  const live = !!r.live; /* the daemon says: its clock and this one may differ */
+  const worked = steps.some((s) => s.ok);
   const approve = () => api('POST', `${path}/approve`, { skill: r.skill })
     .then(() => setSaid('approved'), (e) => setSaid(/not a draft/.test(e.message) ? 'approved' : e.message));
   const routine = () => onRoutine({ title: title(r.skill), prompt: `Do the task of your skill «${r.skill || 'the one the owner taught you'}», following its steps.` });
@@ -28,7 +28,8 @@ function Rehearsal({ r, path, onRoutine }) {
     <p class="trehh"><b>${r.skill || 'A draft'}</b> <span class="bmut">${clock(Date.parse(r.since))} · ${steps.length} ${steps.length === 1 ? 'step' : 'steps'}${live ? ' · rehearsing now' : ''}</span></p>
     ${steps.length ? html`<ol class="tshots">${steps.map((s) => html`<${Step} key=${s.n} s=${s} path=${path} />`)}</ol>` : html`<p class="bnote">No step yet.</p>`}
     <div class="trow">
-      <button type="button" class="bbtn pri" onClick=${approve} disabled=${!r.skill || said === 'approved'}>${said === 'approved' ? 'Aprobada' : 'Aprobar'}</button>
+      <button type="button" class="bbtn pri" onClick=${approve} disabled=${!r.skill || live || !worked || said === 'approved'}
+        title=${live ? 'The rehearsal is still running' : worked ? '' : 'No step worked yet: rehearse it first'}>${said === 'approved' ? 'Aprobada' : 'Aprobar'}</button>
       <button type="button" class="bbtn" onClick=${routine}>Crear rutina</button>
     </div>
     ${said && said !== 'approved' ? html`<p class="berr">${said}</p>` : null}

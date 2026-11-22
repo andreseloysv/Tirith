@@ -1,6 +1,7 @@
 /* The Enseñar tab: the extension's link, Grabar/Parar and the steps as they arrive (web/js/views/bots/teach.js). */
 .bteach .tlink { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; padding: 8px 12px; border: 1px solid var(--b-hair); border-radius: 12px; }
 .bteach .tlink code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--b-mono); font-size: 11.5px; color: var(--b-mut); }
+.bteach a.tdl { display: inline-block; margin: 12px 0 0; text-decoration: none; }
 .bteach .trow { display: flex; align-items: center; gap: 14px; margin: 14px 0 6px; }
 .bteach .trow .bnote { margin: 0; }
 .bteach h4 { display: flex; align-items: baseline; gap: 6px; margin: 18px 0 6px; }

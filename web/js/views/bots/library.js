@@ -16,9 +16,10 @@ export function Library({ bot }) {
   if (!lib) return html`<p class="bnote">${err ? `Could not read what ${bot.name} learned: ${err.message}` : 'Loading…'}</p>`;
   const save = (body) => api('POST', path, body).then(() => { setEdit(null); setFail(''); reload(); }, (x) => setFail(x.message));
   const editor = (e) => html`<${Editor} key=${e.name || (e.shared ? 'shared-memory' : 'memory')} e=${e} err=${fail} onSave=${save} onCancel=${() => { setEdit(null); setFail(''); }} />`;
-  const list = (skills, none) => (skills.length ? html`<ul class="brout">${skills.map((s) => (edit && !edit.memory && edit.name === s.name && edit.shared === s.shared
-    ? html`<li key=${s.name}>${editor(s)}</li>`
-    : html`<${Skill} key=${(s.shared ? 's:' : '') + s.name} s=${s} titles=${titles} open=${open === s.name + s.shared} onOpen=${() => setOpen(open === s.name + s.shared ? '' : s.name + s.shared)}
+  const id = (s) => `${s.draft ? 'draft:' : ''}${s.name}${s.shared}`;
+  const list = (skills, none) => (skills.length ? html`<ul class="brout">${skills.map((s) => (edit && !edit.memory && edit.name === s.name && edit.shared === s.shared && !!edit.draft === !!s.draft
+    ? html`<li key=${(s.draft ? 'd:' : '') + s.name}>${editor(s)}</li>`
+    : html`<${Skill} key=${(s.shared ? 's:' : '') + (s.draft ? 'd:' : '') + s.name} s=${s} titles=${titles} open=${open === id(s)} onOpen=${() => setOpen(open === id(s) ? '' : id(s))}
         onEdit=${() => setEdit(s)} onActivate=${() => save({ name: s.name, shared: s.shared, text: activated(s.text) })} onDelete=${() => save({ name: s.name, shared: s.shared, delete: true })} />`))}</ul>` : html`<p class="bnote">${none}</p>`);
   const titles = titlesOf(lib.template);
   const mem = { edit, setEdit, editor, save };

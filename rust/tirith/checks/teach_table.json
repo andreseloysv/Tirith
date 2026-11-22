@@ -1,0 +1,589 @@
+{
+ "names": [
+  [
+   "Password",
+   true
+  ],
+  [
+   "Contraseña",
+   true
+  ],
+  [
+   "contrasena",
+   true
+  ],
+  [
+   "Confirmar contraseña",
+   true
+  ],
+  [
+   "pwd",
+   true
+  ],
+  [
+   "user_pwd",
+   true
+  ],
+  [
+   "passwd",
+   true
+  ],
+  [
+   "Pass",
+   true
+  ],
+  [
+   "passcode",
+   true
+  ],
+  [
+   "Clave de acceso",
+   true
+  ],
+  [
+   "client_secret",
+   true
+  ],
+  [
+   "API token",
+   true
+  ],
+  [
+   "access_token",
+   true
+  ],
+  [
+   "Verification code",
+   true
+  ],
+  [
+   "Security Code",
+   true
+  ],
+  [
+   "Código de verificación",
+   true
+  ],
+  [
+   "Código de seguridad",
+   true
+  ],
+  [
+   "CVV",
+   true
+  ],
+  [
+   "PIN",
+   true
+  ],
+  [
+   "PINCode",
+   true
+  ],
+  [
+   "userPassword",
+   true
+  ],
+  [
+   "newPassword",
+   true
+  ],
+  [
+   "Tarjeta de crédito",
+   true
+  ],
+  [
+   "Card number",
+   true
+  ],
+  [
+   "OTP",
+   true
+  ],
+  [
+   "2FA",
+   true
+  ],
+  [
+   "Secret",
+   true
+  ],
+  [
+   "Passenger",
+   false
+  ],
+  [
+   "Passenger name",
+   false
+  ],
+  [
+   "Company",
+   false
+  ],
+  [
+   "compass",
+   false
+  ],
+  [
+   "bypass",
+   false
+  ],
+  [
+   "Discard",
+   false
+  ],
+  [
+   "keyboard",
+   false
+  ],
+  [
+   "Secretary",
+   false
+  ],
+  [
+   "Email",
+   false
+  ],
+  [
+   "Nombre",
+   false
+  ],
+  [
+   "Dirección",
+   false
+  ],
+  [
+   "Postal code",
+   false
+  ],
+  [
+   "Promo code",
+   false
+  ],
+  [
+   "Country code",
+   false
+  ],
+  [
+   "tokenizer",
+   false
+  ],
+  [
+   "Pinterest",
+   false
+  ],
+  [
+   "Shipping",
+   false
+  ],
+  [
+   "Descripción",
+   false
+  ],
+  [
+   "",
+   false
+  ]
+ ],
+ "fields": [
+  [
+   {
+    "type": "password",
+    "name": "x"
+   },
+   true
+  ],
+  [
+   {
+    "type": "text",
+    "name": "field1",
+    "label": "",
+    "autocomplete": "current-password"
+   },
+   true
+  ],
+  [
+   {
+    "type": "text",
+    "name": "field1",
+    "autocomplete": "new-password"
+   },
+   true
+  ],
+  [
+   {
+    "type": "text",
+    "name": "cc",
+    "autocomplete": "cc-number"
+   },
+   true
+  ],
+  [
+   {
+    "type": "text",
+    "name": "c",
+    "autocomplete": "one-time-code"
+   },
+   true
+  ],
+  [
+   {
+    "type": "text",
+    "name": "user_password"
+   },
+   true
+  ],
+  [
+   {
+    "type": "text",
+    "name": "f1",
+    "label": "Contraseña"
+   },
+   true
+  ],
+  [
+   {
+    "type": "text",
+    "name": "f1",
+    "label": "Código de verificación"
+   },
+   true
+  ],
+  [
+   {
+    "type": "text",
+    "id": "verification_code"
+   },
+   true
+  ],
+  [
+   {
+    "type": "text",
+    "name": "f1",
+    "label": "Security code"
+   },
+   true
+  ],
+  [
+   {
+    "type": "text",
+    "name": "f1",
+    "label": "Passenger"
+   },
+   false
+  ],
+  [
+   {
+    "type": "text",
+    "name": "company",
+    "label": "Company"
+   },
+   false
+  ],
+  [
+   {
+    "type": "text",
+    "name": "email",
+    "label": "Email",
+    "autocomplete": "email"
+   },
+   false
+  ],
+  [
+   {
+    "type": "text",
+    "name": "f1",
+    "label": "Nombre",
+    "autocomplete": "name"
+   },
+   false
+  ],
+  [
+   {
+    "type": "text",
+    "name": "f1",
+    "revealed": true,
+    "only": "js"
+   },
+   true
+  ]
+ ],
+ "urls": [
+  [
+   "https://x.example/cb?code=abc123&state=xyz",
+   "https://x.example/cb?code=•••&state=xyz"
+  ],
+  [
+   "https://x.example/#access_token=eyJ&state=s1",
+   "https://x.example/#access_token=•••&state=s1"
+  ],
+  [
+   "https://x.example/s?q=shoes&page=2",
+   "https://x.example/s?q=shoes&page=2"
+  ],
+  [
+   "https://x.example/p?api_key=K&sort=asc",
+   "https://x.example/p?api_key=•••&sort=asc"
+  ],
+  [
+   "https://x.example/p?apikey=K",
+   "https://x.example/p?apikey=•••"
+  ],
+  [
+   "https://x.example/a?sig=abc&Expires=1",
+   "https://x.example/a?sig=•••&Expires=1"
+  ],
+  [
+   "https://x.example/a?X-Amz-Signature=abc&X-Amz-Date=1",
+   "https://x.example/a?X-Amz-Signature=•••&X-Amz-Date=1"
+  ],
+  [
+   "https://x.example/p?sessionid=abc&session_id=a&page=1",
+   "https://x.example/p?sessionid=•••&session_id=•••&page=1"
+  ],
+  [
+   "https://x.example/p?password=hunter2&user=ana",
+   "https://x.example/p?password=•••&user=ana"
+  ],
+  [
+   "https://x.example/p?pwd=1&Pass=2",
+   "https://x.example/p?pwd=•••&Pass=•••"
+  ],
+  [
+   "https://x.example/p?key=1&keyword=boots",
+   "https://x.example/p?key=•••&keyword=boots"
+  ],
+  [
+   "https://x.example/#/login?token=abc&next=%2Fhome",
+   "https://x.example/#/login?token=•••&next=%2Fhome"
+  ],
+  [
+   "https://x.example/#section-2",
+   "https://x.example/#section-2"
+  ],
+  [
+   "https://x.example/p?q=1#top",
+   "https://x.example/p?q=1#top"
+  ],
+  [
+   "https://user:secretpw@x.example/path?a=1",
+   "https://user:•••@x.example/path?a=1"
+  ],
+  [
+   "https://user@x.example/path",
+   "https://user@x.example/path"
+  ],
+  [
+   "https://x.example/p?code=",
+   "https://x.example/p?code="
+  ],
+  [
+   "https://x.example/p?passenger=2&company=acme&author=me",
+   "https://x.example/p?passenger=2&company=acme&author=me"
+  ],
+  [
+   "https://x.example/p?auth=abc&token",
+   "https://x.example/p?auth=•••&token"
+  ],
+  [
+   "https://x.example/p?code=1&code=2",
+   "https://x.example/p?code=•••&code=•••"
+  ],
+  [
+   "https://x.example/p?access%5Ftoken=abc",
+   "https://x.example/p?access%5Ftoken=•••"
+  ],
+  [
+   "https://x.example/p?utm_source=a&lang=es",
+   "https://x.example/p?utm_source=a&lang=es"
+  ],
+  [
+   "about:blank",
+   "about:blank"
+  ],
+  [
+   "",
+   ""
+  ]
+ ],
+ "clicks": [
+  [
+   {
+    "editable": true,
+    "aria": "",
+    "label": "",
+    "text": "my secret draft",
+    "field": false
+   },
+   "editable text"
+  ],
+  [
+   {
+    "editable": true,
+    "aria": "Message body",
+    "text": "my secret draft"
+   },
+   "Message body"
+  ],
+  [
+   {
+    "editable": false,
+    "field": true,
+    "label": "Email",
+    "text": ""
+   },
+   "Email"
+  ],
+  [
+   {
+    "editable": false,
+    "field": false,
+    "text": "Filtrar",
+    "label": ""
+   },
+   "Filtrar"
+  ]
+ ],
+ "outward": [
+  [
+   "Enviar",
+   true
+  ],
+  [
+   "Send message",
+   true
+  ],
+  [
+   "Enviar candidatura",
+   true
+  ],
+  [
+   "Envía",
+   true
+  ],
+  [
+   "Comprar ahora",
+   true
+  ],
+  [
+   "Pagar",
+   true
+  ],
+  [
+   "Pay now",
+   true
+  ],
+  [
+   "Place order",
+   true
+  ],
+  [
+   "Hacer pedido",
+   true
+  ],
+  [
+   "Delete account",
+   true
+  ],
+  [
+   "Eliminar cuenta",
+   true
+  ],
+  [
+   "Borrar",
+   true
+  ],
+  [
+   "Publicar",
+   true
+  ],
+  [
+   "Publish",
+   true
+  ],
+  [
+   "Submit",
+   true
+  ],
+  [
+   "Confirmar compra",
+   true
+  ],
+  [
+   "Responder",
+   true
+  ],
+  [
+   "Reply all",
+   true
+  ],
+  [
+   "Compartir",
+   true
+  ],
+  [
+   "Reenviar",
+   true
+  ],
+  [
+   "Checkout",
+   true
+  ],
+  [
+   "button#send",
+   true
+  ],
+  [
+   "SendButton",
+   true
+  ],
+  [
+   "Mover a la papelera",
+   true
+  ],
+  [
+   "Filtrar",
+   false
+  ],
+  [
+   "Siguiente",
+   false
+  ],
+  [
+   "Buscar",
+   false
+  ],
+  [
+   "Search",
+   false
+  ],
+  [
+   "Next",
+   false
+  ],
+  [
+   "Ver más",
+   false
+  ],
+  [
+   "Cancelar",
+   false
+  ],
+  [
+   "Resend",
+   false
+  ],
+  [
+   "Sender",
+   false
+  ],
+  [
+   "Ordenar por precio",
+   false
+  ],
+  [
+   "",
+   false
+  ]
+ ]
+}

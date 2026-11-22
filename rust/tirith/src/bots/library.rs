@@ -1,19 +1,33 @@
-//! The page's Library: a bot's memory, its own skills and the shared ones, read and changed.
+//! The page's Library: a bot's memory, its own skills and the shared ones, drafts included, read and changed.
+use super::drafts::{drafts_dir, is_draft, sweep};
 use super::folder::{folder, skills, SHARED, SKILLS};
 use super::list::key_for;
 use crate::app::App;
 use crate::server::s;
 use serde_json::{json, Value};
 use std::path::PathBuf;
-/// The page's Library: the shared memory of every bot, the bot's own memory, its own skills and the shared ones, and the factory's skill template (a new skill starts from it, and its section titles are the ones a skill is marked for lacking).
-pub(super) fn library(app: &App, id: &str) -> Result<Value, String> {
+/// The page's Library: the shared memory of every bot, the bot's own memory, its own skills and the shared ones (each draft marked `draft`, kept in a drafts folder no agent loads), and the factory's skill template (a new skill starts from it, and its section titles are the ones a skill is marked for lacking).
+pub(crate) fn library(app: &App, id: &str) -> Result<Value, String> {
     let key = key_for(app, id).ok_or(format!("no bot '{id}'"))?;
-    let list = |v: Vec<(String, String)>, shared: bool| {
-        v.into_iter()
-            .map(move |(name, text)| json!({"name": name, "text": text, "shared": shared}))
+    sweep(app, &key);
+    let list = |v: Vec<(String, String)>, shared: bool, draft: bool| {
+        v.into_iter().map(move |(name, text)| {
+            json!({"name": name, "text": text, "shared": shared, "draft": draft})
+        })
     };
-    let all: Vec<Value> = list(skills(&folder(app, &key).join(SKILLS), false), false)
-        .chain(list(skills(&app.home.join("bots/skills"), true), true))
+    let (own, common) = (skills_dir(app, &key, false), skills_dir(app, &key, true));
+    let all: Vec<Value> = list(skills(&own, false), false, false)
+        .chain(list(
+            skills(&drafts_dir(app, &key, false), false),
+            false,
+            true,
+        ))
+        .chain(list(skills(&common, true), true, false))
+        .chain(list(
+            skills(&drafts_dir(app, &key, true), false),
+            true,
+            true,
+        ))
         .collect();
     Ok(
         json!({"memory": read(&folder(app, &key).join("memory.md")), "shared_memory": read(&app.home.join(SHARED)), "skills": all, "template": app.cfg().factory.prompt("skill")}),
@@ -30,43 +44,52 @@ fn named(name: &str) -> bool {
             .bytes()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
 }
-/// The folder the change lands in: the bot's own for its memory (`shared`: the bots' folder, for the shared memory), else the skill's (`shared`: every bot's).
-fn target(app: &App, key: &str, name: &str, b: &Value) -> PathBuf {
-    let skill = (if b["shared"] == true {
+/// The folder of skills of the bot (`shared`: every bot's).
+fn skills_dir(app: &App, key: &str, shared: bool) -> PathBuf {
+    if shared {
         app.home.join("bots/skills")
     } else {
         folder(app, key).join(SKILLS)
-    })
-    .join(name);
-    if b["memory"] == true && b["shared"] == true {
-        app.home.join("bots")
-    } else if b["memory"] == true {
-        folder(app, key)
-    } else {
-        skill
     }
 }
-/// A change from the Library: the `memory` (`shared`: every bot's), or the skill `name` (`shared`: every bot's), gets `text`, or goes with `delete`.
-pub(super) fn learn(app: &App, id: &str, b: &Value) -> Result<Value, String> {
+/// A change from the Library: the `memory` (`shared`: every bot's), or the skill `name` (`shared`: every bot's), gets `text`, or goes with `delete`. A text with `draft: true` is kept as a draft, where no agent loads it; the text of a draft without it activates it, which an agent's call may not do.
+pub(crate) fn learn(app: &App, id: &str, b: &Value, agent: bool) -> Result<Value, String> {
     let (key, name) = (
         key_for(app, id).ok_or(format!("no bot '{id}'"))?,
         s(b, "name"),
     );
-    let dir = target(app, &key, &name, b);
-    (b["memory"] == true || named(&name))
+    let (memory, shared) = (b["memory"] == true, b["shared"] == true);
+    (memory || named(&name))
         .then_some(())
         .ok_or("a skill's name is lowercase letters, digits and dashes")?;
-    let file = dir.join(if b["memory"] == true {
-        "memory.md"
-    } else {
-        "SKILL.md"
-    });
-    let done = match (b["delete"] == true, b["memory"] == true) {
+    let draft = !memory && is_draft(&s(b, "text"));
+    let (skill, held) = (
+        skills_dir(app, &key, shared).join(&name),
+        drafts_dir(app, &key, shared).join(&name),
+    );
+    if agent && !memory && !draft && b["delete"] != true && held.exists() {
+        return Err("only the owner activates a draft".into());
+    }
+    let dir = match (memory, shared, draft) {
+        (true, true, _) => app.home.join("bots"),
+        (true, false, _) => folder(app, &key),
+        (_, _, true) => held.clone(),
+        _ => skill.clone(),
+    };
+    let file = dir.join(if memory { "memory.md" } else { "SKILL.md" });
+    let done = match (b["delete"] == true, memory) {
         (true, true) => std::fs::remove_file(&file),
-        (true, false) => std::fs::remove_dir_all(&dir),
+        (true, false) => [&skill, &held]
+            .iter()
+            .filter(|d| std::fs::remove_dir_all(d).is_ok())
+            .count()
+            .gt(&0)
+            .then_some(())
+            .ok_or_else(|| std::io::ErrorKind::NotFound.into()),
         _ => std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, s(b, "text"))),
     };
     done.map_err(|e| format!("{}: {e}", file.display()))?;
+    let _ = (!memory && !draft && b["delete"] != true).then(|| std::fs::remove_dir_all(&held));
     super::versioned(app, &key, "library");
     app.emit("library", json!({"bot": id}));
     Ok(json!({"ok": true}))

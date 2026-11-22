@@ -3,12 +3,15 @@ mod api;
 mod card;
 mod cli;
 mod context;
+mod drafts;
 mod folder;
 mod fragment;
 mod hook;
 mod hook_api;
+mod hook_clean;
 mod hook_event;
 mod hook_fire;
+mod hook_sample;
 mod layer;
 mod library;
 mod list;
@@ -27,8 +30,11 @@ pub use api::routes;
 pub(crate) use card::save;
 pub use cli::cli;
 pub use context::context;
+pub use drafts::{activated, draft_file, is_draft, sweep as sweep_drafts};
 pub use folder::{folder, skill_file, skills, writable, SKILLS};
 pub use hook::{hook_from, webhook};
+#[cfg(test)]
+pub(crate) use library::{learn, library};
 pub use list::{all, bot, key_for};
 pub use migrate::start;
 pub use run::tick;
@@ -37,6 +43,9 @@ pub use versioned::versioned;
 #[cfg(test)]
 #[path = "../../checks/bot_git.rs"]
 mod git_tests;
+#[cfg(test)]
+#[path = "../../checks/hook_data.rs"]
+mod hook_tests;
 #[cfg(test)]
 #[path = "../../checks/bots.rs"]
 mod tests;
