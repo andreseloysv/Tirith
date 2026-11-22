@@ -19,6 +19,7 @@ pub(super) fn queue(app: &Shared, project: &str, text: &str, mode: &str, phone: 
         let cut = t.notes.len().saturating_sub(KEPT);
         t.left_out += cut;
         t.notes.drain(..cut);
+        t.notes_due |= turn;
         t.notes_phones |= turn && phone;
         turn && !std::mem::replace(&mut t.due, true)
     });

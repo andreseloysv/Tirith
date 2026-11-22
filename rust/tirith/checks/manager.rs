@@ -604,4 +604,11 @@ fn a_judge_that_corrected_itself_is_read_by_its_last_verdict() {
         super::judged(super::verdict::last(first, moods)).0,
         "neutral"
     );
+    let dashed = "Read-only.\n\n— ok — only a date command ran";
+    assert_eq!(super::judged(super::verdict::last(dashed, rubric)).0, "ok");
+    let no_score = "It printed the year.\n\n2026 — matches the task";
+    assert!(
+        !super::verdict::given(no_score, "- `1` — all"),
+        "the answer is no score"
+    );
 }

@@ -13,7 +13,7 @@ pub(super) fn queue_job(app: &Shared, project: &str, job: Job) {
 /// The next run waiting, when the conversation is free (no turn, no message on its way, no report waiting): taken from the queue, and the conversation is its own from this moment.
 pub(super) fn reserve(project: &str) -> Option<Job> {
     talk(project, |t| {
-        let free = !t.busy && !held(t) && t.pending.is_empty() && t.notes.is_empty();
+        let free = !t.busy && !held(t) && t.pending.is_empty() && !t.notes_due;
         let free = free && crate::turns::idle(project);
         let job = free.then(|| t.jobs.pop_front()).flatten();
         t.taken |= job.is_some();

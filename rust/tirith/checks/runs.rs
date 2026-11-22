@@ -356,3 +356,54 @@ async fn the_answer_to_a_card_is_a_turn_with_its_trigger() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// A fake stream-json agent that keeps every message it is handed, and answers it.
+const HEARS: &str = r#"#!/bin/sh
+echo '{"type":"system","subtype":"init","session_id":"fake-hears"}'
+while read -r line; do
+  printf '%s\n' "$line" >> "$0.heard"
+  echo '{"type":"assistant","message":{"content":[{"type":"text","text":"neutral — heard"}]}}'
+  echo '{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":1,"output_tokens":1}}'
+done
+"#;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_note_starts_no_turn_and_the_judge_reads_the_owner_once() {
+    attempts("noted", noted).await;
+}
+
+async fn noted(name: String) {
+    let (app, home, key) = app_with_two_routines(&name);
+    std::fs::write(home.join("fake-agent.sh"), HEARS).unwrap();
+    super::queue::queue(&app, &key, "an experiment was discarded", "note", false);
+    super::deliver::deliver(&app, &key, "", false); // as at every turn's end
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert!(own(&app, &key).is_empty(), "a note alone is no turn");
+    crate::manager::say(&app, &key, "what is new, zebra?", "").unwrap();
+    until("the owner's turn", || own(&app, &key).len() == 1).await;
+    let file = home.join("fake-agent.sh.heard");
+    let judged = || {
+        let heard = std::fs::read_to_string(&file).unwrap_or_default();
+        heard
+            .lines()
+            .find(|l| l.contains("The event to judge"))
+            .map(String::from)
+    };
+    until("the judge's turn", || judged().is_some()).await;
+    assert_eq!(
+        judged().unwrap().matches("zebra").count(),
+        1,
+        "the event, not the event and the chat"
+    );
+    let heard = std::fs::read_to_string(&file).unwrap();
+    let turn = heard
+        .lines()
+        .find(|l| l.contains("zebra") && !l.contains("The event to judge"))
+        .unwrap();
+    assert!(
+        turn.contains("an experiment was discarded"),
+        "the next message carries the note"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}

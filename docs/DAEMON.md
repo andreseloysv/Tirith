@@ -525,7 +525,7 @@ Files:
 - `talk.rs`: One conversation's state, kept under its project's id (or "" for the one of no project): its session, its messages on their way, its waiting reports and routine runs, and what lists or ends its sessions.
 - `turn.rs`: The loose turn: one fresh turn of a `session = "turn"` role, its text the answer.
 - `turn_read.rs`: Reading a loose turn of a stream-json agent: its text, its usage and its permission requests.
-- `verdict.rs`: A judge's verdict: the last line it wrote in its rubric's shape.
+- `verdict.rs`: A judge's verdict: the last line it wrote in its rubric's shape (none: it is asked once more).
 - `waiting.rs`: A routine's run has its agent's turn to itself: what comes meanwhile waits and is handed when that turn ends.
 - `typing.rs`: A turn's rooms and its typing on the phones: where it shows its progress, when it starts and stops.
 

@@ -4,15 +4,22 @@ use crate::turns::By;
 
 /// What the message says apart from the memory: the reports waiting (and how many were cut), then the routine's task (`job`) or `text`. Empty when there is nothing to say.
 fn asked(t: &mut Talk, text: &str, job: Option<&Job>) -> Vec<String> {
+    if let Some(job) = job {
+        let task = Some(job.text.clone()).filter(|task| !task.is_empty());
+        return task.into_iter().collect(); // a run is its task alone: reports wait
+    }
+    if text.is_empty() && !t.notes_due {
+        return vec![]; // a note waits for the next message: it starts no turn
+    }
+    t.notes_due = false;
     let left = std::mem::take(&mut t.left_out);
     let cut = (left > 0).then(|| {
         format!("{left} older reports were left out: the conversation was busy for too long")
     });
     let notes = cut.into_iter().chain(std::mem::take(&mut t.notes));
-    let words = job.map_or(text, |j| j.text.as_str());
     notes
         .map(|n| format!("[tirith] {n}"))
-        .chain((!words.is_empty()).then(|| words.to_string()))
+        .chain((!text.is_empty()).then(|| text.to_string()))
         .collect()
 }
 
@@ -23,10 +30,14 @@ pub(super) fn compose(
     (memory, text): (Option<String>, &str),
     (job, by): (Option<&Job>, Option<By>),
 ) -> Option<Msg> {
-    let noted = !t.notes.is_empty() && std::mem::take(&mut t.notes_phones);
+    let reported = !t.notes.is_empty() && job.is_none();
     let asked = asked(t, text, job);
     (!asked.is_empty()).then_some(())?;
-    let waiting = crate::turns::take_trigger(project);
+    let noted = reported && std::mem::take(&mut t.notes_phones);
+    let waiting = match job {
+        Some(_) if t.notes_due => Default::default(), // that trigger is the waiting report's
+        _ => crate::turns::take_trigger(project),
+    };
     crate::turns::told(project, &asked.join("\n\n")); // what started the turn, for its capture
     let all: Vec<String> = memory.into_iter().chain(asked).collect();
     let by = match (job, by) {

@@ -15,14 +15,15 @@ pub fn from_room(app: &Shared, project: &str, room: &str, author: &str, text: &s
         &format!("{author} ({room}): {text}"),
         "",
     );
+    let reacted = crate::turns::reacted(app, project, text);
+    // What the owner writes from a paired phone is the owner's: owner-mood judges it (a correction counts), before it is in the chat; another agent's line never is.
+    let _ = (!reacted && crate::rooms::paired_phone(author))
+        .then(|| judge_evals(app, project, "owner.message", text, event));
     app.chat("room", &format!("{author} ({room}): {text}"), project);
-    if crate::turns::reacted(app, project, text) {
+    if reacted {
         return; // a 👍/👎 on the bot's last turn starts none
     }
     talk(project, |t| t.reply_to.insert(room.to_string()));
-    // What the owner writes from a paired phone is the owner's: owner-mood judges it (a correction counts); another agent's line never is.
-    let _ = crate::rooms::paired_phone(author)
-        .then(|| judge_evals(app, project, "owner.message", text, event));
     let by = Some(("room".to_string(), String::new()));
     let text = with_cards(app, project, &format!("[room {room}] {author}: {text}"));
     hand(app, project, &text, true, by);
@@ -68,8 +69,8 @@ pub fn say(app: &Shared, project: &str, text: &str, agent: &str) -> Result<(), S
         return Ok(());
     }
     let event = app.event("", project, "owner.message", "", text, "");
+    judge_evals(app, project, "owner.message", text, event); // before it is in the chat: else it looks said twice
     app.chat("owner", text, project);
-    judge_evals(app, project, "owner.message", text, event);
     // A message that starts no turn (`/model`, words kept while a task is taught) leaves no trigger behind.
     let _ = (!model_command(app, project, text) && !crate::teach::heard(app, project, text)) // while it is taught a task, the owner's words go with the steps
         .then(|| {

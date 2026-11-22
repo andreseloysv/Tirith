@@ -42,6 +42,8 @@ pub(super) struct Talk {
     /// A routine's run has the conversation, taken from the queue (`taken`) or with its turn running (`in_run`): nothing joins it (`waiting.rs`).
     pub(super) taken: bool,
     pub(super) in_run: bool,
+    /// A waiting report asks for a turn: without one they wait for the next message, which carries them.
+    pub(super) notes_due: bool,
     /// A waiting report's answer reaches the phones.
     pub(super) notes_phones: bool,
     /// The current (or next) turn was started by the owner or by an event whose route has `phone = true`: its answer reaches the phones.
