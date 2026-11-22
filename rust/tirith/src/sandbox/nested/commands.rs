@@ -18,18 +18,20 @@ const ITS_OWN: [(&str, &str); 2] = [
     ("mach-register", ""),
 ];
 
-pub(super) fn limit(sb: &mut Sb, program: &str, own: &str) {
+pub(super) fn limit(sb: &mut Sb, program: &str, own: Option<&str>) {
     REFUSED.iter().for_each(|rule| sb.line(rule));
     for (op, still) in ITS_OWN {
         sb.line(&format!("(deny {op})"));
         if !still.is_empty() {
             sb.line(&format!("(allow {op} {still})"));
         }
-        sb.line(&format!("(allow {op} {own})"));
+        if let Some(own) = own {
+            sb.line(&format!("(allow {op} {own})"));
+        }
     }
     let exec = super::super::profile::SANDBOX_EXEC;
     sb.line(&format!("(deny process-exec* (literal \"{exec}\"))")); // the same profile again would make it the starter below
     sb.line(&format!(
-        "(deny process-exec* (require-all (literal {program}) (require-not (require-any {own} (process-path \"{exec}\")))))"
+        "(deny process-exec* (require-all (literal {program}) (require-not (require-any (process-path {program}) (process-path \"{exec}\")))))"
     ));
 }

@@ -49,3 +49,8 @@ pub(super) fn confined(from: u16, to: u16) -> bool {
     let holders = socket::holders(from, to);
     holders.is_empty() || holders.into_iter().any(ours)
 }
+
+/// Whether process `pid` holds the end at port `from` of the connection to port `to`.
+pub(super) fn held_by(from: u16, to: u16, pid: pid_t) -> bool {
+    socket::holders(from, to).contains(&pid)
+}

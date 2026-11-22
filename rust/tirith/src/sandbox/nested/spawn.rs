@@ -1,12 +1,16 @@
-//! One program started for a caller: under the one profile, on the caller's own stdin, stdout and stderr.
-use super::limits::{profile, Around};
+//! One process started for a caller under the profile of its part, with that environment alone.
+use super::limits::{profile, Around, Part};
 use super::Request;
-use std::os::fd::OwnedFd;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 
-pub(super) fn spawn(r: &Request, around: &Around, io: [OwnedFd; 3]) -> Result<Child, String> {
-    let (text, params) = profile(r, around);
+pub(super) fn spawn(
+    r: &Request,
+    around: &Around,
+    part: Part,
+    io: [Stdio; 3],
+) -> Result<Child, String> {
+    let (text, params) = profile(r, around, part);
     let mut command = Command::new(super::super::profile::SANDBOX_EXEC);
     for (name, value) in params {
         command.arg("-D").arg(format!("{name}={value}"));
@@ -23,9 +27,9 @@ pub(super) fn spawn(r: &Request, around: &Around, io: [OwnedFd; 3]) -> Result<Ch
         .env_clear()
         .envs(env.map(|(k, v)| (k, v)))
         .current_dir(&r.cwd)
-        .stdin(Stdio::from(stdin))
-        .stdout(Stdio::from(stdout))
-        .stderr(Stdio::from(stderr))
+        .stdin(stdin)
+        .stdout(stdout)
+        .stderr(stderr)
         .process_group(0)
         .spawn()
         .map_err(|e| format!("cannot start {}: {e}", r.program))

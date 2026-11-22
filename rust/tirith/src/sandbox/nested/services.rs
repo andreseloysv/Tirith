@@ -37,9 +37,11 @@ const WITH_NETWORK: [&str; 6] = [
     "com.apple.TrustEvaluationAgent",
 ];
 
-pub(super) fn lookups(sb: &mut Sb, net: bool, own: &str) {
+pub(super) fn lookups(sb: &mut Sb, net: bool, own: Option<&str>) {
     sb.line("(deny mach-lookup)");
-    sb.line(&format!("(allow mach-lookup {own})"));
+    if let Some(own) = own {
+        sb.line(&format!("(allow mach-lookup {own})"));
+    }
     sb.line("(allow mach-lookup (local-name \"com.apple.cfprefsd.agent\"))");
     let more: &[&str] = if net { &WITH_NETWORK } else { &[] };
     for name in SERVICES.iter().chain(more) {

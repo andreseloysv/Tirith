@@ -3,7 +3,7 @@ use super::{asked::Asked, here::here, layers::Layers, mode::Mode, told::instruct
 use std::path::Path;
 
 /// The proxy's variables: a limited Codex's commands get them empty, as they got no network.
-const NO_NET: [&str; 7] = [
+pub(super) const NO_NET: [&str; 7] = [
     "HTTPS_PROXY",
     "HTTP_PROXY",
     "ALL_PROXY",
