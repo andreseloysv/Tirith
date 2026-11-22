@@ -114,3 +114,31 @@ fn the_kernel_tells_a_confined_caller_from_the_owner() {
         "a caller nobody holds is never the owner"
     );
 }
+
+/// Where the daemon's code starts git itself; elsewhere it must ask `sandbox::git`.
+fn bare_git(dir: &std::path::Path, found: &mut Vec<String>) {
+    for entry in std::fs::read_dir(dir).unwrap().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            bare_git(&path, found);
+        } else if path.extension().is_some_and(|e| e == "rs") && !path.ends_with("sandbox/git.rs") {
+            let text = std::fs::read_to_string(&path).unwrap();
+            if text.contains(concat!("Command::new(", "\"git\")")) {
+                found.push(path.display().to_string());
+            }
+        }
+    }
+}
+
+#[test]
+fn the_daemon_starts_git_only_through_the_sandbox() {
+    let mut found = vec![];
+    bare_git(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut found,
+    );
+    assert!(
+        found.is_empty(),
+        "an agent's repository would run code outside the sandbox: {found:?}"
+    );
+}

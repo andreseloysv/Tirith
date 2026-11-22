@@ -63,8 +63,9 @@ tirith service status | restart | logs | uninstall
   `ssh -N -L 7717:127.0.0.1:7717 <you>@<server>`, then `http://127.0.0.1:7717/`. The port is the same at both
   ends: if your computer runs a Tirith of its own, install the server with `--port 7801` and use that one.
 - **Who says yes.** An approval is yours, from the page, your phone or your own terminal: a call from inside an
-  agent's sandbox is known as the agent's. An agent is not walled off from Tirith's files, which are the same
-  user's, and a bot that drives your own browser could click for you.
+  agent's sandbox is known as the agent's, also from what the daemon's git runs for it. This is no wall against a
+  hostile program with your files: an agent can read and write what Tirith's user can (Tirith's store, shell
+  start-up files, programs on the PATH), and a bot that drives your own browser could click for you.
 - **Who may use it.** On Linux only Tirith's user, root and `[server] users` (who installed it with sudo is
   added) reach the daemon, and that user's home is its alone. On macOS any user of that Mac could read it: do not
   install it on a Mac you share. Nor on a server with users you do not trust: while the daemon is down, one of
@@ -101,7 +102,7 @@ end with code, and puts a model in the loop only where judgment is needed.
 - **Rules in code.** Every tool call of every agent passes the rules first, in 1–4 ms: commit checks are never
   skipped, the plan and the agents' settings are not edited by agents, a lane writes only in its own worktree,
   never pushes or touches main and never starts other agents. Projects add rules in `tirith.toml`.
-- **Network sandbox.** Everything Tirith starts (lanes, the manager, reviews, merge checks) runs in a sandbox
+- **Network sandbox.** Everything Tirith starts (lanes, the manager, reviews, merge checks, its own git) runs in a sandbox
   (macOS's, or on Linux a network namespace of its own, without root) that allows the network only through the
   daemon's own proxy, which records every destination by domain and refuses the ones you block
   (`tirith net block …`). Swift, Xcode, Gradle, npm, cargo and git work inside it. Tool calls that touch credentials, push or read secret variables are audited.

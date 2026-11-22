@@ -1,10 +1,10 @@
 //! Git in a bot's repository, as Tirith: its own name, no signing.
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 /// `git -C dir args…`: its stdout trimmed, or what it said on stderr when it failed.
 pub(super) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let out = Command::new("git")
+    let out = crate::sandbox::git()
         .arg("-C")
         .arg(dir)
         .args([

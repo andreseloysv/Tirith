@@ -5,6 +5,7 @@ mod check;
 mod cli;
 mod confine;
 mod env;
+mod git;
 mod jvm;
 mod launch;
 #[cfg(target_os = "linux")]
@@ -29,6 +30,7 @@ mod wrappers;
 pub use caller::confined;
 pub use check::check_command;
 pub use cli::cli;
+pub use git::{git, prepare};
 pub use profile::sandboxed;
 pub use quiet::launcher;
 pub use replay::closes_network;
