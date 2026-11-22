@@ -165,7 +165,7 @@ fn the_one_profile_only_takes_away() {
         },
         kept: vec!["/nonexistent/socket".into()],
     };
-    let (text, params) = limits::profile(&r, &around);
+    let (text, params) = limits::profile(&r, &around, limits::Part::Codex);
     assert!(
         text.starts_with(super::super::profile::PROFILE),
         "Tirith's comes first, whole"
@@ -236,7 +236,7 @@ fn the_one_profile_only_takes_away() {
     }
     let ro = super::Request { write: false, ..r };
     assert!(
-        !limits::profile(&ro, &around)
+        !limits::profile(&ro, &around, limits::Part::Codex)
             .1
             .iter()
             .any(|(_, v)| v == odd),
@@ -264,7 +264,7 @@ fn what_runs_under_the_one_profile_is_still_an_agents() {
         },
         kept: vec![],
     };
-    let (text, params) = limits::profile(&r, &around);
+    let (text, params) = limits::profile(&r, &around, limits::Part::Codex);
     let params_again = params.clone();
     assert!(text.contains(limits::TIGHTER));
     let mut command = std::process::Command::new(super::super::profile::SANDBOX_EXEC);
@@ -366,6 +366,21 @@ fn a_profile_named_in_the_settings_is_read_and_servers_are_named() {
         .unwrap();
     assert!(!r.write, "the profile's limit wins");
     assert!(note.contains("notes"), "said, not silent: {note}");
+    let inline = words("exec -c mcp_servers.inline={command=\"inline-server\"} -- hi");
+    let (with, _) = settings::limit(&asked::read(&inline).unwrap(), &at)
+        .unwrap()
+        .unwrap();
+    let find = |word: &str| with.args.iter().position(|a| a.starts_with(word));
+    let moved =
+        find("mcp_servers.inline.environment_id=\"remote\"").expect("it runs with the commands");
+    assert!(
+        find("mcp_servers.inline={") < Some(moved)
+            && Some(moved) < with.args.iter().position(|a| a == "--")
+            && find("mcp_servers.inline.cwd=\"/").is_some()
+            && find("mcp_servers.notes.environment_id=").is_some(),
+        "after the caller's own table, before the prompt, from a whole path: {:?}",
+        with.args
+    );
     let briefed = words("exec -c developer_instructions=Brief. hi");
     let (said, _) = settings::limit(&asked::read(&briefed).unwrap(), &at)
         .unwrap()
@@ -378,6 +393,14 @@ fn a_profile_named_in_the_settings_is_read_and_servers_are_named() {
     assert!(
         told.len() == 1 && told[0].contains("Brief.") && told[0].contains("write nothing"),
         "the caller's words, then the true limit, once: {told:?}"
+    );
+    assert!(
+        said.args
+            .iter()
+            .any(|a| a == "include_environment_context=false")
+            && told[0].contains("Working directory: ")
+            && !told[0].contains("unrestricted"),
+        "no note that calls the sandbox none, and its folder still said: {told:?}"
     );
     assert!(
         r.args
@@ -407,7 +430,7 @@ fn only_codexs_own_process_reaches_this_machines_ports() {
             program: program.into(),
             ..Default::default()
         };
-        let (text, params) = limits::profile(&r, &around);
+        let (text, params) = limits::profile(&r, &around, limits::Part::Codex);
         std::process::Command::new(super::super::profile::SANDBOX_EXEC)
             .args(
                 params
@@ -439,7 +462,7 @@ fn only_codexs_own_process_reaches_this_machines_ports() {
         program: "/bin/sleep".into(),
         ..Default::default()
     };
-    let (text, params) = limits::profile(&r, &around);
+    let (text, params) = limits::profile(&r, &around, limits::Part::Codex);
     let mut child = std::process::Command::new(super::super::profile::SANDBOX_EXEC)
         .args(
             params
@@ -480,7 +503,7 @@ fn the_daemons_port_is_a_roles_and_the_hooks_door_the_limited_ones() {
             doors,
             kept: vec![],
         };
-        let (text, params) = limits::profile(r, &around);
+        let (text, params) = limits::profile(r, &around, limits::Part::Codex);
         std::process::Command::new(super::super::profile::SANDBOX_EXEC)
             .args(
                 params
@@ -539,4 +562,142 @@ fn the_daemons_port_is_a_roles_and_the_hooks_door_the_limited_ones() {
         r.env,
         vec![("TIRITH_PORT".to_string(), doors.rules.to_string())]
     );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn what_runs_the_commands_has_none_of_codexs_own() {
+    use limits::Part;
+    // SAFETY: getpid only reads this process's own id.
+    if crate::sandbox::mac::ours(unsafe { libc::getpid() }) {
+        return; // confined already
+    }
+    let d = folder("parts");
+    let (state, work) = (d.join("codex"), d.join("work"));
+    std::fs::write(state.join("auth.json"), "{}").unwrap();
+    let r = super::Request {
+        program: "/bin/dd".into(), // which then is Codex's own process: it opens as Codex's writer does
+        write: true,
+        roots: vec![work.display().to_string()],
+        state: state.display().to_string(),
+        ..Default::default()
+    };
+    let around = limits::Around {
+        doors: super::doors::Doors { main: 1, rules: 2 },
+        kept: vec![],
+    };
+    let from = d.join("from");
+    std::fs::write(&from, "x").unwrap();
+    let copies = |part: Part, to: &std::path::Path| {
+        let (text, params) = limits::profile(&r, &around, part);
+        std::process::Command::new(super::super::profile::SANDBOX_EXEC)
+            .args(
+                params
+                    .iter()
+                    .flat_map(|(name, value)| ["-D".to_string(), format!("{name}={value}")]),
+            )
+            .args(["-p", &text, "/bin/dd", "status=none"])
+            .args([
+                format!("if={}", from.display()),
+                format!("of={}", to.display()),
+            ])
+            .output()
+            .unwrap()
+            .status
+            .success()
+    };
+    let (auth, made) = (state.join("auth.json"), work.join("made"));
+    assert!(
+        copies(Part::Codex, &auth),
+        "Codex's own process renews its sign-in"
+    );
+    assert!(
+        !copies(Part::Commands, &auth),
+        "what runs the patches never writes it"
+    );
+    assert!(copies(Part::Commands, &made), "patches write in the folder");
+    assert!(
+        !copies(Part::Codex, &work.join("not")),
+        "Codex's own process writes in no folder"
+    );
+    assert!(
+        !copies(Part::Commands, &work.join(".git")),
+        "nor what the limit protects"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn the_bridge_speaks_websocket() {
+    use super::{frames, upgrade};
+    assert_eq!(
+        upgrade::accepted("dGhlIHNhbXBsZSBub25jZQ=="),
+        "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+        "RFC 6455's own example"
+    );
+    let client = |fin: bool, op: u8, data: &[u8]| {
+        let mask = [7u8, 9, 11, 13];
+        let mut out = vec![if fin { 0x80 } else { 0 } | op, 0x80 | 127];
+        out.extend((data.len() as u64).to_be_bytes());
+        out.extend(mask);
+        out.extend(data.iter().enumerate().map(|(i, b)| b ^ mask[i % 4]));
+        out
+    };
+    let big = vec![b'a'; 70_000];
+    let wire = [
+        client(false, 1, &big),
+        client(true, 9, b"ping"),
+        client(true, 0, b"z"),
+    ]
+    .concat();
+    let mut pinged = vec![];
+    let Some(frames::Got::Whole(got)) =
+        frames::next(&mut wire.as_slice(), |p| pinged.push(p.to_vec()))
+    else {
+        panic!("a whole message");
+    };
+    assert_eq!((got.len(), pinged), (70_001, vec![b"ping".to_vec()]));
+    let mut huge = br#"{"id":41,"method":"fs/writeFile","params":""#.to_vec();
+    huge.resize(frames::MOST as usize + 9, b'a');
+    let wire = [client(true, 1, &huge), client(true, 1, b"after")].concat();
+    let mut from = wire.as_slice();
+    let Some(frames::Got::TooBig(start)) = frames::next(&mut from, |_| {}) else {
+        panic!("over the cap is no message");
+    };
+    assert!(
+        start.len() as u64 <= frames::MOST,
+        "no more than the cap is held"
+    );
+    let said = super::too_big::refusal(&start).expect("the call is answered");
+    let said: serde_json::Value = serde_json::from_slice(&said).unwrap();
+    assert_eq!(said["id"], 41, "that call's id");
+    assert!(said["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("more than 16 MiB"));
+    assert!(
+        matches!(frames::next(&mut from, |_| {}), Some(frames::Got::Whole(next)) if next == b"after"),
+        "and the bridge goes on"
+    );
+    let inner = br#"{"method":"process/output","params":{"id":7}}"#;
+    assert!(
+        super::too_big::refusal(inner).is_none(),
+        "never another thing's id"
+    );
+    let unmasked = [0x81u8, 1, b'x'];
+    assert!(
+        frames::next(&mut unmasked.as_slice(), |_| {}).is_none(),
+        "a client masks"
+    );
+    for size in [5usize, 300, 70_000] {
+        let mut sent = vec![];
+        frames::send(&mut sent, frames::TEXT, &vec![b'b'; size]).unwrap();
+        let head = match size {
+            5 => 2,
+            300 => 4,
+            _ => 10,
+        };
+        assert_eq!(sent.len(), head + size, "{size}");
+    }
 }

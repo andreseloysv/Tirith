@@ -1,4 +1,4 @@
-//! What may be written: the folders workspace-write opens, less what it protects, and of Codex's state only what Codex's own process must write. A folder above what stays cannot be renamed, or the rule would stay behind.
+//! What may be written: the folders workspace-write opens, less what it protects, but not by Codex's own process, whose writing is its state's alone (and only what it must). A folder above what stays cannot be renamed, or the rule would stay behind.
 use super::limits::Around;
 use super::sb::{named, real, Sb};
 use super::{state, Request};
@@ -14,14 +14,18 @@ const DEVICES: [&str; 4] = [
     "(allow file-write* (require-all (regex #\"^/dev/ttys[0-9]+\") (extension \"com.apple.sandbox.pty\")))",
 ];
 
-pub(super) fn writes(sb: &mut Sb, r: &Request, around: &Around, own: &str) {
+pub(super) fn writes(sb: &mut Sb, r: &Request, around: &Around, own: Option<&str>) {
     sb.line("(deny file-write*)");
     DEVICES.iter().for_each(|rule| sb.line(rule));
     let mut held = BTreeSet::new();
     let roots: &[String] = if r.write { &r.roots } else { &[] };
     for root in roots.iter().filter(|p| !p.is_empty()) {
-        let root = sb.path(&real(root));
-        sb.line(&format!("(allow file-write* (subpath {root}))"));
+        let root = format!("(subpath {})", sb.path(&real(root)));
+        let who = match own {
+            Some(own) => format!("(require-all {root} (require-not {own}))"),
+            None => root,
+        };
+        sb.line(&format!("(allow file-write* {who})"));
     }
     for root in roots.iter().filter(|p| !p.is_empty()) {
         for name in PROTECTED {
@@ -30,9 +34,11 @@ pub(super) fn writes(sb: &mut Sb, r: &Request, around: &Around, own: &str) {
     }
     if !r.state.is_empty() {
         stays(sb, &r.state, &mut held);
-        state::own(sb, &real(&r.state), own);
+        if let Some(own) = own {
+            state::own(sb, &real(&r.state), own);
+        }
     }
-    if !r.out.is_empty() {
+    if let Some(own) = own.filter(|_| !r.out.is_empty()) {
         let out = sb.path(&real(&r.out)); // Codex writes the file `-o` names itself
         sb.line(&format!(
             "(allow file-write* (require-all {own} (literal {out})))"
