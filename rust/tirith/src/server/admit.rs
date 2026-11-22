@@ -1,4 +1,4 @@
-//! The gate in front of every route: who calls comes from a token and from nothing else, and whoever has none gets 403. Two kinds of route stand apart: the agents' hooks, where no token leaves only the refusals, and those with a token of their own (the teach extension's, the page's one-use link).
+//! The gate in front of every route: who calls comes from a token and from nothing else, and whoever has none gets 403. Two kinds of route stand apart: the agents' hooks, where no token leaves only the refusals, and those with a token of their own (the teach extension's, the page's one-use link, a connector sign-in's state on its callback).
 use super::who::{sent, Who};
 use super::{caller, identify, page, refused, scope};
 use crate::app::Shared;
@@ -58,5 +58,7 @@ fn is_hook(method: &Method, path: &str) -> bool {
 
 /// The routes whose handler checks a token of its own.
 fn carries_its_own(app: &Shared, method: &Method, path: &str, headers: &HeaderMap) -> bool {
-    page::link(method, path) || crate::teach::own_token(app, method, path, headers)
+    page::link(method, path)
+        || crate::teach::own_token(app, method, path, headers)
+        || crate::oauth::own_route(method, path)
 }

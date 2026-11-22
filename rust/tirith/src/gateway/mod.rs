@@ -15,6 +15,7 @@ mod open;
 mod permit;
 mod record;
 mod remote;
+mod renew;
 mod rpc;
 mod session;
 mod stdio;
@@ -30,6 +31,9 @@ mod approval_tests;
 #[cfg(test)]
 #[path = "../../checks/gateway_fakes.rs"]
 mod fakes;
+#[cfg(test)]
+#[path = "../../checks/connector_oauth.rs"]
+mod oauth_tests;
 #[cfg(test)]
 #[path = "../../checks/gateway.rs"]
 mod tests;

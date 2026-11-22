@@ -1,5 +1,5 @@
-//! One connector of an open gateway: its connection, local or remote, opened with the bot's secrets for it, and the tools it listed.
-use super::{given::secrets, local::Local, remote::Remote, rpc};
+//! One connector of an open gateway: its connection, local or remote, opened with the bot's secrets for it (a remote one's sign-in first, when the bot has one), and the tools it listed.
+use super::{given::secrets, local::Local, remote::Remote, renew::Renew, rpc};
 use crate::app::Shared;
 use crate::connectors::Connector;
 use serde_json::{json, Value};
@@ -22,13 +22,13 @@ pub struct Link {
 impl Link {
     /// Connector `c` opened for bot `bot` (its page id), running as `who`: started or reached, greeted, its tools read.
     pub async fn open(app: &Shared, who: &str, bot: &str, c: &Connector) -> Result<Link, String> {
-        let given = secrets(app, bot, &c.secrets).await?;
+        let mut given = secrets(app, bot, &c.secrets).await?;
         let conn = if c.command.is_empty() {
-            Conn::Remote(Remote::new(
-                &crate::sandbox::proxy_url(app, who),
-                &c.url,
-                &given,
-            )?)
+            let signed = crate::oauth::bearer(app, bot, &c.id, false).await?;
+            let renew = signed.is_some().then(|| Renew::of(app, bot, &c.id));
+            given.splice(0..0, signed.map(|b| ("AUTHORIZATION".to_string(), b)));
+            let proxy = crate::sandbox::proxy_url(app, who);
+            Conn::Remote(Remote::new(&proxy, &c.url, &given, renew)?)
         } else {
             let local = Local::start(app, who, &c.command, &given)?;
             Conn::Local(Box::new(tokio::sync::Mutex::new(local)))

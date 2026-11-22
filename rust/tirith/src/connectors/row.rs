@@ -70,6 +70,12 @@ pub(super) fn wrong(i: usize, t: &toml::Table) -> Option<String> {
                 .iter()
                 .any(|s| !secret_name(s))
                 .then(|| "secrets as variable names (A-Z, 0-9, _), never values".into())
+        })
+        .or_else(|| {
+            strings(t, "secrets")
+                .iter()
+                .any(|s| crate::oauth::reserved(s))
+                .then(|| "secrets without a TIRITH_OAUTH_ name, a sign-in's own".into())
         });
     bad.map(|b| format!("{at}: {b}"))
 }

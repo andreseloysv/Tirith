@@ -28,3 +28,13 @@ pub(super) fn value(value: &str) -> Result<(), String> {
         .then_some(())
         .ok_or_else(|| "a value is text with no NUL, not empty and of 64 KiB at most".into())
 }
+
+/// A name the owner may set: never a connector sign-in's reserved one (`oauth/names.rs`), which the daemon alone writes.
+pub(super) fn owners(name: &str) -> Result<(), String> {
+    (!crate::oauth::reserved(name))
+        .then_some(())
+        .ok_or_else(|| {
+            "TIRITH_OAUTH_ names are a connector's sign-in: tirith connector login keeps them"
+                .into()
+        })
+}

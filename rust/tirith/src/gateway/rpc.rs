@@ -1,4 +1,4 @@
-//! JSON-RPC 2.0 as MCP speaks it, both ways: a request, a notification, an answer read, and a tool result that says it failed.
+//! JSON-RPC 2.0 as MCP speaks it, both ways: a request, a notification, an HTTP answer's messages, an answer read, and a tool result that says it failed.
 use serde_json::{json, Value};
 
 pub fn request(id: u64, method: &str, params: Value) -> Value {
@@ -7,6 +7,18 @@ pub fn request(id: u64, method: &str, params: Value) -> Value {
 
 pub fn notification(method: &str) -> Value {
     json!({"jsonrpc": "2.0", "method": method})
+}
+
+/// The messages of an HTTP answer of type `kind`: JSON, or an event stream's `data:` lines.
+pub fn messages(kind: &str, body: &str) -> impl Iterator<Item = Value> {
+    let msgs: Vec<Value> = if kind.starts_with("text/event-stream") {
+        let data = body.lines().filter_map(|l| l.strip_prefix("data:"));
+        data.filter_map(|d| serde_json::from_str(d.trim()).ok())
+            .collect()
+    } else {
+        serde_json::from_str(body).into_iter().collect()
+    };
+    msgs.into_iter()
 }
 
 /// Whether `msg` answers request `id`.
