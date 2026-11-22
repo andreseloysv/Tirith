@@ -13,6 +13,12 @@ fn the_guide_knows_four_agents_and_a_release_can_add_to_one() {
     let all = catalog::read(include_str!("../assets/agents.toml"), "").unwrap();
     let names: Vec<&str> = all.iter().map(|k| k.alias.as_str()).collect();
     assert_eq!(names, ["anthropic", "codex", "copilot", "muse"]);
+    let muse = (all[3].check_model.as_str(), all[3].check_effort.as_str());
+    assert_eq!(
+        muse,
+        ("muse-ember-1.0", "low"),
+        "its default model is its dearest"
+    );
     let more = "[anthropic]\nbin = \"agent-x\"\n";
     let all = catalog::read(include_str!("../assets/agents.toml"), more).unwrap();
     assert_eq!(

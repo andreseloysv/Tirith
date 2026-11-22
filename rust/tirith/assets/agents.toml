@@ -54,4 +54,5 @@ new_settings = { schema_version = 1 }
 hooks = "groups"
 token_env = "META_API_KEY"
 token_hint = "a Meta API key"
+check_model = "muse-ember-1.0"
 check_effort = "low"
