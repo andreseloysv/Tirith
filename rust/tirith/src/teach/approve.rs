@@ -38,7 +38,7 @@ fn rehearsed(app: &Shared, key: &str, skill: &str) -> bool {
                 .is_some_and(|v| v.iter().any(|st| st["ok"] == true))
     })
 }
-/// Activates the bot's own draft `skill`: moved from its drafts folder to its skills, without the `draft: true` line.
+/// Activates the bot's own draft `skill`: moved from its drafts folder to its skills, without the `draft: true` line. The bot is told with its next message: its live session saw a draft.
 pub(super) fn approve_skill(app: &Shared, key: &str, skill: &str) -> Result<(), String> {
     named(skill)
         .then_some(())
@@ -57,10 +57,10 @@ pub(super) fn approve_skill(app: &Shared, key: &str, skill: &str) -> Result<(), 
         .and_then(|_| std::fs::remove_dir_all(held.parent().unwrap_or(&held)).or(Ok(())));
     done.map_err(|e| format!("{}: {e}", file.display()))?;
     crate::bots::versioned(app, key, "library"); // a change of its skills from the Library's side
-    app.chat(
-        "tirith",
-        &format!("The owner approved «{skill}»: it is no longer a draft, use it from now on."),
+    crate::manager::noted(
+        app,
         key,
+        &format!("The owner approved «{skill}»: it is no longer a draft, use it from now on."),
     );
     app.emit("library", json!({"bot": key}));
     Ok(())

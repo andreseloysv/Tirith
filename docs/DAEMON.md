@@ -114,7 +114,7 @@ Files:
 - `card.rs`: A bot's card saved: a new bot, or a change to one.
 - `cli.rs`: A bot's own commands, in its conversation.
 - `context.rs`: What a bot is handed at the start of every turn and routine, and the skill links laid before it.
-- `drafts.rs`: Draft skills (a taught task not yet approved): kept in the bot's `drafts/` folder (shared ones in `<home>/bots/drafts`), outside every folder an agent loads by itself; one found among the skills is moved there (by `context`, `versioned` and the Library's read).
+- `drafts.rs`: Draft skills (a taught task not yet approved): kept in the bot's `drafts/` folder (shared ones in `<home>/bots/drafts`), outside every folder an agent loads by itself; one found among the skills is moved there (by `context`, `versioned` and the Library's read). One activated in the Library is told to its bot with its next message.
 - `folder.rs`: A bot's folder and skills: where its sessions run (the lab's worktree during a B run), where agents may write, and the skills a folder holds.
 - `fragment.rs`: The bots as a TOML fragment: the owner's bots' roles, and every written bot's routes and routines.
 - `handed.rs`: What a bot is handed with its next message, from the folder that turn runs in (an experiment's B: the branch's); a skill that changed is read again in a session of its own.
@@ -1212,7 +1212,7 @@ Files:
 - `api.rs`: The teach API: the recording read, started and stopped (by the page, or by the extension with the token).
 - `own_page.rs`: Tirith's own page is no step of a rehearsal.
 - `approvals.rs`: What the skill lists under «Qué requiere aprobación»: the click a rehearsal must stop at because the skill names it.
-- `approve.rs`: «Aprobar» on the tab «Enseñar»: the draft rehearsed loses `draft: true` from its header, so from then on the bot uses it.
+- `approve.rs`: «Aprobar» on the tab «Enseñar»: the draft rehearsed loses `draft: true` from its header, so from then on the bot uses it; it is told with its next message.
 - `clock.rs`: A step's time rebuilt on the daemon's clock from the extension's `at` and `sent`.
 - `cli.rs`: `tirith teach rehearse|do|stop`: a bot rehearses a draft in the owner's Edge, from its session (`TIRITH_PROJECT` is its conversation).
 - `cors.rs`: Who may call the teach API: the page (same origin) and Tirith's extension with the bot's token. CORS answers only the extension's origin.

@@ -21,6 +21,11 @@ pub fn notify(app: &Shared, project: &str, text: &str) {
     let to = if none { app.conv("") } else { conv };
     rooms::to_phones_surely(app, to, &format!("Tirith: {text}"));
 }
+/// A line of Tirith's that its agent must know: in the conversation, and with that agent's next message (it starts no turn and goes to no phone).
+pub fn noted(app: &Shared, project: &str, text: &str) {
+    app.chat("tirith", text, project);
+    super::queue::queue(app, app.conv(project), text, "note", false);
+}
 /// One user message as a stream-json line. `pending` keeps plain texts; only a live session's stdin sees lines.
 pub(super) fn user_line(text: &str) -> String {
     json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}).to_string()
@@ -67,4 +72,9 @@ pub(super) fn hand(app: &Shared, project: &str, text: &str, phones: bool, by: Op
     let _ = began.then(|| begin_turn(app, project)); // a message a live, idle session took starts its turn now; one for a running turn begins at that turn's end
     let _ = handed.then(|| typing_start(app, project, true)); // the phones see the turn start (or, for a turn already running, its state again), even while its session is still on its way
     let _ = start.then(|| tokio::spawn(run(app.clone(), project.to_string())));
+}
+/// What waits for the next message of `project`.
+#[cfg(test)]
+pub fn waiting_notes(project: &str) -> Vec<String> {
+    talk(project, |t| t.notes.clone())
 }
