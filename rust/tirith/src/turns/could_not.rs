@@ -14,7 +14,12 @@ fn cause(score: f64, why: &str) -> Option<&str> {
     let head = why.get(..SAYS.len())?;
     let marked = head.eq_ignore_ascii_case(SAYS) && score <= AT_MOST;
     let rest = why[head.len()..].trim_start_matches(['`', '*']);
-    marked.then(|| rest.strip_prefix(':'))?.map(str::trim)
+    let said = marked.then(|| rest.strip_prefix(':'))??.trim();
+    Some(
+        Some(said)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("su juez no dijo el motivo"),
+    )
 }
 
 /// Event `event`'s run as its judge's last word leaves it. With no score in it, or with no such eval, code's loose words decide.

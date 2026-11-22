@@ -42,7 +42,6 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
         why.as_deref(),
     );
     super::signals::keep(app, id, &t, &answer);
-    super::quality::catch_up(app, id, event);
     let own = app
         .cfg()
         .factory
@@ -54,6 +53,7 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
         crate::bots::versioned(app, &t.conv, &format!("turn {id}")) // a bot's folder and the shared one, committed when this turn changed them
     });
     app.emit("turn", json!({"id": id, "conv": t.conv, "status": status}));
+    super::quality::catch_up(app, id, event); // after that line: a judge that was quicker may end it failed
     crate::lab::finished(app, id, &t.conv, &t.routine); // a run of a live experiment: its variant, its comparison
     let _ = (t.role == t.conv).then(|| crate::bots::untune(app, &t.conv)); // the routine's own effort or model ends with its turn
     id
