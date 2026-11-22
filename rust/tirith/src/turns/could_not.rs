@@ -41,6 +41,7 @@ pub(super) fn check(app: &Shared, event: i64) {
     if why.is_some() || !judge {
         crate::expected::admitted(app, turn, &answer, why);
     }
+    crate::expected::settled(app, turn);
 }
 
 /// True when some judge grades runs.

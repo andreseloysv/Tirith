@@ -1,4 +1,4 @@
-//! What a routine's run says waits for its end: on the phones only when the run was good and has news. A failed one is the one line of `expected/`.
+//! What a routine's run says waits for its end: on the phones only when the run was good and has news, once its judge read it (`expected/news.rs`). A failed one is the one line of `expected/`.
 use super::talk::talk;
 use crate::app::Shared;
 use crate::rooms;
@@ -16,13 +16,11 @@ pub(super) fn say(app: &Shared, project: &str, text: &str) {
     }
 }
 
-/// The run of `project` ended, `good` or not: what it held goes out, unless it ends saying that nothing is new.
-pub fn run_over(app: &Shared, project: &str, good: bool) {
+/// The run of `project` ended, `good` or not: what it held that is news, none when it ends saying that nothing is new.
+pub fn run_over(project: &str, good: bool) -> Option<String> {
     let said = talk(project, |t| std::mem::take(&mut t.said));
     let news = said
         .last()
         .is_some_and(|last| !crate::expected::quiet(last));
-    if good && news {
-        rooms::to_phones(app, project, &said.join("\n\n"));
-    }
+    (good && news).then(|| said.join("\n\n"))
 }

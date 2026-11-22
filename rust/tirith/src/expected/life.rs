@@ -1,7 +1,7 @@
 //! An expected run's life: it starts, and its turn ends it; or it never becomes a turn and ends without one (`lost.rs`).
 use super::found::oldest;
 use super::store::{close, select, Expected, FAILED, OK, RUNNING, WAITING};
-use super::{lost, notice, PASS};
+use super::{lost, news, notice, PASS};
 use crate::app::{now_iso, Shared};
 use rusqlite::params;
 
@@ -14,7 +14,7 @@ pub fn started(app: &Shared, conv: &str, routine: &str) {
     app.insert(sql, params![RUNNING, now_iso(), run.id]); // why it waited is over
 }
 
-/// Turn `turn` of `conv`, which ran `routine`, was kept with `status`: the run it was ends with it, and a failure is said. What the run held back from the phones goes out only when it is good.
+/// Turn `turn` of `conv`, which ran `routine`, was kept with `status`: the run it was ends with it, and a failure is said. What the run held back from the phones goes out only when it is good, and once it was judged.
 pub fn ended(
     app: &Shared,
     (conv, role, routine): (&str, &str, &str),
@@ -26,10 +26,17 @@ pub fn ended(
         return;
     }
     let good = status != "failed";
-    if routine != PASS {
-        crate::manager::run_over(app, conv, good); // a pass has no conversation's turn to hold
+    let held = (routine != PASS) // a pass has no conversation's turn to hold
+        .then(|| crate::manager::run_over(conv, good))
+        .flatten();
+    let run = oldest(app, conv, routine, RUNNING);
+    if let Some(text) = held {
+        match run.is_some() && status == "ok" {
+            true => news::keep(app, conv, turn, &text), // before it closes: a failure may claim it from then on
+            false => crate::rooms::to_phones(app, conv, &text),
+        }
     }
-    let Some(run) = oldest(app, conv, routine, RUNNING) else {
+    let Some(run) = run else {
         return;
     };
     if good {

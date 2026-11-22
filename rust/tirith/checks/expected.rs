@@ -653,7 +653,7 @@ async fn the_judge_tells_a_could_not_in_other_words() {
 echo '{"type":"system","subtype":"init","session_id":"s"}'
 while read -r line; do
   case "$line" in
-    *'grade how well'*) echo '{"type":"assistant","message":{"content":[{"type":"text","text":"VERDICT"}]}}' ;;
+    *'grade how well'*) sleep 2; echo '{"type":"assistant","message":{"content":[{"type":"text","text":"VERDICT"}]}}' ;;
     *)
       echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"1","name":"Bash","input":{"command":"cat notes"}}]}}'
       echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"1","is_error":true,"content":"cat: notes: no such helper"}]}}'
@@ -684,7 +684,12 @@ done
         let app = crate::app::App::open_at(home.clone());
         crate::bots::tick(&app);
         let row = || kept(&app, &key).0.first().cloned().unwrap_or_default();
+        let mut waited = false;
         until("the judge's word", || {
+            let news = app.query("SELECT key FROM kv WHERE key LIKE 'news:run:%'", [], |r| {
+                r.get::<_, String>(0)
+            });
+            waited |= !news.is_empty();
             let judged = !app
                 .query(
                     "SELECT id FROM scores WHERE eval = 'turn-quality'",
@@ -699,6 +704,16 @@ done
         crate::turns::scored(&app, event, "turn-quality", row()["score"].as_f64()); // said again: nothing twice
         let (rows, said) = kept(&app, &key);
         crate::manager::end_session(&key);
+        if session == "chat" {
+            assert!(
+                waited,
+                "{name}: the news went out before the judge's word, so a failure is two lines"
+            );
+        }
+        let left = app.query("SELECT key FROM kv WHERE key LIKE 'news:run:%'", [], |r| {
+            r.get::<_, String>(0)
+        });
+        assert!(left.is_empty(), "{name}: {left:?}");
         let shown = app.query("SELECT summary FROM events WHERE id = ?1", [event], |r| {
             r.get::<_, String>(0)
         });
@@ -729,4 +744,24 @@ done
         let _ = std::fs::remove_dir_all(&home);
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn news_wait_for_a_judge_but_never_long_and_a_failure_takes_their_place() {
+    let (app, home, key) = home_of("news", "/usr/bin/true", "1", "08:00");
+    let now = Local::now();
+    super::news::keep(&app, &key, 1, "2 ofertas");
+    super::news::overdue(&app, now + chrono::TimeDelta::minutes(1));
+    assert!(
+        super::news::settled(&app, 1),
+        "still waiting after a minute"
+    );
+    assert!(!super::news::settled(&app, 1), "never twice");
+    super::news::keep(&app, &key, 2, "2 ofertas");
+    super::news::overdue(&app, now + chrono::TimeDelta::minutes(5));
+    assert!(!super::news::settled(&app, 2), "out after three");
+    super::news::keep(&app, &key, 3, "Falló");
+    super::news::drop_them(&app, 3);
+    assert!(!super::news::settled(&app, 3), "the line takes their place");
+    let _ = std::fs::remove_dir_all(&home);
 }

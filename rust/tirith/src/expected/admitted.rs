@@ -2,7 +2,7 @@
 use super::admits::trouble;
 use super::claims::{after, could_not, NOTHING};
 use super::store::{close, select, FAILED, OK};
-use super::{notice, words::short};
+use super::{news, notice, words::short};
 use crate::app::{redact_secrets, Shared};
 use rusqlite::params;
 use serde_json::json;
@@ -27,6 +27,7 @@ pub fn admitted(app: &Shared, turn: i64, answer: &str, cause: Option<&str>) {
                 )
             }
         };
+        news::drop_them(app, turn);
         close(app, run.id, FAILED, turn, &why);
         let sql = "UPDATE turns SET status = ?1, why = ?2 WHERE id = ?3";
         app.insert(sql, params![FAILED, why, turn]);

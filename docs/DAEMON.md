@@ -232,7 +232,8 @@ What was due and how it ended. Every run of a routine and every scheduled pass o
 (table `expected_runs`), before anything starts, and ends in a row of `turns` whether it ran or not. One that failed, was lost or
 never started says why, counts as a failure in the numbers the Coach reads, and is one line in the chat and on the phones, sent
 by code, so it needs no agent and no quota. «∅» means "I looked and nothing is new". Code fails a run only where it is certain;
-a "could not" in other words is told by the judge that grades the run (`turns/`, `score`).
+a "could not" in other words is told by the judge that grades the run (`turns/`, `score`), so a good run's news reach the phones
+once it is judged, three minutes later at most: a failure it finds is the one line.
 
 Files:
 
@@ -247,6 +248,7 @@ Files:
 - `lost.rs`: The row in `turns` of a run that never was a turn: failed, with no agent, no time and no tokens (the numbers count the failure and nothing else), and why.
 - `missed.rs`: Occurrences that nothing ever wrote down and that will not run: Tirith was stopped, or the machine slept, across them. The one `catch_up` still runs is not lost; with "skip" one is lost as soon as it is late. Each gets its row, and each routine one line.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `news.rs`: The news of a good run wait for its judge, so a "could not" that it finds is one line; never long, and in the store.
 - `notice.rs`: The one line the owner gets of a run that did not work, written by code and kept until the phones have it.
 - `overdue.rs`: Runs that wait, or work, too long (`[limits] routine_minutes`), counted on a clock that stops while the machine sleeps; and a pass whose day ended while it waited and that `catch_up` runs no more.
 - `passes.rs`: A turn role's scheduled pass as an expected run: written down when due, waiting while something keeps it, and never twice.
@@ -1313,7 +1315,7 @@ Files:
 - `checks.rs`: The bot's own validation, `tirith turn checks`, kept on the open turn of its conversation or the last one.
 - `could_not.rs`: The judge's word that a routine's run could not do its task: that run becomes a failure.
 - `codex_log.rs`: Codex's own log of a thread, for the model a turn ran on.
-- `evidence.rs`: What a run's judge is shown of its calls: the errors and what the last ones gave, as data.
+- `evidence.rs`: What a run's judge is shown of its calls: those that failed or printed an error and the last two, and what each gave, as data.
 - `exec_items.rs`: The tool calls in the exec agents' lines, under the names their hooks use.
 - `follow.rs`: Which messages handed during a turn got turns of their own (the streaming CLI may fold them into the running one).
 - `hashes.rs`: The git blob hashes of files as they are now.
