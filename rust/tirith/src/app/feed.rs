@@ -39,6 +39,11 @@ impl App {
             role.to_string()
         };
         let (factory, role_hash) = self.stamp_for(&by);
+        let honest = match role {
+            "manager" => crate::expected::honest(text), // a «∅» that says it could not is no silence
+            _ => text.into(),
+        };
+        let text = honest.as_ref();
         let id = self.insert("INSERT INTO chat (at, role, text, project, factory, role_hash) VALUES (?1,?2,?3,?4,?5,?6)", params![at, role, text, project, factory, role_hash]);
         self.emit("chat", json!({"id": id, "at": at, "role": role, "text": text, "project": project, "factory": factory, "role_hash": role_hash}));
     }

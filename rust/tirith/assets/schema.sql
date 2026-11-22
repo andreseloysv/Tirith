@@ -40,8 +40,14 @@ CREATE TABLE IF NOT EXISTS turns (id INTEGER PRIMARY KEY, conv TEXT, role TEXT, 
     steps INTEGER, skills TEXT, tools TEXT, versions TEXT, answer TEXT, event INTEGER,
     factory TEXT NOT NULL DEFAULT '', role_hash TEXT NOT NULL DEFAULT '',
     reaction INTEGER, corrected INTEGER NOT NULL DEFAULT 0, checks_passed INTEGER, checks_total INTEGER,
-    checks TEXT, cited TEXT, score REAL, experiment INTEGER, variant TEXT);
+    checks TEXT, cited TEXT, score REAL, experiment INTEGER, variant TEXT, why TEXT);
 CREATE INDEX IF NOT EXISTS turns_conv ON turns (conv, id);
+-- What was due (docs/DAEMON.md, `expected/`): one row for each occurrence of a routine or scheduled pass, written
+-- before anything starts: when it was due (UTC), its task, waiting | running | ok | failed, why, and its turn.
+CREATE TABLE IF NOT EXISTS expected_runs (id INTEGER PRIMARY KEY, conv TEXT, routine TEXT, title TEXT, "trigger" TEXT,
+    kind TEXT, due TEXT, task TEXT, state TEXT, why TEXT, turn INTEGER, created_at TEXT, started_at TEXT, ended_at TEXT);
+CREATE INDEX IF NOT EXISTS expected_runs_of ON expected_runs (conv, routine, due);
+CREATE INDEX IF NOT EXISTS expected_runs_open ON expected_runs (state);
 -- A turn from its start to its row in `turns`: what a restart finds here was interrupted and is kept as failed.
 CREATE TABLE IF NOT EXISTS open_turns (conv TEXT, role TEXT, start_us INTEGER, "trigger" TEXT, routine TEXT,
     started_at TEXT, agent TEXT, model TEXT, effort TEXT, PRIMARY KEY (conv, role, start_us));

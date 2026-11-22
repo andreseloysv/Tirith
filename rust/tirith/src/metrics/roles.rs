@@ -1,5 +1,5 @@
 //! Any turn role's pass, not only the CEO's: the brief its `brief` key names ("ceo" or "bots"), its `schedule` route and the events routed to it, each within its `max_per_day`.
-use super::pass::{daily_due, under_budget};
+use super::pass::{may_start, under_budget};
 use super::review::start_review;
 use crate::app::{now_s, Shared};
 
@@ -38,7 +38,7 @@ pub(super) fn scheduled(app: &Shared, ceo: &str, now: u64) {
     roles.dedup();
     roles
         .into_iter()
-        .filter(|r| r != ceo && is_turn(app, r) && daily_due(app, r) && under_budget(app, r, now))
+        .filter(|r| r != ceo && is_turn(app, r) && may_start(app, r, now))
         .for_each(|r| start_review(app, r, "daily".into(), "Scheduled pass.".into()));
 }
 

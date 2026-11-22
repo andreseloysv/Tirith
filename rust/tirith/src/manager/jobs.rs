@@ -23,6 +23,7 @@ pub(super) fn reserve(project: &str) -> Option<Job> {
 
 /// A routine's run starts: it is A or B of the experiment on it, and its own effort or model applies, each ending its session first when its turn needs a fresh one.
 pub(super) fn start_run(app: &Shared, project: &str, job: &Job) {
+    crate::expected::started(app, project, &job.by.1);
     crate::lab::fired(app, project, &job.by.1, &job.text);
     crate::bots::tune(app, project, &job.by.1);
 }

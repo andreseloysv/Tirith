@@ -17,12 +17,13 @@ fn count(v: &toml::Value) -> Option<u64> {
 }
 
 impl Factory {
-    /// Every `schedule` route that names a time of day: (to, at, days). A bot's routines are fired from config.toml by bots.rs; one of the factory's own (the CEO's daily pass) by whoever runs its role.
+    /// Every `schedule` route that names a time of day and no task: (to, at, days). A route with a task is a routine, fired from config.toml by bots.rs; one of the factory's own (the CEO's daily pass) by whoever runs its role.
     pub fn schedules(&self) -> Vec<Schedule> {
         rows(&self.raw, "routes")
             .filter(|r| {
                 str_of(r, "on") == "schedule"
                     && !str_of(r, "at").is_empty()
+                    && str_of(r, "task").is_empty()
                     && r.get("enabled").and_then(|v| v.as_bool()) != Some(false)
             })
             .map(|r| {

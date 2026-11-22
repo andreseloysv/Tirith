@@ -16,10 +16,10 @@ Los pasos numerados, en orden, con dónde mirar, qué filtrar y qué saltarse.
 Cómo comprobar que el resultado es correcto antes de darlo: cada comprobación en una línea.
 
 ## Qué devuelve
-El formato y el largo de la respuesta (por ejemplo: tres líneas, una por oferta nueva, o «∅» si no hay nada).
+El formato y el largo de la respuesta (por ejemplo: tres líneas, una por oferta nueva, o «∅» si miró y no hay nada nuevo; nunca «∅» si no pudo).
 
 ## Qué requiere aprobación
 Lo que no se hace sin el sí del dueño: enviar, comprar, borrar, publicar o tocar producción.
 
 ## Si algo falla
-Qué hacer cuando falta un acceso o un paso ya no funciona, y qué decir al dueño en una línea.
+Qué hacer cuando falta un acceso o un paso ya no funciona, y qué decir al dueño en una línea que empieza por «✗».

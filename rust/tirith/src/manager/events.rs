@@ -15,23 +15,20 @@ pub fn emit_event(app: &Shared, project: &str, on: &str, shown: &str, told: Opti
 }
 /// `emit_event`, with the event's id back (a turn's row keeps it).
 pub fn emitted(app: &Shared, project: &str, on: &str, shown: &str, told: Option<&str>) -> i64 {
-    emit_by(app, project, (on, shown, told), None)
+    emit_by(app, project, (on, shown, told), None).0
 }
-/// A routine is due (`on` is `schedule` or `webhook`, `task` what its bot is handed): its run is a turn of its own, begun by `by` (the trigger and the routine's id), after the runs and messages before it in that conversation.
-pub fn run_routine(app: &Shared, project: &str, on: &str, task: &str, by: (&str, &str)) {
-    emit_by(
-        app,
-        project,
-        (on, task, None),
-        Some((by.0.into(), by.1.into())),
-    );
+/// A routine is due (`on` is `schedule` or `webhook`, `task` what its bot is handed): its run is a turn of its own, begun by `by` (the trigger and the routine's id), after the runs and messages before it in that conversation. False when nobody could be handed it.
+pub fn run_routine(app: &Shared, project: &str, on: &str, task: &str, by: (&str, &str)) -> bool {
+    let job = Some((by.0.into(), by.1.into()));
+    emit_by(app, project, (on, task, None), job).1
 }
 fn emit_by(
     app: &Shared,
     project: &str,
     (on, shown, told): (&str, &str, Option<&str>),
     job: Option<By>,
-) -> i64 {
+) -> (i64, bool) {
+    let mut handed = false;
     let event = app.event("", project, on, "", shown, "");
     let routes = app.cfg().factory.routes_on(on);
     let here_p = app.conv(project);
@@ -53,15 +50,11 @@ fn emit_by(
         }
         let text = told.unwrap_or(shown);
         match job.clone().filter(|_| mode == "turn") {
-            Some(by) => queue_job(
-                app,
-                &dest,
-                Job {
-                    text: text.into(),
-                    by,
-                    phones: phone,
-                },
-            ),
+            Some(by) => {
+                handed = true;
+                let (text, phones) = (text.to_string(), phone);
+                queue_job(app, &dest, Job { text, by, phones });
+            }
             None => {
                 crate::turns::on_event(&dest, on, &mode);
                 queue(app, &dest, text, &mode, phone);
@@ -69,7 +62,7 @@ fn emit_by(
         }
     }
     judge_evals(app, project, on, shown, event);
-    event
+    (event, handed)
 }
 /// The conversation a route to role `to` hands its event to, if any.
 fn dest_of(f: &Factory, to: &str, on: &str, here_p: &str) -> Option<String> {

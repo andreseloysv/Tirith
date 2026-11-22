@@ -59,6 +59,23 @@ pub(super) fn daily_due(app: &Shared, role: &str) -> bool {
     })
 }
 
+/// Whether the scheduled pass of `role` may start now: due (and so expected, `expected/`) and within its budget; else it waits, saying for what.
+pub(super) fn may_start(app: &Shared, role: &str, now: u64) -> bool {
+    let due = daily_due(app, role);
+    if !crate::expected::pass_due(app, role, due, chrono::Local::now()) {
+        return false;
+    }
+    let under = under_budget(app, role, now);
+    if !under {
+        crate::expected::blocked(
+            app,
+            role,
+            "su tope de pasadas en 24 h (max_per_day) estaba gastado",
+        );
+    }
+    under
+}
+
 /// When this home's daemon first started.
 const BORN: &str = "born";
 

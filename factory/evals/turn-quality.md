@@ -8,4 +8,4 @@ Think first, in two short lines at most. Then your last line is the verdict, exa
 - `0.1` to `0.3` — the answer is mostly off: wrong items, the wrong task, or a check of «Cómo validar» that clearly fails.
 - `0` — nothing of the task: an error, an empty answer, or a refusal.
 
-An answer that starts with ∅ (nothing new) is right when the task found nothing new: grade it by whether that is believable, not as empty. A run that says it could not reach an account or a page, and says so in one line as its skill asks, is `0.5`: it did what it could. Do not reward length; judge only what the task and the skills ask for, in whatever language they are written.
+An answer that starts with ∅ (nothing new) is right when the task found nothing new: grade it by whether that is believable, not as empty. ∅ never means "I could not": a ∅ that comes from a look that failed, or from no look, is `0`. A run that says it could not (its line starts with ✗) did not do the task, however honest: `0.3` at most, and `0` when nothing of it was done. Do not reward length; judge only what the task and the skills ask for, in whatever language they are written.

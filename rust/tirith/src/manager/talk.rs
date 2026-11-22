@@ -42,6 +42,8 @@ pub(super) struct Talk {
     /// A routine's run has the conversation, taken from the queue (`taken`) or with its turn running (`in_run`): nothing joins it (`waiting.rs`).
     pub(super) taken: bool,
     pub(super) in_run: bool,
+    /// What a routine's run said for the phones, held until it ends (`held.rs`).
+    pub(super) said: Vec<String>,
     /// A waiting report asks for a turn: without one they wait for the next message, which carries them.
     pub(super) notes_due: bool,
     /// A waiting report's answer reaches the phones.

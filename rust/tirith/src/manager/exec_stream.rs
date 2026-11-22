@@ -1,10 +1,8 @@
 //! What an exec turn says while it runs: Muse's stream, Codex's and Copilot's events, in the chat and on the phones.
 use super::exec_copilot::on_copilot;
-use super::talk::talk;
 use super::typing::typing_line;
 use crate::app::Shared;
 use crate::codex::Exec;
-use crate::rooms;
 use serde_json::Value;
 /// One event of the agent's stream.
 pub(super) fn on_event(app: &Shared, project: &str, key: &str, kind: Exec, msg: &Value) {
@@ -55,7 +53,7 @@ fn on_codex(app: &Shared, project: &str, key: &str, msg: &Value) {
         "item.completed" if msg["item"]["type"] == "agent_message" => {
             let text = msg["item"]["text"].as_str().unwrap_or("");
             app.chat("manager", text, project);
-            let _ = talk(project, |t| t.phones).then(|| rooms::to_phones(app, project, text));
+            super::held::say(app, project, text);
         }
         "item.started" if msg["item"]["type"] == "command_execution" => {
             let cmd = msg["item"]["command"].as_str().unwrap_or("command");

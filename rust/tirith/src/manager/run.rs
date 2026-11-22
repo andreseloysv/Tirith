@@ -1,5 +1,5 @@
 //! A conversation's sessions, one after another while messages wait, started again more slowly when they fail young.
-use super::deliver::report;
+use super::deliver::{deliver, report};
 use super::jobs::release_run;
 use super::session::session;
 use super::talk::{set_busy, talk};
@@ -7,17 +7,18 @@ use super::typing::typing_stop;
 use crate::app::Shared;
 use std::time::Duration;
 pub(super) async fn run(app: Shared, project: String) {
-    let mut backoff = 2;
+    let (mut backoff, mut failed) = (2, 0);
     loop {
         let started = std::time::Instant::now();
         let result = session(&app, &project).await;
         result
             .as_ref()
             .err()
-            .filter(|_| backoff == 2)
+            .filter(|_| backoff == 2 && !super::unstarted::only_runs(&project))
             .into_iter()
             .for_each(|e| (app.event("", &project, "error", "manager", e, ""), report(&app, &project, &format!("The manager could not start: {e}. Tirith keeps trying; what you wrote waits for it."))).1);
         let _ = result.is_err().then(|| release_run(&app, &project)); // a session that never started held what its run took
+        super::unstarted::after(&app, &project, &result, &mut failed);
         typing_stop(&project); // a session that ended, failed or never got ready leaves no turn typing on the phones
         let rest = talk(&project, |t| {
             (t.tx, t.pid, t.in_run) = (None, 0, false);
@@ -27,6 +28,7 @@ pub(super) async fn run(app: Shared, project: String) {
             !t.alive
         });
         let Some(()) = (!rest).then_some(()) else {
+            deliver(&app, &project, "", false); // the next run waiting, if one does
             return;
         };
         // A session that ended young is started again more and more slowly; one that lived is started again at once.

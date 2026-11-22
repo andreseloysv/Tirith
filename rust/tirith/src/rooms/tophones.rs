@@ -1,5 +1,6 @@
 //! What a project's conversation says reaches the phones in its rooms.
-use super::{outbox::queue, store::ROOMS, uncite::uncited, Room};
+use super::outbox::{queue, Line};
+use super::{store::ROOMS, uncite::uncited, unsent, Room};
 use crate::app::Shared;
 /// The ids of a conversation's own rooms, the ones its phones are in.
 pub fn phone_rooms(app: &Shared, project: &str) -> Vec<String> {
@@ -13,24 +14,35 @@ pub fn phone_rooms(app: &Shared, project: &str) -> Vec<String> {
 }
 /// What a project's conversation says (its manager's words, Tirith's reports, a card) goes to the phones of its rooms, without a bot's memory citations.
 pub fn to_phones(app: &Shared, project: &str, text: &str) {
-    // An answer that starts with ∅ (a routine found nothing new) stays on the page: only news reaches the phones.
+    for (room, text, readers) in lines(app, project, text) {
+        queue(&room, &text, readers);
+    }
+}
+/// The same, for a line that must arrive: kept until it is sent.
+pub fn to_phones_surely(app: &Shared, project: &str, text: &str) {
+    for (room, text, readers) in lines(app, project, text) {
+        unsent::keep(app, (room.clone(), text.clone(), readers.clone()));
+        queue(&room, &text, readers);
+    }
+}
+/// What is sent where.
+fn lines(app: &Shared, project: &str, text: &str) -> Vec<Line> {
+    // A true ∅ (a routine looked and found nothing new) stays on the page: only news reaches the phones, and «∅ I could not» is news.
+    if crate::expected::quiet(text) {
+        return vec![];
+    }
+    let text = &crate::expected::honest(text);
+    let text = uncited(text);
     let rooms: Vec<Room> = ROOMS
         .lock()
         .unwrap()
         .values()
-        .filter(|r| {
-            r.kind == "manager"
-                && app.conv(&r.project) == project
-                && !text.trim_start().starts_with('∅')
-        })
+        .filter(|r| r.kind == "manager" && !r.devices.is_empty() && app.conv(&r.project) == project)
         .cloned()
         .collect();
-    let text = uncited(text);
-    rooms.iter().for_each(|r| {
-        queue(
-            &r.id,
-            &text,
-            r.devices.iter().map(|d| d.public.clone()).collect(),
-        )
-    });
+    let readers = |r: &Room| r.devices.iter().map(|d| d.public.clone()).collect();
+    rooms
+        .iter()
+        .map(|r| (r.id.clone(), text.to_string(), readers(r)))
+        .collect()
 }

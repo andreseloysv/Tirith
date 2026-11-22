@@ -23,32 +23,30 @@ pub(super) fn exec_end(
     kind: Exec,
     result: Result<String, String>,
 ) {
-    let (rooms_now, phones) = talk(project, |t| {
-        t.in_run = false;
-        (
-            set_busy(app, project, t, false),
-            (
-                std::mem::take(&mut t.turn_rooms),
-                std::mem::take(&mut t.phones),
-            ),
-        )
-            .1
-    });
+    let run = talk(project, |t| t.in_run);
     let (text, answered) = match result {
         Ok(text) => (text, true),
         Err(e) => {
-            let who = kind.failed();
-            let text = format!("{who}: {e}. Send your message again to retry.");
-            report(app, project, &text);
+            let mut text = format!("{}: {e}", kind.failed());
+            if !run {
+                text += ". Send your message again to retry.";
+                report(app, project, &text); // a routine's failure is said once, by `expected/`
+            }
             app.set_kv(key, None);
             (text, false)
         }
     };
-    crate::turns::end(app, project, Some(answered), Some(&text));
     // Codex and Copilot speak while they work; Muse's exec turn answers once, at its end.
-    let _ = (!kind.speaks() && answered)
-        .then(|| app.chat("manager", &text, project))
-        .map(|_| phones.then(|| rooms::to_phones(app, project, &text)));
+    if answered && !kind.speaks() {
+        app.chat("manager", &text, project);
+        super::held::say(app, project, &text);
+    }
+    let rooms_now = talk(project, |t| {
+        (t.in_run, t.phones) = (false, false);
+        set_busy(app, project, t, false);
+        std::mem::take(&mut t.turn_rooms)
+    });
+    crate::turns::end(app, project, Some(answered), Some(&text));
     typing_stop(project); // finished, failed or timed out: the phones stop showing it typing
     rooms::reply(app, &Vec::from_iter(rooms_now), &text);
     deliver(app, project, "", false); // the next routine's run waiting, if the conversation is free

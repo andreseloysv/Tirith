@@ -11,6 +11,7 @@ mod exec;
 mod exec_copilot;
 mod exec_end;
 mod exec_stream;
+mod held;
 mod interrupt;
 mod jobs;
 mod judged;
@@ -31,13 +32,15 @@ mod talk;
 mod turn;
 mod turn_read;
 mod typing;
+mod unstarted;
 mod verdict;
 mod waiting;
 pub use answer::owner_answer;
 pub use ask::ask_owner;
 pub use cards::close_card;
-pub use deliver::deliver;
+pub use deliver::{deliver, notify};
 pub use events::{emit_event, emitted, run_routine};
+pub use held::run_over;
 pub use interrupt::interrupt;
 pub use jobs::release_run;
 pub use judged::card_id_of;
@@ -52,6 +55,7 @@ pub use stale::stale_reason; // only the lanes' checks call it from outside
 pub use talk::{busy, end_session, restart};
 pub use turn::run_turn;
 pub use typing::typing_heartbeats;
+pub use unstarted::{drop_run, stop_run};
 #[cfg(test)]
 use {
     judged::judged, open::waiting_cards, progress::progress_line, spawn::turn_permission,

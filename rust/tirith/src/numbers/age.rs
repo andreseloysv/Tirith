@@ -22,7 +22,7 @@ fn written_at(dir: &Path, id: &str) -> Option<String> {
 /// How many of the bot's own runs started after note `id` was written; none when it is not known when.
 pub fn runs_since(app: &Shared, key: &str, dir: &Path, id: &str) -> Option<usize> {
     let at = written_at(dir, id)?;
-    let sql = "SELECT COUNT(*) FROM turns WHERE conv = ?1 AND role = ?1 AND COALESCE(variant, '') <> 'B' AND started_at > ?2";
+    let sql = "SELECT COUNT(*) FROM turns WHERE conv = ?1 AND role = ?1 AND COALESCE(variant, '') <> 'B' AND started_at > ?2 AND NOT (COALESCE(status, '') = 'failed' AND COALESCE(why, '') <> '' AND ms IS NULL)";
     let n = app.query(sql, [key, at.as_str()], |r| r.get::<_, i64>(0));
     n.first().map(|n| *n as usize)
 }

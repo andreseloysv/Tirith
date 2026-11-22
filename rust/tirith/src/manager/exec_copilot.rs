@@ -1,8 +1,6 @@
 //! What a Copilot turn says while it runs: its messages in the chat and on the phones, its tools' calls in the chat.
-use super::talk::talk;
 use super::typing::typing_line;
 use crate::app::Shared;
-use crate::rooms;
 use serde_json::Value;
 
 /// A Copilot event: its session id is kept, its own messages are said as they come, its tool calls shown.
@@ -22,7 +20,7 @@ pub(super) fn on_copilot(app: &Shared, project: &str, key: &str, msg: &Value) {
                 return;
             };
             app.chat("manager", text, project);
-            let _ = talk(project, |t| t.phones).then(|| rooms::to_phones(app, project, text));
+            super::held::say(app, project, text);
         }
         "tool.execution_start" => {
             let name = data["toolName"].as_str().unwrap_or("tool");

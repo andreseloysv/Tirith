@@ -17,6 +17,7 @@ pub fn add_columns(db: &Connection) {
         "score REAL",
         "experiment INTEGER",
         "variant TEXT",
+        "why TEXT",
     ]
     .into_iter()
     .for_each(|col| drop(db.execute(&format!("ALTER TABLE turns ADD COLUMN {col}"), [])));

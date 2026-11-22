@@ -1,4 +1,4 @@
-//! A bot's routine gone worse: its last 5 runs cost 30 % more (in tokens or in dollars) than the 10 before them, or 2 of them failed. The measures' pass emits `routine.worse` for it once per episode (kv `routine_worse:<bot>:<routine>`, cleared when it is no longer worse), with the bot, the routine and those numbers.
+//! A bot's routine gone worse: its last 5 runs cost 30 % more (in tokens or in dollars) than the 10 before them, or 2 of them failed (of fewer, when it has no five yet; a run that never started is one, with no tokens to compare). The measures' pass emits `routine.worse` for it once per episode (kv `routine_worse:<bot>:<routine>`, cleared when it is no longer worse), with the bot, the routine and those numbers.
 use crate::app::Shared;
 use crate::server::s;
 
@@ -34,11 +34,10 @@ fn grew(last: &[Run], before: &[Run], f: fn(&Run) -> Option<f64>) -> Option<(f64
 
 /// Why the runs (newest first) went worse, if they did.
 pub(super) fn worse(runs: &[Run]) -> Option<String> {
-    (runs.len() >= 5).then_some(())?;
-    let (last, before) = runs.split_at(5);
+    let (last, before) = runs.split_at(runs.len().min(5)); // two failures need no five runs
     let pct = |(now, was): (f64, f64)| ((now / was - 1.0) * 100.0).round();
     let mut why = vec![];
-    if let Some(t) = grew(last, before, |r| Some(r.tokens)) {
+    if let Some(t) = grew(last, before, |r| (r.tokens > 0.0).then_some(r.tokens)) {
         why.push(format!(
             "tokens per run {:.0} against {:.0} in the 10 before (+{} %)",
             t.0,
@@ -55,7 +54,8 @@ pub(super) fn worse(runs: &[Run]) -> Option<String> {
         ));
     }
     let failed = last.iter().filter(|r| r.failed).count();
-    let _ = (failed >= 2).then(|| why.push(format!("{failed} of the last 5 runs failed")));
+    let _ =
+        (failed >= 2).then(|| why.push(format!("{failed} of the last {} runs failed", last.len())));
     (!why.is_empty()).then(|| why.join("; "))
 }
 
@@ -82,7 +82,10 @@ pub(super) fn check(app: &Shared) {
             .find(|r| r["id"] == routine.as_str())
             .map(|r| s(r, "title"))
             .unwrap_or_default();
-        let text = format!("Routine worse: bot {} ({conv}), routine «{title}» ({routine}): its last 5 runs: {why}.", s(&bot, "name"));
+        let text = format!(
+            "Routine worse: bot {} ({conv}), routine «{title}» ({routine}): its last runs: {why}.",
+            s(&bot, "name")
+        );
         crate::manager::emit_event(app, &conv, "routine.worse", &text, None);
     }
 }

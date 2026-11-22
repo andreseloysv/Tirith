@@ -18,18 +18,28 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
         .or_else(|| cost(&app.cfg().raw, &t.model, &t.usage));
     let ok = ok.unwrap_or(!t.usage.failed);
     let answer: String = answer.unwrap_or(&t.text).chars().take(4000).collect();
-    let event = event(app, &t, &answer);
+    let waits = super::approval::waits(app, &t);
+    let judged = (!waits).then(|| crate::expected::verdict(app, &t, ok, &answer));
+    let why = judged.flatten(); // a routine's run that did not do its task
+    let event = event(app, &t, &answer, why.as_deref());
     let (factory, role_hash) = app.stamp_for(&t.role);
     let u = &t.usage;
     let ms = t.started.elapsed().as_millis() as i64;
     let (skills, tools) = (json!(t.skills).to_string(), json!(t.tools).to_string());
     let versions = versions(app, &t).to_string();
-    let status = match (super::approval::waits(app, &t), ok) {
+    let status = match (waits, ok && why.is_none()) {
         (true, _) => "waiting", // its approval card is still open: the owner's answer starts its next turn
         (_, true) => "ok",
         _ => "failed",
     };
     let id = app.insert("INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, ms, status, agent, model, effort, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, cost_usd, steps, skills, tools, versions, answer, event, factory, role_hash) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)", params![t.conv, t.role, t.trigger, t.routine, t.started_at, now_iso(), ms, status, t.agent, t.model, t.effort, u.input, u.output, u.cache_read, u.cache_write, cost_usd, t.steps, skills, tools, versions, answer, event, factory, role_hash]);
+    crate::expected::ended(
+        app,
+        (&t.conv, &t.role, &t.routine),
+        id,
+        status,
+        why.as_deref(),
+    );
     super::signals::keep(app, id, &t, &answer);
     super::quality::catch_up(app, id, event);
     let own = app
@@ -49,7 +59,7 @@ pub fn finish(app: &Shared, mut t: Turn, ok: Option<bool>, answer: Option<&str>)
 }
 
 /// A bot's own turn (a role with `scope = "own"` and `session = "chat"`, in its conversation) emits `turn.done`, or `routine.done` when a routine started it or it read a skill: its id, else none.
-fn event(app: &Shared, t: &Turn, answer: &str) -> Option<i64> {
+fn event(app: &Shared, t: &Turn, answer: &str, why: Option<&str>) -> Option<i64> {
     // Only the bot's own role: a judge's turn in its conversation emits nothing (an eval on turn.done would judge itself forever).
     (t.role == t.conv).then_some(())?;
     let bot = crate::bots::bot(app, &t.conv).filter(|b| b["session"] == "chat")?;
@@ -69,6 +79,7 @@ fn event(app: &Shared, t: &Turn, answer: &str) -> Option<i64> {
         " · skills: {}",
         names(t.skills.clone()).unwrap_or("none".into())
     );
+    why.iter().for_each(|w| text += &format!(" · failed: {w}"));
     let approval = super::approval::context(app, t);
     // A routine's turn, or a chat turn that read a skill (graded with its «Cómo validar» too); a chat turn that read none is not graded.
     let (on, text) = if routine.is_some() || !t.skills.is_empty() {

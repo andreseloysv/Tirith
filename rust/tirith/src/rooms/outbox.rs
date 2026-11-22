@@ -17,6 +17,7 @@ pub(super) fn open(app: &Shared) {
 async fn send_all(app: Shared, mut rx: mpsc::UnboundedReceiver<Line>) {
     while let Some((id, text, readers)) = rx.recv().await {
         send_until_done(&app, &id, &text, &readers).await;
+        super::unsent::done(&app, &id, &text);
     }
 }
 /// While the platform is away all wait (some six hours at most); what it refuses three times is dropped and said.

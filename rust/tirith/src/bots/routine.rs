@@ -63,7 +63,8 @@ fn edit(
     set(r, b)?;
     Ok((
         if i.is_none() {
-            format!("Created routine · {}", s(r, "title"))
+            let first = crate::expected::first(r, chrono::Local::now());
+            format!("Created routine · {}{first}", s(r, "title"))
         } else {
             String::new()
         },

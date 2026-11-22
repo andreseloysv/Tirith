@@ -12,6 +12,7 @@ pub(super) fn held(t: &Talk) -> bool {
 /// The turn of `group` starts: whether it is a routine's run, and whether its answer reaches the phones.
 pub(super) fn starts(t: &mut Talk, group: &[Msg]) {
     t.in_run = group.first().is_some_and(|m| m.job);
+    t.said.clear();
     t.phones |= group.iter().any(|m| m.phones);
 }
 

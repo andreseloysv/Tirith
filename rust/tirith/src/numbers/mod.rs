@@ -21,12 +21,18 @@ pub fn numbers(app: &Shared, id: &str) -> Result<Value, String> {
     let bot = bot_by_id(app, id).ok_or(format!("no bot '{id}'"))?;
     let key = s(&bot, "key");
     let rows = rows::rows(app, &key);
-    let routines: Vec<(String, String)> = bot["routines"]
+    let mut routines: Vec<(String, String)> = bot["routines"]
         .as_array()
         .into_iter()
         .flatten()
         .map(|r| (s(r, "id"), s(r, "title")))
         .collect();
+    if rows.iter().any(|r| r.routine == crate::expected::PASS) {
+        routines.push((
+            crate::expected::PASS.into(),
+            crate::expected::PASS_TITLE.into(),
+        ));
+    }
     let read = |p: std::path::PathBuf| std::fs::read_to_string(p).unwrap_or_default();
     let own = read(app.home.join("manager").join(&key).join("memory.md"));
     let shared = read(app.home.join("bots/memory.md"));

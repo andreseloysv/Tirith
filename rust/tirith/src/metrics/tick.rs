@@ -4,7 +4,7 @@ use super::book::BOOK;
 use super::compute::compute;
 use super::episode::episode;
 use super::metric::{describe, iso, Metric};
-use super::pass::{daily_due, under_budget};
+use super::pass::{may_start, under_budget};
 use super::review::{delayed_review, start_review};
 use crate::app::{now_s, Shared};
 use crate::manager;
@@ -46,7 +46,7 @@ pub(super) fn tick(app: &Shared) {
     let (mut due, notes) = record(app, &metrics, now, after);
     announce(app, notes);
     let budget = under_budget(app, &ceo, now);
-    let _ = daily_due(app, &ceo).then(|| {
+    let _ = may_start(app, &ceo, now).then(|| {
         let all = metrics.iter().map(describe).collect::<Vec<_>>().join("\n");
         due.push((
             "daily",

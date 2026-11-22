@@ -443,6 +443,9 @@ build_idle_minutes = 30
 plan_commit_seconds = 120
 batch_seconds = 2
 agent_messages_in_a_row = 30
+# A routine's run that waits for its conversation, or works, longer than this failed:
+# it is said in one line (counted on a clock that stops while the machine sleeps).
+routine_minutes = 60
 # max_parallel: no cap on lanes at once unless config.toml sets one here.
 
 [plan]

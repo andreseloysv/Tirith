@@ -31,17 +31,26 @@ fn keep(app: &Shared, role: &str, metric: &str, result: &Result<String, String>)
         .unwrap_or_else(|e| format!("(the review could not run: {e})"));
     let (factory, role_hash) = app.stamp_for(role); // the review turn's stamp
     let _ = app.db.lock().unwrap().execute("INSERT INTO ceo_reviews (at, metric, text, factory, role_hash, role) VALUES (?1, ?2, ?3, ?4, ?5, ?6)", rusqlite::params![now_iso(), metric, text, factory, role_hash, role]);
-    app.chat("manager", &text, role);
+    if result.is_ok() || !scheduled(metric) {
+        app.chat("manager", &text, role); // a scheduled one's failure is the one line of `expected/`
+    }
     text
 }
+/// Whether the role's schedule is (one of) what started the pass.
+fn scheduled(metric: &str) -> bool {
+    metric.split(',').any(|m| m == "daily")
+}
 /// What started a pass, for its turn's row: its schedule, the event it heard, or (a red stretch, the owner's "CEO now") nobody said.
-fn trigger(role: &str, metric: &str) {
-    let by = match metric.strip_prefix("event:") {
-        Some(on) => format!("event:{on}"),
-        None if metric == "daily" => "schedule".into(),
+fn trigger(app: &Shared, role: &str, metric: &str) {
+    let (by, routine) = match metric.strip_prefix("event:") {
+        Some(on) => (format!("event:{on}"), ""),
+        None if scheduled(metric) => {
+            crate::expected::started(app, role, crate::expected::PASS);
+            ("schedule".to_string(), crate::expected::PASS)
+        }
         None => return,
     };
-    crate::turns::trigger(&format!("turn:{role}"), &by, "");
+    crate::turns::trigger(&format!("turn:{role}"), &by, routine);
 }
 /// One pass of turn role `role` (one at a time per role), with the brief its `brief` key names and `why` it runs.
 pub(super) fn start_review(app: &Shared, role: String, metric: String, why: String) {
@@ -51,7 +60,7 @@ pub(super) fn start_review(app: &Shared, role: String, metric: String, why: Stri
     let app = app.clone();
     tokio::spawn(async move {
         app.emit("review", json!({"running": true, "role": role}));
-        trigger(&role, &metric);
+        trigger(&app, &role, &metric);
         let brief = super::roles::brief_for(&app, &role, &why);
         let result = manager::run_turn(&app, &role, &role, &brief).await;
         let text = keep(&app, &role, &metric, &result);

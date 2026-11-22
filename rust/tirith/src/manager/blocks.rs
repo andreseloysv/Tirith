@@ -3,7 +3,7 @@ use super::progress::progress_line;
 use super::talk::talk;
 use super::typing::typing_line;
 use crate::app::Shared;
-use crate::{rooms, rules};
+use crate::rules;
 use serde_json::Value;
 pub(super) fn assistant(app: &Shared, project: &str, msg: &Value) {
     msg["message"]["content"]
@@ -18,7 +18,7 @@ pub(super) fn assistant(app: &Shared, project: &str, msg: &Value) {
 }
 fn text(app: &Shared, project: &str, text: &str) {
     app.chat("manager", text, project);
-    let _ = talk(project, |t| t.phones).then(|| rooms::to_phones(app, project, text)); // on the phones only when this turn is marked (owner, or phone = true)
+    super::held::say(app, project, text); // on the phones only when this turn is marked (owner, or phone = true), a routine's at its end
     talk(project, |t| {
         t.text = format!("{}\n\n{text}", t.text).trim_start().to_string()
     });

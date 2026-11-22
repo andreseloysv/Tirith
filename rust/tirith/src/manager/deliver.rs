@@ -13,6 +13,14 @@ pub(super) fn report(app: &Shared, project: &str, text: &str) {
     app.chat("tirith", text, project);
     rooms::to_phones(app, app.conv(project), &format!("Tirith: {text}"));
 }
+/// A line of Tirith's own that must reach the owner, with no agent: in the conversation, and kept until its phones (with none, those of the conversation of no project) have it.
+pub fn notify(app: &Shared, project: &str, text: &str) {
+    app.chat("tirith", text, project);
+    let conv = app.conv(project);
+    let none = rooms::phone_rooms(app, conv).is_empty();
+    let to = if none { app.conv("") } else { conv };
+    rooms::to_phones_surely(app, to, &format!("Tirith: {text}"));
+}
 /// One user message as a stream-json line. `pending` keeps plain texts; only a live session's stdin sees lines.
 pub(super) fn user_line(text: &str) -> String {
     json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}).to_string()

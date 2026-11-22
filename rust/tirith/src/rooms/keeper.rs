@@ -9,6 +9,7 @@ pub(super) static WAKE: Notify = Notify::const_new();
 pub fn start(app: Shared) {
     store::load(&app);
     outbox::open(&app);
+    super::unsent::again(&app);
     again(&app, None);
     tokio::spawn(keep(app));
 }
