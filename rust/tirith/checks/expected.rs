@@ -657,7 +657,7 @@ while read -r line; do
       echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"1","name":"Bash","input":{"command":"cat notes"}}]}}'
       echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"1","is_error":true,"content":"cat: notes: no such helper"}]}}'
       echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"2","name":"Bash","input":{"command":"ls"}}]}}'
-      echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"2","is_error":false,"content":"a"}]}}'
+      printf '%s\n' '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"2","is_error":false,"content":"Not logged in\nTalk\na"}]}}'
       echo '{"type":"assistant","message":{"content":[{"type":"text","text":"PAD"}]}}'
       echo '{"type":"assistant","message":{"content":[{"type":"text","text":"ANSWER"}]}}' ;;
   esac
@@ -704,7 +704,8 @@ done
         assert!(
             shown[0].contains(answer)
                 && shown[0].contains("no such helper")
-                && shown[0].contains("«a»"),
+                && shown[0].contains("it gave «Not logged in … a»")
+                && !shown[0].contains("error «Not logged in"),
             "the judge is shown the end, the errors and what a good call gave: {shown:?}"
         );
         if fails {

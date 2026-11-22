@@ -73,13 +73,17 @@ pub(super) fn broke(output: &str, failed: bool) -> Option<Broke> {
     })
 }
 
-/// The last thing an output says, short: what the call gave.
-pub(super) fn end(output: &str) -> String {
+/// What an output says at its start and at its end, short: what the call gave.
+pub(super) fn gave(output: &str) -> String {
     let mut said = output
         .lines()
         .map(str::trim)
         .filter(|l| !STATUS.is_match(l));
-    said.next_back().unwrap_or("").chars().take(160).collect()
+    let cut = |line: &str| line.chars().take(80).collect::<String>();
+    match (said.next(), said.next_back()) {
+        (Some(first), Some(last)) => format!("{} … {}", cut(first), cut(last)),
+        (first, _) => first.map(cut).unwrap_or_default(),
+    }
 }
 
 /// True when nothing was printed but the status.

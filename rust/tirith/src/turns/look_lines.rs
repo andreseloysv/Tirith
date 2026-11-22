@@ -1,5 +1,5 @@
 //! How a tool call ended, as any agent's lines say it.
-use super::broke::{broke, end, silent, Broke};
+use super::broke::{broke, gave, silent, Broke};
 use super::capture_fit::text_of;
 use super::look_muse::{self, Said};
 use regex::Regex;
@@ -10,13 +10,13 @@ use std::sync::LazyLock;
 static MATCHING: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(^|[|;&:(]\s*)([ef]?grep|rg|diff)\b[^|;&]*$").unwrap());
 
-/// One ended call: what it did, whether it failed, the error it printed and the last thing it said.
+/// One ended call: what it did, whether it failed, the error it printed and what it gave.
 #[derive(Clone, Debug)]
 pub(super) struct Ended {
     pub what: String,
     pub failed: bool,
     pub broke: Option<Broke>,
-    pub end: String,
+    pub gave: String,
 }
 
 impl Ended {
@@ -27,7 +27,7 @@ impl Ended {
             what,
             failed,
             broke,
-            end: end(output),
+            gave: gave(output),
         }
     }
 }
