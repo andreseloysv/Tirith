@@ -705,8 +705,8 @@ done
         assert!(
             shown[0].contains(answer)
                 && shown[0].contains("no such helper")
-                && shown[0].contains("it gave «Not logged in … a»")
-                && !shown[0].contains("error «Not logged in"),
+                && shown[0].contains("it gave «Not logged in / Talk / a»")
+                && !shown[0].contains("its error «"),
             "the judge is shown the end, the errors and what a good call gave: {shown:?}"
         );
         if fails {

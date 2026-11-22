@@ -1,4 +1,4 @@
-//! What a run's judge is shown of its calls: the errors and what the last ones gave, as data. Only a failed call has an error: what one that ended well printed is its content, whatever words it holds.
+//! What a run's judge is shown of its calls: those that failed or printed an error and the last two, how each ended and what it gave, as data. None of it is named an error here: a page holds any words, and a check that finds red ends as failed.
 use super::looks::Looks;
 use crate::app::redact_secrets;
 
@@ -24,9 +24,6 @@ impl Looks {
             .map(|(at, e)| {
                 let how = if e.failed { "failed" } else { "ended well" };
                 let gave = match (&e.broke, e.gave.as_str()) {
-                    (Some(broke), _) if e.failed => {
-                        format!("its error «{}»", line(&broke.line, 120))
-                    }
                     (None, "") => "it printed nothing".to_string(),
                     (Some(broke), said) if !said.contains(&broke.line) => {
                         format!(
