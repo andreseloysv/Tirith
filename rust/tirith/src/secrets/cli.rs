@@ -27,6 +27,9 @@ pub(super) fn parsed<'a>(words: &[&'a str]) -> Result<Command<'a>, String> {
     if let Command::Set(_, name) | Command::Remove(_, name) = command {
         names::secret(name)?;
     }
+    if let Command::Set(_, name) = command {
+        names::owners(name)?;
+    }
     Ok(command)
 }
 

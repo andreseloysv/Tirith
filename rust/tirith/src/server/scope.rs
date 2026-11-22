@@ -21,7 +21,7 @@ pub(super) fn refused(agent: &Agent, method: &Method, path: &str) -> Option<&'st
         ["api", "teach", _, "events" | "next" | "done"] => true,
         _ => false,
     };
-    if owners || crate::secrets::route(path) {
+    if owners || crate::secrets::route(path) || crate::oauth::route(path) {
         return Some(OWNERS);
     }
     if !post {

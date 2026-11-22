@@ -21,6 +21,7 @@ mod merge;
 mod metrics;
 mod models;
 mod numbers;
+mod oauth;
 mod plan;
 mod power;
 mod projects;

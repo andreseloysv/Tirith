@@ -229,7 +229,8 @@ command = ["node", "gmail-server.js"] # a local server: its argv (or url, never 
 blocked = false                       # optional, default false: true refuses every tool for every bot
 deny = ["delete_*"]                   # optional globs (* any run, ? one character)
 approval = ["send_*"]                 # optional globs: a call asks the owner first
-secrets = ["GMAIL_TOKEN"]             # optional: variable names only (A-Z, 0-9, _), never values
+secrets = ["GMAIL_TOKEN"]             # optional: variable names only (A-Z, 0-9, _), never values, never a TIRITH_OAUTH_ one
+# a remote server that signs in with OAuth needs no secret: tirith connector login <id> --bot <bot> (see oauth/)
 
 [roles.bot-<id>.connectors.gmail]     # the grant: without this table the bot has no gmail
 tools = ["read_*", "search"]          # optional: when set, all the bot may use
@@ -400,7 +401,7 @@ connector's `secrets` added to that process's environment alone; a remote one (`
 per message, the answer JSON or an event stream, `Mcp-Session-Id` kept) is reached always through Tirith's proxy with
 the bot's run's credentials (`sandbox/proxy_url.rs`), so the proxy counts it as the bot's, never the daemon's; its
 first secret goes as `Authorization: Bearer <value>` and any other as a header of its own name (`_` as `-`), marked
-sensitive. The values come from the per-bot store (`secrets::value`) at open time and stay in the daemon. A connector
+sensitive; a bot signed in to it (`tirith connector login`, `oauth/`) sends its access as that Bearer first, renewed by the daemon when it ends or the server answers 401. The values come from the per-bot store (`secrets::value`) at open time and stay in the daemon. A connector
 that does not open is the owner's `error` event (with why) and missing from the list, never the end of the others.
 
 The agent is listed each open connector's tools as `<connector>__<tool>`, only those the verdict lets this bot reach
@@ -457,7 +458,8 @@ Files:
 - `permit.rs`: One-use permits keyed by the sha256 of connector, tool and canonical arguments, bound to their card: granted by the owner's yes alone, used by one call.
 - `record.rs`: Every attempt as a row of `connector_calls`: hashes and the verdict, never the content.
 - `remote.rs`: A remote connector: MCP's streamable HTTP through Tirith's proxy as the bot.
-- `rpc.rs`: JSON-RPC 2.0 as MCP speaks it, both ways.
+- `renew.rs`: A signed-in remote connector's renewal on a 401: the daemon renews the sign-in, the connection sends the new bearer.
+- `rpc.rs`: JSON-RPC 2.0 as MCP speaks it, both ways, and an HTTP answer's messages.
 - `session.rs`: The gateways open now, each found again only by the run that opened it.
 - `stdio.rs`: The gateway's side facing the agent: MCP over stdio, every tools message handed to the daemon.
 - `summary.rs`: The short, secret-free summary of a call's arguments an approval card shows.
@@ -921,6 +923,66 @@ Files:
 - `rows.rs`: A bot's own turns as the numbers read them, the first first.
 - `skills.rs`: A bot's numbers by skill: uses, validated uses, and its routine's tokens before its first use against after.
 
+## `oauth/`
+
+Signing a bot in to a remote connector (`url`): `tirith connector login <id> --bot <bot>`, the owner's in their own
+terminal (an agent is refused, and its routes `/api/connectors/…` are the owner's alone by `server/scope.rs` and by a
+check of their own). A local connector (`command`) needs no login and is refused one: it is given the secrets its
+definition names, as before.
+
+The daemon (`start.rs`) discovers the server (`discover.rs`): its protected-resource metadata (RFC 9728) at
+`/.well-known/oauth-protected-resource<path>`, then at the origin; its first `authorization_servers` entry's metadata
+(RFC 8414 `/.well-known/oauth-authorization-server<path>`, then OpenID's `openid-configuration`); without either the
+server's origin with `/authorize`, `/token` and `/register`. A server that lists PKCE methods without `S256` is
+refused. Tirith registers itself (`register.rs`, RFC 7591 dynamic registration, a public client: `token_endpoint_auth_method
+= "none"`) at the `registration_endpoint`, with the daemon's own callback `http://127.0.0.1:<port>/oauth/callback` as
+its one redirect; a server that offers no registration cannot be signed in to. The sign-in address carries `S256`
+PKCE (`pkce.rs`, a 32-byte verifier that never leaves the daemon), a random state, the connector's url as `resource`
+(RFC 8707) and the resource's `scopes_supported`. The CLI opens it in the owner's browser (`open`, `xdg-open`; over
+SSH it prints it) and waits on a ticket (`GET /api/connectors/logins/<ticket>`: waiting, done or failed with why), ten
+minutes at most.
+
+The code comes only to `GET /oauth/callback` on 127.0.0.1 (`callback.rs`), the one route without a token
+(`server/admit.rs`): a sandboxed caller and an agent's token are refused; its state must be a sign-in under way
+(`pending.rs`, in memory, taken once, ten minutes); the code is exchanged with its verifier at the token endpoint
+(`token.rs`). The tokens go in that bot's secret store (`secrets::keep`) under reserved names (`names.rs`):
+`TIRITH_OAUTH_<ID>_ACCESS`, `TIRITH_OAUTH_<ID>_REFRESH` and `TIRITH_OAUTH_<ID>_GRANT` (the token address, the
+client, the resource and the expiry), `<ID>` the connector's id in capitals with `-` as `_`. The owner cannot set a
+`TIRITH_OAUTH_` name (`tirith secret set` and its route refuse it) and no connector's `secrets` may name one
+(`connectors/row.rs`), so the token reaches its own connector alone; `tirith secret list` shows the names,
+`tirith secret remove` signs out, and deleting the bot removes them with its other secrets. No route answers a token.
+
+The gateway (`fresh.rs`, `gateway/renew.rs`) reads the bot's access when it opens that remote connector and sends it
+as `Authorization: Bearer`, before the connector's own secrets; one that ends within a minute is renewed first with
+the refresh token, and a 401 from the server renews it once and sends the new one. Renewals go one at a time (a
+server may rotate the refresh token) and are kept in the same names. Another bot granted the same connector uses its
+own sign-in or none: nothing of this bot's store or account reaches it.
+
+Manual acceptance servers (never in the automated checks): Asana `https://mcp.asana.com/v2/mcp` and Calendly
+`https://mcp.calendly.com`, each as a `[[connectors]]` `url`, granted to a bot, then `tirith connector login
+asana --bot <bot>` and a bot turn that calls one of its tools. Test `connector_oauth_flow`
+(`rust/tirith/checks/connector_oauth.rs`) runs offline against one fake server that is the discovery, registration,
+authorization, token, refresh and MCP endpoints: the owner alone begins it, a local connector is refused, the PKCE
+verifier matches, a forged or reused state is refused, the tokens are kept under the reserved names in that bot's
+store alone, the gateway renews an access that is ending and one the server revoked, a second bot granted the same
+connector sends no token and gets none of its tools, and no token is in anything an agent or a route was given.
+
+Files:
+
+- `api.rs`: The owner's routes of a sign-in: begin one, ask how it stands; and the callback's.
+- `callback.rs`: The daemon's 127.0.0.1 callback, the one place a code comes in.
+- `cli.rs`: `tirith connector login <id> --bot <bot>`: the owner's, waiting until the callback took the code.
+- `discover.rs`: OAuth discovery of a remote MCP server from its `.well-known` metadata.
+- `fresh.rs`: The gateway's bearer for a remote connector, renewed when it ends or was refused.
+- `keep.rs`: A sign-in's tokens in the bot's store under the reserved names, and read back.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use; the daemon's OAuth client.
+- `names.rs`: The reserved names a connector's sign-in is kept under.
+- `pending.rs`: Sign-ins under way by their state, and how each ended by its ticket.
+- `pkce.rs`: PKCE (S256) and the state.
+- `register.rs`: Dynamic client registration, when the server offers it.
+- `start.rs`: A sign-in begun: discovery, registration and the browser's address.
+- `token.rs`: The token endpoint: a code exchanged and a refresh.
+
 ## `plan/`
 
 The plan: the project's markdown checklist (`## N. Title` steps, `- [ ] item` lines). Its content changes (new step, new item, ticked item, deleted step) are written to the file at once and committed in batches; which lane works on an item lives in the
@@ -1215,7 +1277,7 @@ A bot's secrets. The owner's commands are `tirith secret set <bot> <NAME>`, `tir
 the value from stdin, typed unseen or piped whole less its last line end, and takes none from argv; `list` prints
 names alone. Their routes (`/api/secrets/<bot>`) are the owner's alone, by `server/scope.rs` and by a check of their own: a
 bot, a lane and a manager get 403, for their own secrets too. No route and no command answers a value. The daemon's lookup
-(`lookup.rs`) is by bot and name; only the connector gateway asks it (`gateway/`), and puts a value only in that
+(`lookup.rs`) is by bot and name; only the connector gateway asks it (`gateway/`) and only a connector's sign-in (`oauth/`) keeps a value through it, under its reserved `TIRITH_OAUTH_` names that the owner cannot set, and puts a value only in that
 connector's own process environment or its auth headers, never in the agent's environment, its MCP arguments, a
 transcript or a capture.
 
@@ -1244,7 +1306,7 @@ Files:
 - `index.rs`: A bot's names and where each value lies, never a value.
 - `input.rs`: A value as it comes on stdin.
 - `key.rs`: The fallback's private files and the daemon's key material in them.
-- `lookup.rs`: The daemon's own lookup of one value, by bot and name, for the connector gateway alone.
+- `lookup.rs`: The daemon's own lookup of one value, by bot and name, for the connector gateway alone, and its keeping of a connector's sign-in.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `names.rs`: What may be a bot, a name and a value.
 - `os.rs`: The OS's credential store, in-process.

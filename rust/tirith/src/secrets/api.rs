@@ -1,5 +1,5 @@
 //! The owner's routes, which refuse whoever is not the owner themselves too (besides `server/scope.rs`): a value comes in, and only names go out.
-use super::store::Store;
+use super::{names, store::Store};
 use crate::app::{bad, Shared, R};
 use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
@@ -50,6 +50,7 @@ async fn list(State(app): State<Shared>, Path(bot): Path<String>) -> R {
 async fn set(State(app): State<Shared>, Path(bot): Path<String>, Json(b): Json<Value>) -> R {
     blocking(move || {
         let field = |key: &str| b[key].as_str().unwrap_or_default();
+        names::owners(field("name"))?;
         Store::of(&app)
             .set(&bot, field("name"), field("value"))
             .map(|_| json!({"ok": true}))

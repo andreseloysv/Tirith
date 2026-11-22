@@ -14,6 +14,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         sandbox::routes(),
         secrets::routes(),
         crate::gateway::routes(),
+        crate::oauth::routes(),
         models::routes(),
         guard::routes(),
         metrics::routes(),
