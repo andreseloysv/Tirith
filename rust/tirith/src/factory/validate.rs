@@ -23,7 +23,7 @@ impl Factory {
             .or_else(|| unknown_in(t, "roles", ROLE_KEYS))
             .or_else(|| unknown_in(t, "metrics", &["label", "target", "at_least"]))
             .or_else(|| unknown_flat(t, "plan", &["role_prefixes", "owner_wait", "waits_for"]))
-            .or_else(|| unknown_flat(t, "cards", &["kinds"]))
+            .or_else(|| unknown_flat(t, "cards", &["kinds", "yes"]))
     }
 
     /// The first name that points at nothing, with the unknown keys of routes and evals in their place.

@@ -4,6 +4,8 @@ use serde_json::{json, Value};
 
 const REFUSED: &str = "an approval or a payment is the owner's: they answer the card on the page or their phone, or write in this conversation. Never answer it yourself: end your turn, their answer starts your next one";
 
+const GATEWAY: &str = "this card asks for a connector call: only the owner's own answer on the card (the page, or `<card>: yes` from their phone) lets it run; no agent hands it in, not even in the owner's words";
+
 /// The answer an agent hands in for card (or waiting lane) `id`.
 pub fn relayed(app: &Shared, id: &str, answer: &str) -> Result<Value, String> {
     if app.lane(id).is_some_and(|l| l.status == "waiting") {
@@ -17,6 +19,9 @@ pub fn relayed(app: &Shared, id: &str, answer: &str) -> Result<Value, String> {
             r.get::<_, String>(2)?,
         ))
     });
+    if crate::gateway::is_gateway_card(app, id) {
+        return Err(GATEWAY.into());
+    }
     let (kind, project, at) = cards
         .into_iter()
         .next()

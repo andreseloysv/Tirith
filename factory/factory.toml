@@ -459,6 +459,9 @@ waits_for = ["wait until", "made by the item", "created by the item", "after the
 
 [cards]
 kinds = ["credentials", "payment", "account", "device", "decision", "approval"]
+# The first word of an answer that is the owner's yes to an approval card that asks for a
+# connector call (gateway/permit.rs); any other answer, or a closed card, is a no.
+yes = ["yes", "y", "ok", "okay", "approve", "approved", "sí", "si", "vale", "dale", "adelante", "apruebo", "aprobado"]
 
 [metrics.merged]
 label = "En main (24 h)"

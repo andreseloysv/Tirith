@@ -5,15 +5,15 @@ use crate::app::{App, Shared};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
-const MAIL_SECRET: &str = "mail-secret-value-5d1e9a";
+pub(super) const MAIL_SECRET: &str = "mail-secret-value-5d1e9a";
 const WEB_SECRET: &str = "web-secret-value-77b0c2";
 const ORG_SECRET: &str = "org-secret-value-3fa418";
 const SECRETS: [&str; 3] = [MAIL_SECRET, WEB_SECRET, ORG_SECRET];
-const BOT: &str = "manager@bot-mail";
+pub(super) const BOT: &str = "manager@bot-mail";
 
-struct World {
-    app: Shared,
-    port: u16,
+pub(super) struct World {
+    pub(super) app: Shared,
+    pub(super) port: u16,
     home: PathBuf,
     seen: PathBuf,
     hits: Hits,
@@ -72,6 +72,9 @@ tools = ["read_*", "send_*", "delete_*"]
 [roles.bot-other]
 extends = "manager"
 scope = "own"
+
+[limits]
+batch_seconds = 3600
 "#
     )
 }
@@ -85,7 +88,7 @@ fn free_port() -> u16 {
 }
 
 /// The daemon of a fresh home, its proxy listening, bot-mail's secrets set by the owner.
-async fn world(name: &str) -> World {
+pub(super) async fn world(name: &str) -> World {
     let (home, seen) = (dir(name), dir(&format!("{name}-seen")));
     let (web, hits) = http_server().await;
     let argv = stdio_server(&home, &seen);
@@ -135,7 +138,13 @@ async fn world(name: &str) -> World {
 }
 
 /// One request to the test daemon with `token`: its status and its body.
-async fn http(port: u16, token: &str, method: &str, path: &str, body: Value) -> (u16, String) {
+pub(super) async fn http(
+    port: u16,
+    token: &str,
+    method: &str,
+    path: &str,
+    body: Value,
+) -> (u16, String) {
     let url = format!("http://127.0.0.1:{port}{path}");
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
     let mut req = client
@@ -150,12 +159,17 @@ async fn http(port: u16, token: &str, method: &str, path: &str, body: Value) -> 
 }
 
 impl World {
-    fn token(&self, who: &str) -> String {
+    pub(super) fn token(&self, who: &str) -> String {
         crate::server::testing::token(&self.app, who)
     }
 
     /// The gateway as the agent of `who` runs it with `--bot <bot>`, fed `msgs`: what it wrote back, or why it refused.
-    async fn gateway(&self, who: &str, bot: &str, msgs: &[Value]) -> Result<Vec<Value>, String> {
+    pub(super) async fn gateway(
+        &self,
+        who: &str,
+        bot: &str,
+        msgs: &[Value],
+    ) -> Result<Vec<Value>, String> {
         let door = Door {
             port: self.port,
             token: vec![("X-Tirith-Token", self.token(who))],
@@ -175,12 +189,12 @@ impl World {
     }
 
     /// What the stdio server got as tools calls.
-    fn calls(&self) -> String {
+    pub(super) fn calls(&self) -> String {
         std::fs::read_to_string(self.seen.join("calls")).unwrap_or_default()
     }
 
     /// The recorded attempts, oldest first.
-    fn rows(&self) -> Vec<Value> {
+    pub(super) fn rows(&self) -> Vec<Value> {
         let cols = [
             "at",
             "bot",
@@ -204,12 +218,12 @@ fn request(id: u64, method: &str, params: Value) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
 }
 
-fn call(id: u64, name: &str, args: Value) -> Value {
+pub(super) fn call(id: u64, name: &str, args: Value) -> Value {
     request(id, "tools/call", json!({"name": name, "arguments": args}))
 }
 
 /// The opening every agent sends.
-fn hello() -> Vec<Value> {
+pub(super) fn hello() -> Vec<Value> {
     vec![
         request(
             1,
@@ -221,7 +235,7 @@ fn hello() -> Vec<Value> {
     ]
 }
 
-fn text(reply: &Value) -> String {
+pub(super) fn text(reply: &Value) -> String {
     reply["result"]["content"][0]["text"]
         .as_str()
         .unwrap_or("")
@@ -532,7 +546,7 @@ async fn refused_calls_are_recorded() {
         "refused by deny",
         "refused by scope",
         "refused by block",
-        "approval required",
+        "waiting for approval",
         "ran",
         "refused by scope",
     ];

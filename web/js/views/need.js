@@ -5,7 +5,7 @@ import { html, useState } from '../../vendor/preact-htm.js';
 import { api, setUi } from '../store.js';
 import { ago, go } from '../common.js';
 
-export const KIND = { credentials: 'Credentials', payment: 'Payment', account: 'Account', device: 'Device', decision: 'Decision', lane: 'Agent' };
+export const KIND = { credentials: 'Credentials', payment: 'Payment', account: 'Account', device: 'Device', decision: 'Decision', approval: 'Approval', lane: 'Agent' };
 const WORDS = ['decision', 'lane']; /* answered in words only: no Done button */
 
 /** The open questions: the daemon's cards, and the lanes waiting on a question that no card carries (read live from
@@ -44,7 +44,9 @@ export function Need({ o, p, full, done, here }) {
       <span class="nchip">${done ? (typeof done === 'string' ? done : 'Done') : KIND[o.kind] || o.kind}</span>${done ? null : html`<span class="nage">${ago(o.at)}</span>`}
       ${done || o.kind === 'lane' ? null : html`<button type="button" class="nclose" disabled=${busy} title="Close this card: it is no longer needed" aria-label="Close this card" onClick=${close}>×</button>`}</div>
     ${lane}
-    ${done || words ? null : html`<div class="nacts"><button class="nbtn primary" disabled=${busy} onClick=${() => send('Done')}>Done</button></div>`}
+    ${done || words ? null : o.kind === 'approval' /* a yes or a no: a connector call runs once only on the yes */
+      ? html`<div class="nacts"><button class="nbtn primary" disabled=${busy} onClick=${() => send('yes')}>Yes</button><button class="nbtn" disabled=${busy} onClick=${() => send('no')}>No</button></div>`
+      : html`<div class="nacts"><button class="nbtn primary" disabled=${busy} onClick=${() => send('Done')}>Done</button></div>`}
     ${done ? null : html`<div class="nwrite"><input class="iin" type="text" placeholder=${o.kind === 'lane' ? 'Answer it yourself…' : words ? 'Your answer…' : 'Or write what you need…'} aria-label="Answer"
       value=${draft} disabled=${busy} onInput=${(e) => setDraft(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') send(draft); }} />
       <button class="isend ovsend" disabled=${busy || !draft.trim()} onClick=${() => send(draft)}>${busy ? 'Sending…' : 'Answer'}</button></div>`}

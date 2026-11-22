@@ -1,17 +1,16 @@
-//! Every attempt through a gateway, as a row of `connector_calls` beside the bot's turns: when, the bot, its conversation and the turn open then, the connector and the tool, the sha256 of the canonical arguments and of the result, and the verdict. Never the arguments or the result themselves.
+//! Every attempt through a gateway, as a row of `connector_calls` beside the bot's turns: when, the bot, its conversation and the turn open then, the connector and the tool, the sha256 of the canonical arguments and of the result, and the verdict (an approval call's: waiting for approval, or approved and ran). Never the arguments or the result themselves.
 use super::{canon::sha, session::Session};
 use crate::app::{now_iso, Shared};
-use crate::connectors::Verdict;
 use serde_json::Value;
 
-/// Records one attempt; `result` is what ran answered (None when nothing ran).
+/// Records one attempt with its verdict `word`; `result` is what ran answered (None when nothing ran).
 pub fn record(
     app: &Shared,
     s: &Session,
     (connector, tool): (&str, &str),
     args: &Value,
     result: Option<&Value>,
-    v: Verdict,
+    word: &str,
 ) {
     let turn = crate::turns::open_start(&s.key);
     let result = result.map(sha).unwrap_or_default();
@@ -25,7 +24,7 @@ pub fn record(
         tool,
         sha(args),
         result,
-        v.word()
+        word
     ];
     let _ = app.db.lock().unwrap().execute(sql, row);
 }

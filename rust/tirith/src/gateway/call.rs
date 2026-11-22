@@ -1,5 +1,5 @@
-//! One `tools/call`: the verdict asked again with the grants of now (never the list the agent was given), a refusal or a call that asks first answered without running, a call that may run handed to its connector, and every attempt recorded.
-use super::{names::split, record::record, rpc::failed, session::Session};
+//! One `tools/call`: the verdict asked again with the grants of now (never the list the agent was given), a refusal answered without running, a call that asks first handed to its permit (`approve.rs`), a call that may run handed to its connector, and every attempt recorded.
+use super::{approve::approval, names::split, record::record, rpc::failed, session::Session};
 use crate::app::Shared;
 use crate::connectors::{refusal, verdict, Verdict};
 use serde_json::{json, Value};
@@ -26,15 +26,13 @@ pub async fn call(app: &Shared, s: &Session, name: &str, args: &Value) -> Value 
             "{connector}.{tool}: refused by scope; this bot is not granted connector '{connector}'"
         )),
     };
-    let result = if let Some(said) = said {
-        failed(&said)
+    let (result, word, ran) = if let Some(said) = said {
+        (failed(&said), v.word(), false)
     } else if matches!(v, Verdict::Approval | Verdict::BotApproval) {
-        failed(&format!(
-            "{connector}.{tool}: approval required; it did not run, as no approval reaches it yet"
-        ))
+        approval(app, s, (&connector, tool), args, link).await
     } else {
         let params = json!({"name": tool, "arguments": args});
-        match link {
+        let result = match link {
             Some(l) => l
                 .request("tools/call", params)
                 .await
@@ -42,9 +40,16 @@ pub async fn call(app: &Shared, s: &Session, name: &str, args: &Value) -> Value 
             None => failed(&format!(
                 "connector '{connector}' is not open in this gateway"
             )),
-        }
+        };
+        (result, v.word(), true)
     };
-    let ran = (v == Verdict::Run).then_some(&result);
-    record(app, s, (&connector, tool), args, ran, v);
+    record(
+        app,
+        s,
+        (&connector, tool),
+        args,
+        ran.then_some(&result),
+        word,
+    );
     result
 }
