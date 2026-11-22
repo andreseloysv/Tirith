@@ -1,5 +1,7 @@
 //! macOS: Codex inside Tirith's sandbox. Its own sandbox cannot start there (macOS refuses any profile but the same one again: «sandbox_apply: Operation not permitted»), and no flag keeps both. So the limit its caller asked for becomes part of the profile: a `codex` on the sandboxed PATH reads what was asked (`asked.rs`, `settings.rs`), and the daemon, from outside, starts Codex under Tirith's profile plus that limit (`limits.rs`, `broker.rs`), its own sandbox off only there, as two processes (`pair.rs`): Codex's own, which alone has its state, and its `exec-server`, which alone runs the model's commands and patches. Such a profile is never looser than Tirith's, the broker serves only a caller under Tirith's, and what runs under one gets no other. On Linux Codex's sandbox nests by itself: nothing here runs.
 #[cfg(target_os = "macos")]
+mod answers;
+#[cfg(target_os = "macos")]
 mod around;
 #[cfg(target_os = "macos")]
 mod ask;
@@ -44,8 +46,12 @@ mod services;
 mod settings;
 #[cfg(target_os = "macos")]
 mod spawn;
+#[cfg(target_os = "macos")]
+mod stalled;
 mod state;
 mod told;
+#[cfg(target_os = "macos")]
+mod too_big;
 #[cfg(target_os = "macos")]
 mod upgrade;
 mod values;

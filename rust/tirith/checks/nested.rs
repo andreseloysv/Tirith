@@ -637,8 +637,39 @@ fn the_bridge_speaks_websocket() {
     ]
     .concat();
     let mut pinged = vec![];
-    let got = frames::next(&mut wire.as_slice(), |p| pinged.push(p.to_vec())).unwrap();
+    let Some(frames::Got::Whole(got)) =
+        frames::next(&mut wire.as_slice(), |p| pinged.push(p.to_vec()))
+    else {
+        panic!("a whole message");
+    };
     assert_eq!((got.len(), pinged), (70_001, vec![b"ping".to_vec()]));
+    let mut huge = br#"{"id":41,"method":"fs/writeFile","params":""#.to_vec();
+    huge.resize(frames::MOST as usize + 9, b'a');
+    let wire = [client(true, 1, &huge), client(true, 1, b"after")].concat();
+    let mut from = wire.as_slice();
+    let Some(frames::Got::TooBig(start)) = frames::next(&mut from, |_| {}) else {
+        panic!("over the cap is no message");
+    };
+    assert!(
+        start.len() as u64 <= frames::MOST,
+        "no more than the cap is held"
+    );
+    let said = super::too_big::refusal(&start).expect("the call is answered");
+    let said: serde_json::Value = serde_json::from_slice(&said).unwrap();
+    assert_eq!(said["id"], 41, "that call's id");
+    assert!(said["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("more than 32 MiB"));
+    assert!(
+        matches!(frames::next(&mut from, |_| {}), Some(frames::Got::Whole(next)) if next == b"after"),
+        "and the bridge goes on"
+    );
+    let inner = br#"{"method":"process/output","params":{"id":7}}"#;
+    assert!(
+        super::too_big::refusal(inner).is_none(),
+        "never another thing's id"
+    );
     let unmasked = [0x81u8, 1, b'x'];
     assert!(
         frames::next(&mut unmasked.as_slice(), |_| {}).is_none(),

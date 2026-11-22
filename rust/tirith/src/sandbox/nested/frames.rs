@@ -1,8 +1,8 @@
 //! The WebSocket frames (RFC 6455) of the bridge: one peer on this machine, whole messages, no extensions.
 use std::io::{Read, Result, Write};
 
-/// The most one message holds (a file read whole, as JSON).
-pub(super) const MOST: u64 = 1 << 30;
+/// The most one message holds, a whole file as JSON among them: the daemon holds one of them each way.
+pub(super) const MOST: u64 = 32 << 20;
 pub(super) const TEXT: u8 = 1;
 pub(super) const CLOSE: u8 = 8;
 const PING: u8 = 9;
@@ -27,9 +27,16 @@ pub(super) fn send(to: &mut impl Write, op: u8, data: &[u8]) -> Result<()> {
     to.flush()
 }
 
-/// The next whole message of the client; none at its close, its end or what is no such frame. A ping is handed to `pong`.
-pub(super) fn next(from: &mut impl Read, mut pong: impl FnMut(&[u8])) -> Option<Vec<u8>> {
-    let mut whole = vec![];
+/// What the client sent.
+pub(super) enum Got {
+    Whole(Vec<u8>),
+    /// More than `MOST`: its beginning, the rest read and dropped.
+    TooBig(Vec<u8>),
+}
+
+/// The next message of the client; none at its close, its end or what is no such frame. A ping is handed to `pong`.
+pub(super) fn next(from: &mut impl Read, mut pong: impl FnMut(&[u8])) -> Option<Got> {
+    let (mut whole, mut big) = (vec![], false);
     loop {
         let [first, second] = exactly::<2>(from)?;
         let (last, op) = (first & 0x80 != 0, first & 0x0f);
@@ -39,22 +46,33 @@ pub(super) fn next(from: &mut impl Read, mut pong: impl FnMut(&[u8])) -> Option<
             127 => u64::from_be_bytes(exactly::<8>(from)?),
             n => u64::from(n),
         };
-        (size <= MOST && size + whole.len() as u64 <= MOST).then_some(())?;
         let mask = exactly::<4>(from)?;
-        let mut data = vec![];
-        from.take(size).read_to_end(&mut data).ok()?;
-        (data.len() as u64 == size).then_some(())?;
-        for (i, byte) in data.iter_mut().enumerate() {
+        let message = op <= 2;
+        // a control frame holds 125 bytes at most
+        (message || size <= 125).then_some(())?;
+        let room = if message {
+            MOST - whole.len() as u64
+        } else {
+            size
+        };
+        let (kept, at) = (size.min(room), if message { whole.len() } else { 0 });
+        let mut control = vec![];
+        let into = if message { &mut whole } else { &mut control };
+        from.take(kept).read_to_end(into).ok()?;
+        ((into.len() - at) as u64 == kept).then_some(())?;
+        for (i, byte) in into[at..].iter_mut().enumerate() {
             *byte ^= mask[i % 4];
         }
+        if kept < size {
+            big = true;
+            let dropped = std::io::copy(&mut from.take(size - kept), &mut std::io::sink()).ok()?;
+            (dropped == size - kept).then_some(())?;
+        }
         match op {
-            0..=2 => {
-                whole.append(&mut data);
-                if last {
-                    return Some(whole);
-                }
-            }
-            PING => pong(&data),
+            0..=2 if last && big => return Some(Got::TooBig(whole)),
+            0..=2 if last => return Some(Got::Whole(whole)),
+            0..=2 => {}
+            PING => pong(&control),
             PONG => {}
             _ => return None,
         }

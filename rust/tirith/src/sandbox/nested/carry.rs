@@ -1,46 +1,78 @@
-//! The bridge's two ways, once Codex's own process is on it.
-use super::{frames, upgrade::upgrade};
-use std::io::{BufRead, BufReader, Read, Write};
+//! The bridge's two ways, once Codex's own process is on it. Whichever end is gone first says whether the run is lost.
+use super::{answers::answers, bridge::Seen, frames, too_big::refusal, upgrade::upgrade};
+use std::io::Write;
 use std::net::{Shutdown, TcpStream};
 use std::process::{ChildStdin, ChildStdout};
-use std::sync::{Arc, Mutex};
+use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex};
 use std::time::Duration;
 
-/// Messages both ways, until either end is gone.
-pub(super) fn carry(mut peer: TcpStream, mut to: ChildStdin, from: ChildStdout) -> Option<()> {
+pub(super) type Out = Arc<Mutex<TcpStream>>;
+
+pub(super) fn send(out: &Out, op: u8, data: &[u8]) -> std::io::Result<()> {
+    frames::send(
+        &mut *out.lock().unwrap_or_else(|e| e.into_inner()),
+        op,
+        data,
+    )
+}
+
+/// Messages both ways, until either end is gone: `left` when Codex's was first, `lost` when the other was.
+pub(super) fn carry(
+    mut peer: TcpStream,
+    to: ChildStdin,
+    from: ChildStdout,
+    seen: Arc<Seen>,
+) -> Option<()> {
     peer.set_nonblocking(false).ok()?;
     peer.set_read_timeout(Some(Duration::from_secs(10))).ok()?;
     upgrade(&mut peer)?;
     peer.set_read_timeout(None).ok()?;
-    let writer = Arc::new(Mutex::new(peer.try_clone().ok()?));
-    let back = writer.clone();
+    let out: Out = Arc::new(Mutex::new(peer.try_clone().ok()?));
+    let (back, over) = (out.clone(), seen.clone());
     std::thread::spawn(move || {
-        let mut lines = BufReader::new(from);
-        let mut line = vec![];
-        while let Ok(1..) = (&mut lines).take(frames::MOST).read_until(b'\n', &mut line) {
-            let message = line.trim_ascii();
-            let mut out = back.lock().unwrap_or_else(|e| e.into_inner());
-            if !message.is_empty() && frames::send(&mut *out, frames::TEXT, message).is_err() {
-                break;
-            }
-            line.clear();
+        answers(from, &back);
+        if !over.left.load(SeqCst) {
+            over.lost.store(true, SeqCst); // before Codex can come back for another
         }
-        let mut out = back.lock().unwrap_or_else(|e| e.into_inner());
-        let _ = frames::send(&mut *out, frames::CLOSE, &[]);
-        let _ = out.shutdown(Shutdown::Both);
+        let _ = send(&back, frames::CLOSE, &[]);
+        let _ = back
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .shutdown(Shutdown::Both);
     });
-    let pong = |data: &[u8]| {
-        let mut out = writer.lock().unwrap_or_else(|e| e.into_inner());
-        let _ = frames::send(&mut *out, frames::PONG, data);
-    };
-    while let Some(mut message) = frames::next(&mut peer, pong) {
+    asks(&mut peer, to, &out, &seen)
+}
+
+/// What Codex asks, until it leaves.
+fn asks(peer: &mut TcpStream, mut to: ChildStdin, out: &Out, seen: &Seen) -> Option<()> {
+    let pong = |data: &[u8]| drop(send(out, frames::PONG, data));
+    loop {
+        let Some(got) = frames::next(peer, pong) else {
+            seen.left.store(true, SeqCst); // before `to` closes and ends the other
+            return Some(());
+        };
+        let mut message = match got {
+            frames::Got::Whole(message) => message,
+            frames::Got::TooBig(start) => match refusal(&start) {
+                Some(error) => {
+                    send(out, frames::TEXT, &error).ok()?;
+                    continue;
+                }
+                None => {
+                    seen.lost.store(true, SeqCst);
+                    return None;
+                }
+            },
+        };
         // a line each: JSON's own line breaks are only spaces
         message
             .iter_mut()
             .filter(|b| **b == b'\n')
             .for_each(|b| *b = b' ');
         message.push(b'\n');
-        to.write_all(&message).ok()?;
+        if to.write_all(&message).is_err() {
+            seen.lost.store(true, SeqCst);
+            return None;
+        }
     }
-    Some(())
 }

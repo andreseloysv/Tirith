@@ -2,6 +2,7 @@
 use super::bridge::Bridge;
 use super::capable::{capable, URL};
 use super::limits::{Around, Part};
+use super::stalled::stalled;
 use super::{ending::end, line::NO_NET, spawn::spawn, watch::Watch, Request};
 use std::os::fd::OwnedFd;
 use std::os::unix::process::ExitStatusExt;
@@ -70,11 +71,16 @@ impl Pair {
             let code = status.code().unwrap_or(128 + status.signal().unwrap_or(0));
             return Ok(Some(code));
         }
-        if !self.bridge.linked() && self.began.elapsed() > CONNECTS_WITHIN {
-            self.end();
-            return Err("this Codex did not hand its commands to the process that has their limit, so it was stopped".into());
-        }
-        Ok(None)
+        let late = !self.bridge.linked() && self.began.elapsed() > CONNECTS_WITHIN;
+        let why = if self.bridge.lost() || stalled(self.runs.id()) {
+            "the process that runs its commands ended or was stopped, so Codex was stopped: none of them runs in its own process"
+        } else if late {
+            "this Codex did not hand its commands to the process that has their limit, so it was stopped"
+        } else {
+            return Ok(None);
+        };
+        self.end();
+        Err(why.into())
     }
 
     pub(super) fn end(&mut self) {

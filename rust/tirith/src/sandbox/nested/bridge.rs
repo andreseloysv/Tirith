@@ -1,4 +1,4 @@
-//! The one way to the process that runs a limited Codex's commands and patches (`exec-server --listen stdio`): a WebSocket on loopback that takes one connection, of that Codex's own process as the kernel tells, and hands each message over that process's pipes. Nobody else reaches it: it listens nowhere.
+//! The one way to the process that runs a limited Codex's commands and patches (`exec-server --listen stdio`): a WebSocket on loopback that takes one connection, of that Codex's own process as the kernel tells, and hands each message over that process's pipes. Nobody else reaches it: it listens nowhere. The bridge keeps its port for as long as the run lives, so nobody can stand in its place when Codex comes back for another connection.
 use super::carry::carry;
 use crate::sandbox::mac;
 use std::net::TcpListener;
@@ -8,9 +8,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Default)]
-struct Seen {
+pub(super) struct Seen {
     linked: AtomicBool,
     over: AtomicBool,
+    /// Codex's end went first: it is leaving.
+    pub left: AtomicBool,
+    /// The other went first: nothing can run any more.
+    pub lost: AtomicBool,
 }
 
 pub(super) struct Bridge {
@@ -40,16 +44,20 @@ impl Bridge {
         };
         let (seen, port) = (self.seen.clone(), self.port);
         std::thread::spawn(move || {
+            let mut pipes = Some((to, from));
             while !seen.over.load(SeqCst) {
                 let Ok((peer, at)) = listener.accept() else {
                     std::thread::sleep(Duration::from_millis(15));
                     continue;
                 };
-                if mac::held_by(at.port(), port, codex) {
-                    drop(listener); // one connection, its own
+                // one connection, of its own process: any later one is dropped, and the port stays the bridge's
+                if pipes.is_none() || !mac::held_by(at.port(), port, codex) {
+                    continue;
+                }
+                if let Some((to, from)) = pipes.take() {
                     seen.linked.store(true, SeqCst);
-                    carry(peer, to, from);
-                    return;
+                    let seen = seen.clone();
+                    std::thread::spawn(move || carry(peer, to, from, seen));
                 }
             }
         });
@@ -58,6 +66,11 @@ impl Bridge {
     /// Whether that Codex handed its commands over.
     pub(super) fn linked(&self) -> bool {
         self.seen.linked.load(SeqCst)
+    }
+
+    /// Whether what runs its commands is gone while Codex is not.
+    pub(super) fn lost(&self) -> bool {
+        self.seen.lost.load(SeqCst)
     }
 }
 
