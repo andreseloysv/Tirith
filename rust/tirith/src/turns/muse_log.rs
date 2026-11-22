@@ -1,4 +1,4 @@
-//! Muse's own log of a session, for a turn whose output carried no usage: the `model_completed` records of `~/.local/share/muse/sessions/<year>/<month>/<day>/<id>/session.jsonl`.
+//! Muse's own log of a session, for what its output does not carry: the usage (`model_completed` records) and the end of a command that went on in the background (`output` records), of `~/.local/share/muse/sessions/<year>/<month>/<day>/<id>/session.jsonl`.
 use super::usage::Usage;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -6,17 +6,24 @@ use std::path::{Path, PathBuf};
 /// The usage recorded in session `id` since `since_us` (microseconds).
 pub(super) fn from_muse_session(id: &str, since_us: i64) -> Usage {
     let mut usage = Usage::default();
+    since(id, since_us, |record| usage.take(record));
+    usage
+}
+
+/// Every record of session `id` since `since_us`, in the order it was written.
+pub(super) fn since(id: &str, since_us: i64, take: impl FnMut(&Value)) {
     let root = crate::config::home_dir().join(".local/share/muse/sessions");
     let Some(file) = find(&root, id, 3) else {
-        return usage;
+        return;
     };
     std::fs::read_to_string(file)
         .unwrap_or_default()
         .lines()
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
         .filter(|m| m["recorded_at"].as_i64().unwrap_or(0) >= since_us)
-        .for_each(|m| usage.take(&m));
-    usage
+        .collect::<Vec<_>>()
+        .iter()
+        .for_each(take);
 }
 
 /// The session.jsonl of session `id`, `depth` folders (year, month, day) below `dir`.

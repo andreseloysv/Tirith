@@ -1,6 +1,7 @@
 //! The turn log: every turn of a chat or turn role (the project managers, the bots, the CEO, the judge) leaves a row in `turns` — who started it and why, its agent and model, its tokens and cost, its tools and skills, the versions of its memory and skills, its answer (docs/DAEMON.md). Where turns run and are handed over, the code only calls this module.
 mod api;
 mod approval;
+mod broke;
 mod capture;
 mod capture_fit;
 mod capture_keep;
@@ -13,10 +14,12 @@ mod hashes;
 mod interrupted;
 mod live;
 mod look_lines;
+mod look_muse;
 mod looks;
 mod loose;
 mod muse_log;
 mod price;
+mod proof;
 mod quality;
 mod react;
 mod record;

@@ -1,10 +1,18 @@
-//! A turn's numbers made comparable across the agents before its row is kept: its own share, fresh input apart from the cache, and the model.
+//! A turn made whole and comparable across the agents before its row is kept: its own share, fresh input apart from the cache, the model, and the ends of Muse's background commands.
 use super::record::Turn;
-use super::{codex_log, muse_log::from_muse_session, spent::own_share, usage::Usage};
+use super::{
+    codex_log,
+    muse_log::{from_muse_session, since},
+    spent::own_share,
+    usage::Usage,
+};
 use crate::app::App;
 
 /// `tokens_in` is always the fresh input: what the cache gave is `tokens_cache_read` alone, so no sum counts it twice.
 pub(super) fn settle(app: &App, t: &mut Turn) {
+    if !t.looks.waiting.is_empty() && !t.session.is_empty() {
+        since(&t.session, t.start_us, |record| t.looks.take(record));
+    }
     if !t.usage.seen && t.agent == "muse" && !t.session.is_empty() {
         t.usage = from_muse_session(&t.session, t.start_us);
     }

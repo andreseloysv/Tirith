@@ -374,3 +374,131 @@ async fn a_false_silence_is_a_failure_that_is_said() {
         std::fs::remove_dir_all(&dir),
     );
 }
+
+/// A shell call of each agent's shape: it printed `output` and ended with `code`.
+fn ran(what: &str, output: &str, code: i64) -> Vec<Vec<Value>> {
+    let shell = json!({"command": what, "output": output, "exit_code": code}).to_string();
+    vec![
+        vec![
+            json!({"payload_type": "tool.result", "payload": {"correlation_facts": {"tool_name": "bash"}, "text": shell}}),
+        ],
+        vec![
+            json!({"type": "item.completed", "item": {"type": "command_execution", "command": what, "aggregated_output": output, "exit_code": code}}),
+        ],
+        vec![
+            json!({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "1", "name": "Bash", "input": {"command": what}}]}}),
+            json!({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "1", "is_error": code != 0, "content": output}]}}),
+        ],
+        vec![
+            json!({"type": "tool.execution_start", "data": {"toolCallId": "1", "toolName": "bash", "arguments": {"command": what}}}),
+            json!({"type": "tool.execution_complete", "data": {"toolCallId": "1", "success": code == 0, "result": {"content": output}}}),
+        ],
+    ]
+}
+
+/// The verdict on `answer` after `calls`, the same for every agent's shape.
+fn verdicts(answer: &str, calls: &[(&str, &str, i64)]) -> Vec<Option<String>> {
+    (0..4)
+        .map(|shape| {
+            let mut looks = crate::turns::Looks::default();
+            for (what, output, code) in calls {
+                ran(what, output, *code)[shape]
+                    .iter()
+                    .for_each(|m| looks.take(m));
+            }
+            verdict::judged(false, true, answer, (calls.len() as i64, &looks))
+        })
+        .collect()
+}
+
+#[test]
+fn could_not_is_a_failure_in_any_words() {
+    // An inner agent's CLI ends well although its every command was refused: only its output says it.
+    let nested = "exec\nsandbox-exec: sandbox_apply: Operation not permitted\ntokens used\n30\nI could not run it.";
+    let call = [(
+        "codex exec --sandbox workspace-write 'look at the plants'",
+        nested,
+        0,
+    )];
+    for answer in [
+        "El ayudante falló y no pudo mirar: sandbox_apply: Operation not permitted.",
+        "Hoy la revisión de plantas queda para otro rato.",
+        "The helper had trouble, nothing checked today.",
+        "Todo en orden.",
+        "∅ Nada nuevo",
+    ] {
+        for got in verdicts(answer, &call) {
+            let why = got.unwrap_or_else(|| panic!("a failure: {answer}"));
+            assert!(
+                why.contains("sandbox_apply: Operation not permitted"),
+                "the tool's own error: {why}"
+            );
+        }
+    }
+    // Words alone, in both languages, with no mark.
+    for answer in [
+        "Hoy no pude revisar las plantas.",
+        "El sensor falló y no pudo leer la humedad.",
+        "Lo intenté dos veces y no he podido entrar.",
+        "I could not check the plants today.",
+        "The helper failed and couldn't finish.",
+        "Sorry: the script was unable to read the sensor.",
+    ] {
+        assert!(
+            verdicts(answer, &[("ls", "a", 0)])
+                .iter()
+                .all(Option::is_some),
+            "{answer}"
+        );
+    }
+    // Words of trouble beside a call that failed.
+    let failed = [("python3 read.py", "RuntimeError: no sensor on that bus", 1)];
+    assert!(verdicts("La lectura falló.", &failed)
+        .iter()
+        .all(Option::is_some));
+}
+
+#[test]
+fn finding_nothing_or_quoting_someone_is_no_failure() {
+    let found = [("curl -s https://plants.example/new", "0 new", 0)];
+    for answer in [
+        "∅ Nada nuevo desde ayer",
+        "∅ No pude encontrar plantas nuevas",
+        "∅ I could not find any new plants",
+        "No pude encontrar ninguna planta nueva.",
+        "I couldn't find any new plants today.",
+        "Un correo nuevo de Ana: «no pude regarlas, lo siento».",
+        "Ana escribe que no pudo regar ayer.",
+        "One new message: Sam says they could not come.",
+        "> I could not make it\nOne new reply, nothing to do.",
+        "El panel avisa de que 2 riegos fallaron esta noche.",
+    ] {
+        assert_eq!(
+            verdicts(answer, &found),
+            vec![None, None, None, None],
+            "{answer}"
+        );
+    }
+    // An error that a later try undid, and a page that talks about errors.
+    let undone = [
+        (
+            "codex exec 'look'",
+            "sandbox-exec: sandbox_apply: Operation not permitted",
+            0,
+        ),
+        ("curl -s https://plants.example/new", "3 new", 0),
+    ];
+    assert_eq!(
+        verdicts("3 plantas nuevas.", &undone),
+        vec![None, None, None, None]
+    );
+    let page = [(
+        "curl -s https://forum.example/t/9",
+        "Thread\ncurl: (7) someone's paste\nline\nline\nline\nline\nline\n2 replies",
+        0,
+    )];
+    assert_eq!(
+        verdicts("2 respuestas nuevas en el foro.", &page),
+        vec![None, None, None, None]
+    );
+}

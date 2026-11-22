@@ -1,4 +1,5 @@
 //! What was due and how it ended: every run of a routine and every scheduled pass of a turn role is written down when it is due (table `expected_runs`), before anything starts, and ends in a row of `turns` whether it ran or not. One that failed, was lost or never started says why in that row, counts as a failure, and the owner hears it in one line sent by code, so no quota and no agent is needed for it. «∅» means "I looked and nothing is new", never "I could not" (`claims.rs`, `verdict.rs`).
+mod admits;
 mod calendar;
 mod claims;
 mod found;
@@ -13,6 +14,7 @@ mod reasons;
 mod restart;
 mod store;
 mod timed;
+mod told;
 mod verdict;
 mod watch;
 mod words;

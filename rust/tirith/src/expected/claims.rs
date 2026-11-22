@@ -11,28 +11,45 @@ static COULD_NOT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
         r"(?i)\bno (pude|puedo|pudo|pudimos|he podido|ha podido|he logrado|logré|he conseguido|conseguí|fue posible|ha sido posible|me fue posible)\b",
         r"|\bimposible (acceder|abrir|leer|comprobar|entrar|revisar|buscar|mirar)",
-        r"|\bsin (acceso|permiso|permisos|conexión|red|cuota|sesión)\b",
+        r"|\bsin (acceso|permisos?|conexión|red|cuota|sesión)( al? \S+)?\s*([.,;:)!]|$)|\bsin permisos? (para|de (lectura|acceso))\b",
         r"|\bno (tengo|tuve|había|hay) (acceso|permiso|permisos|conexión|red|sesión)\b",
         r"|\b(could not|couldn['’]t|cannot|can['’]t|was not able to|wasn['’]t able to|unable to|failed to)\b",
-        r"|\bno access\b|\bnicht (erreichen|zugreifen|öffnen)\b|\bkonnte\b[^.\n]{0,60}\bnicht\b",
+        r"|\bme (fue|ha sido|resultó) imposible\b|\bno access\b|\bnicht (erreichen|zugreifen|öffnen)\b|\bkonnte\b[^.\n]{0,60}\bnicht\b",
     ))
     .unwrap()
 });
 /// But not finding anything new is exactly «∅».
 static FOUND_NONE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)(no (pude|he podido|logré|conseguí|he conseguido)|could not|couldn['’]t|was not able to|unable to|failed to) (encontrar|hallar|find|spot) (nada|ningun\w*|ningún|nuev\w*|ofertas nuevas|any\w*|new)").unwrap()
+    Regex::new(r"(?i)(no (pude|he podido|logré|conseguí|he conseguido)|could not|couldn['’]t|was not able to|unable to|failed to) (encontrar|hallar|find|spot) (nada|ningun\w*|ningún|any\w*|nothing|(\S+ ){0,3}(nuev\w*|new\b))(?P<rest>[^.;\n]*)").unwrap()
+});
+/// Unless it says why it found none, or it is the way in that it could not find.
+static CAUSE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b(porque|ya que|debido|because|due to|as the|since the|way|manera|forma de|botón|button|login)\b").unwrap()
+});
+/// And waiting for the owner's yes, or promising nothing, is no failure.
+static WAITS: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(no puedo|no he podido|cannot|can['’]t)( \S+){0,6}? ((sin|without) (tu|your) (sí|ok|yes|visto bueno|aprobación|confirmación|approval|confirmation)|(hasta que|until) (lo |la )?(apruebes|confirmes|you approve|you confirm))|(no puedo|cannot|can['’]t) (garantizar|asegurar|prometer|guarantee|promise|wait)").unwrap()
 });
 
 /// True when `text` says that something could not be done.
 pub(super) fn could_not(text: &str) -> bool {
-    COULD_NOT.is_match(&FOUND_NONE.replace_all(text, ""))
+    let mine = super::told::own_words(text);
+    mine.lines()
+        .any(|said| COULD_NOT.is_match(&but_found_none(said)))
 }
 
-/// True when the first line of `text` begins by saying so.
-pub(super) fn begins_could_not(text: &str) -> bool {
-    let line = text.trim_start().lines().next().unwrap_or("");
-    let head: String = line.chars().take(32).collect();
-    could_not(&head) && could_not(line)
+/// `text` without what is no failure: finding nothing new, and waiting for the owner's yes.
+pub(super) fn but_found_none(text: &str) -> String {
+    let text = WAITS.replace_all(text, "");
+    let kept = FOUND_NONE.replace_all(&text, |c: &regex::Captures| {
+        let said = if CAUSE.is_match(&c[0]) {
+            &c[0]
+        } else {
+            &c["rest"]
+        };
+        said.to_string()
+    });
+    kept.into_owned()
 }
 
 /// What follows `mark` where a paragraph of the answer begins with it, to the answer's end.
