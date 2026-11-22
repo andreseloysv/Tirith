@@ -7,6 +7,8 @@ use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
 use std::path::PathBuf;
+/// At most this many screenshots of a bot are kept.
+const KEPT: usize = 300;
 fn dir(app: &Shared, key: &str) -> PathBuf {
     crate::bots::folder(app, key).join("rehearsals")
 }
@@ -23,7 +25,21 @@ pub(super) fn save(app: &Shared, key: &str, data: &str) -> Option<(String, PathB
     let path = dir(app, key).join(&name);
     std::fs::create_dir_all(dir(app, key)).ok()?;
     std::fs::write(&path, bytes).ok()?;
+    prune(&dir(app, key));
     Some((name, path))
+}
+/// The newest `KEPT` screenshots stay, by their names (their times): the older ones go.
+fn prune(dir: &std::path::Path) {
+    let files = std::fs::read_dir(dir).into_iter().flatten().flatten();
+    let mut names: Vec<String> = files
+        .filter_map(|f| f.file_name().into_string().ok())
+        .filter(|n| ours(n))
+        .collect();
+    names.sort();
+    let old = names.len().saturating_sub(KEPT);
+    names.iter().take(old).for_each(|n| {
+        let _ = std::fs::remove_file(dir.join(n));
+    });
 }
 /// A file name the daemon wrote: digits, dashes and one extension.
 fn ours(name: &str) -> bool {

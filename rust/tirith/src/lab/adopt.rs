@@ -24,8 +24,23 @@ fn bare(line: &str) -> String {
     TAG.replace(line, "").trim().to_string()
 }
 
-/// Merges `branch` into the main at `dir` (`merge`: where main moved on the same lines the branch's tested text wins), then writes back, as new notes, what main added to memory.md that the merge lost. False, and nothing merged, when it cannot merge.
+/// True when main changed a file the branch changes too, since it was branched: that text was never tested. (memory.md moves at every turn: its notes are written back.)
+fn moved(dir: &Path, branch: &str) -> bool {
+    let names = |range: String| -> Vec<String> {
+        let out = git(dir, &["diff", "--name-only", &range]).unwrap_or_default();
+        out.lines().map(String::from).collect()
+    };
+    let main = names(format!("{branch}...HEAD"));
+    names(format!("HEAD...{branch}"))
+        .iter()
+        .any(|f| f != "memory.md" && main.contains(f))
+}
+
+/// Merges `branch` into the main at `dir`, unless main changed the same skill meanwhile (`merge`: where main moved on the same lines the branch's tested text wins), then writes back, as new notes, what main added to memory.md that the merge lost. False, and nothing merged, when it cannot merge.
 pub(super) fn adopt(dir: &Path, branch: &str, msg: &str) -> bool {
+    if moved(dir, branch) {
+        return false;
+    }
     let mine = added(dir, branch);
     if !merge(dir, branch, msg) {
         return false;

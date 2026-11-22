@@ -318,7 +318,7 @@ ended, it was abandoned, or its agent never started), by `lab::released` (`manag
 `experiment` and `variant`; a B run is compared with the A run before it: the event `lab.compare` (no route) carries the
 routine's task and the two answers as «Answer a» and «Answer b» in an order drawn at random, the letter B was shown
 under kept in `lab_comparisons` (`b_is`), and the eval `ab-compare` (rubric `factory/evals/ab-compare.md`, judge
-`judge`) answers `a`, `b` or `tie`, mapped back to B's `win`, `lose` or `tie` (`manager/evals.rs` calls `lab::judged`).
+`judge`; the answers stand between marks drawn for that pair alone, as data) answers `a`, `b` or `tie`, mapped back to B's `win`, `lose` or `tie` (`manager/evals.rs` calls `lab::judged`).
 A pair whose two answers are the same words is a `tie` at once, with no event and no judge.
 
 **Captures.** Every turn of a bot (`turns/capture*.rs`) keeps what it read in `<home>/captures/<turn>.jsonl`: a first
@@ -389,7 +389,8 @@ least `min_saving` of A's mean tokens, dollars or time (each only when most pair
 that much too: `saved.rs`). Adopted, the bot's folder is committed and the branch is merged
 into its main (the live folder is that checkout, so the next run uses it: a changed skill is read again, in a session of its own, `bots/handed.rs`; where main moved on the same lines, B's
 tested text wins, but a note main added to `memory.md` meanwhile that the merge lost is written back as a new note,
-`adopt.rs`; a merge that still fails discards it instead); in both
+`adopt.rs`; a skill or other file of the branch that main changed meanwhile was never tested like that, and discards
+it, as a merge that still fails does); in both
 cases the worktree and the branch go. The row keeps the status, the end and the numbers (A's and B's runs, mean
 tokens, dollars and time, the tally, the savings and the line), and one line is emitted in the bot's conversation:
 `lab.adopted` (routed to its chat and the phones) or `lab.discarded` (its chat only), as «Adopté gmail-safari v3:
@@ -1129,7 +1130,7 @@ Files:
 - `relay.rs`: The relay between `tirith teach do` and the extension: one command at a time per bot, its answer handed back.
 - `run.rs`: One rehearsal step: checked, handed to the extension through the relay, and kept with its result and screenshot.
 - `url.rs`: A recorded address with its secrets masked (user:password@, secret query and fragment parameters).
-- `shots.rs`: A rehearsal's screenshots: kept as files in the bot's folder (`rehearsals/`), where the bot can look at them, and served to the page.
+- `shots.rs`: A rehearsal's screenshots: kept as files in the bot's folder (`rehearsals/`), where the bot can look at them (the newest 300 stay), and served to the page.
 - `steps.rs`: The recorded steps as the bot reads them: one line each, between two marks, as data from outside.
 - `state.rs`: A bot's recording in kv (`teach:<bot>`: on, since, steps, the owner's words) and its token (`teach-token:<bot>`).
 

@@ -62,7 +62,7 @@ pub(super) fn close(app: &Shared, e: &Experiment, adopt_it: bool, line: &str) {
             (adopted, line) = (
                 false,
                 format!(
-                    "Descarté {}: no entra en su main (conflicto)",
+                    "Descarté {}: no entra en su main (conflicto: cambió mientras se probaba)",
                     name_of(app, e)
                 ),
             );

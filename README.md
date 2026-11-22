@@ -66,7 +66,9 @@ tirith service status | restart | logs | uninstall
   agent's sandbox is known as the agent's. An agent is not walled off from Tirith's files, which are the same
   user's, and a bot that drives your own browser could click for you.
 - **Who may use it.** On Linux only Tirith's user, root and `[server] users` (who installed it with sudo is
-  added) reach the daemon. On macOS any user of that Mac could: do not install it on a Mac you share.
+  added) reach the daemon, and that user's home is its alone. On macOS any user of that Mac could read it: do not
+  install it on a Mac you share. Nor on a server with users you do not trust: while the daemon is down, one of
+  them could take its port.
 - **Updating.** Run the installer again. Lanes at work go on across the restart, and uninstalling the service
   leaves `~/.tirith` as it is.
 - **Known limits.** Copilot cannot be replayed by the bots' lab (its sign-in host would let a replay write to

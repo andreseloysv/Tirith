@@ -18,6 +18,12 @@ impl Context {
         // Tokens, chats and keys live here: on a server other users are never let in.
         std::fs::set_permissions(&home, PermissionsExt::from_mode(0o700))
             .map_err(|e| format!("{}: {e}", home.display()))?;
+        if std::env::var_os(super::as_user::VIA).is_some() {
+            // install.sh's account: the agents' own files and transcripts are in its home
+            let account = home_dir();
+            std::fs::set_permissions(&account, PermissionsExt::from_mode(0o700))
+                .map_err(|e| format!("{}: {e}", account.display()))?;
+        }
         Ok(Context {
             exe: crate::app::exe().ok_or("cannot tell where the tirith binary is")?,
             home,
