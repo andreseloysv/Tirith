@@ -690,3 +690,52 @@ async fn shared_memory_comes_first() {
     );
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn deleting_a_bot_drops_its_grants() {
+    let connector =
+        "[[connectors]]\nid = \"gmail\"\ncommand = [\"gmail-mcp\"]\nsecrets = [\"GMAIL_TOKEN\"]\n";
+    let bots = json!([{"id": "aaa111", "name": "Mail", "shape": "drop", "color": "#22d3ee"}, {"id": "bbb222", "name": "Other", "shape": "drop", "color": "#22d3ee"}]);
+    let text = super::written::written(connector, bots.as_array().unwrap()).unwrap();
+    let text = format!(
+        "{text}\n# what Mail may do\n[roles.bot-aaa111.connectors.gmail]\ntools = [\"read_*\"]\n"
+    );
+    let parse = |text: &str| {
+        crate::factory::parse(
+            crate::factory::TEXT,
+            crate::factory::embedded_prompts(),
+            &text.parse().unwrap(),
+        )
+        .unwrap()
+    };
+    let tools = |text: &str| {
+        let f = parse(text);
+        f.granted("bot-aaa111")
+            .into_iter()
+            .map(|(c, g)| (c.id.clone(), g.tools))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        tools(&text),
+        [("gmail".to_string(), Some(vec!["read_*".to_string()]))]
+    );
+    // An ordinary card save (a rename), twice: the grant stays, once, and the file still parses.
+    let mut renamed = bots.clone();
+    renamed[0]["name"] = json!("Mailer");
+    let saved = super::written::written(&text, renamed.as_array().unwrap()).unwrap();
+    let saved = super::written::written(&saved, renamed.as_array().unwrap()).unwrap();
+    assert_eq!(tools(&saved), tools(&text), "kept on a save:\n{saved}");
+    assert_eq!(saved.matches("connectors.gmail]").count(), 1, "{saved}");
+    assert!(parse(&saved).prompts_of("bot-aaa111").contains("Mailer"));
+    // Saving the other bot keeps it too; deleting Mail drops its grant with its role, and the connector stays.
+    let gone = super::written::written(&saved, &renamed.as_array().unwrap()[1..]).unwrap();
+    assert!(
+        !gone.contains("bot-aaa111"),
+        "the grant goes with the bot:\n{gone}"
+    );
+    assert!(tools(&gone).is_empty() && parse(&gone).connector("gmail").is_some());
+    assert!(
+        parse(&gone).granted("bot-bbb222").is_empty(),
+        "no grant moved to another bot"
+    );
+}

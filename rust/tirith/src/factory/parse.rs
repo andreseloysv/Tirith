@@ -16,11 +16,15 @@ pub fn parse(
     resolve_roles(&mut table);
     layers::agents(&mut table);
     let raw = table.as_table().cloned().unwrap_or_default();
+    let roles = raw.get("roles").and_then(|r| r.as_table()).cloned();
+    let connectors = crate::connectors::checked(overlay, &roles.unwrap_or_default())
+        .map_err(|e| format!("factory: {e}"))?;
     let f = Factory {
         limits: limits::read(&raw)?,
         lab: lab::read(&raw)?,
         raw,
         prompts,
+        connectors,
         version: stamp::version(overlay),
     };
     f.validate()?;

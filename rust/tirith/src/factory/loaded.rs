@@ -12,6 +12,8 @@ pub struct Factory {
     /// Its `[lab]`: the rule experiments are decided by.
     pub lab: Lab,
     pub(super) prompts: BTreeMap<String, String>,
+    /// config.toml's `[[connectors]]`, checked with the grants under the roles.
+    pub connectors: Vec<crate::connectors::Connector>,
     /// This version's stamp: the main commit that last changed `factory/`, plus a short hash of what config.toml lays over it (`<commit>+<hash>`; `embedded` when no checkout is at hand).
     pub version: String,
 }
