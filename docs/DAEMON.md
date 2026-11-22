@@ -910,7 +910,7 @@ Files:
 - `check.rs`: One tool call against every rule, in order: the first refusal wins.
 - `confined.rs`: A role confined by its `writes` key (the Coach): its edits land only in the bots' folders and the folders `writes` names; of the hidden folders only a skill's (`.agents/skills`).
 - `hooks.rs`: The rules about the turn itself: commit checks are never skipped, and a chat's turn never waits.
-- `judge.rs`: A judge (an eval's read-only turn role that nobody talks to) uses no tool: what it is handed is data.
+- `judge.rs`: A judge (an eval's read-only turn role that nobody talks to) uses no tool but its agent's own book-keeping: what it is handed is data.
 - `lane.rs`: A lane's rules: it writes only in its own copy, never touches main and never starts agents.
 - `manifest.rs`: The rules a project's tirith.toml brings: its plan is written only by Tirith, and its own `[[rules]]`.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
