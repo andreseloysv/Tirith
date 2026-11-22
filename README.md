@@ -4,7 +4,9 @@
 
 # Tirith
 
-**An autonomous manager for your coding agents. They finish the plan; you see everything and decide only what only you can.**
+**Agents that finish the work, your code and your office tasks, on your own machine.**
+
+Code is checked before it merges. Bots are told to ask before they send or buy.
 
 [![CI](https://github.com/andreseloysv/Tirith/actions/workflows/tirith.yml/badge.svg)](https://github.com/andreseloysv/Tirith/actions/workflows/tirith.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
