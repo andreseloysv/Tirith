@@ -17,7 +17,8 @@
 //
 // The parts live in face/: sheet.js, bot3d.js, bot3d-parts.js, bot3d-pose.js, bot3d-face.js, geometry.js, materials.js
 // and decals.js (the 3D bots), animator.js, animator-steps.js, features.js, motion.js, clock.js, markup.js and
-// shapes2d.js (the 2D face), acts.js, keys.js, pose.js and schedule.js (the acts of both).
+// shapes2d.js (the 2D face), acts.js, keys.js, pose.js and schedule.js (the acts of both). The `hero` shape is the app
+// icon's star with a body of its own (hero.js, hero-front.js, hero-mesh.js from tools/hero-face/make.py; hero2d.js).
 import { html, useRef, useEffect, useMemo } from '../../../vendor/preact-htm.js';
 import { markup } from './face/markup.js';
 import { Animator } from './face/animator.js';

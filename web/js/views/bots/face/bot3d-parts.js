@@ -37,7 +37,7 @@ export function eyes3(sh) {
   const e = sh.eyes, out = [];
   for (let i = 0; i < 2; i++) {
     const rx = e[3] * PX / sh.rmax, ry = e[4] * PX / sh.rmax;
-    const eye = new THREE.Mesh(EYE_GEO3, eyeMat3);
+    const eye = new THREE.Mesh(EYE_GEO3, sh.eyeMat || eyeMat3);
     seatEye(eye, sh, i);
     eye.userData.s = [rx * 0.9, ry * 0.9, 0.3 * rx];
     eye.scale.set(...eye.userData.s);
@@ -48,15 +48,16 @@ export function eyes3(sh) {
   return out;
 }
 
-/** Mouths for each mood, the sleeping eyes and a yawn's mouth: {grin, smile, sleepy, yawn, shut}. */
+/** Mouths for each mood, the sleeping eyes and a yawn's mouth: {grin, smile, sleepy, yawn, shut}. A shape with a mouth
+ *  of its own (`o`, the hero's) has it at rest instead of the smile, and the others made about it at its size. */
 export function mouths3(sh) {
-  const e = sh.eyes;
-  const mx = (e[0] + e[1]) / 2, my = e[2] + e[4] + 6, hw = (e[1] - e[0]) * 0.5, k = (v) => boxPt(sh, v[0], v[1]);
+  const e = sh.eyes, o = sh.o, hw = o ? o[2] * 2.6 : (e[1] - e[0]) * 0.5;
+  const mx = o ? o[0] : (e[0] + e[1]) / 2, my = o ? o[1] - hw * 0.45 : e[2] + e[4] + 6, k = (v) => boxPt(sh, v[0], v[1]);
   const grinPts = [...cubic3([mx - hw, my], [mx - hw, my + hw * 1.35], [mx + hw, my + hw * 1.35], [mx + hw, my], 24), ...quad3([mx + hw, my], [mx, my + hw * 0.16], [mx - hw, my], 12)].map(k);
   const tongue = Array.from({ length: 20 }, (_, i) => { const a = i / 20 * TAU; return k([mx + hw * 0.5 * Math.cos(a), my + hw * 0.78 + hw * 0.2 * Math.sin(a)]); });
   const grin = new THREE.Group(); grin.add(decal3(sh, grinPts, 0.004, MOUTH3), decal3(sh, tongue, 0.008, TONGUE3));
   const lineW = 1.6 * PX / sh.rmax;
-  const smile = tube3(sh, [...quad3([mx - hw * 0.6, my - 1], [mx, my - 1 + hw * 1.3], [mx + hw * 0.6, my - 1], 16), [mx + hw * 0.6, my - 1]].map(k), lineW, INK3);
+  const smile = o ? yawn3(sh, o[0], o[1], Math.max(o[2] / 0.6, o[3] / 0.78)) : tube3(sh, [...quad3([mx - hw * 0.6, my - 1], [mx, my - 1 + hw * 1.3], [mx + hw * 0.6, my - 1], 16), [mx + hw * 0.6, my - 1]].map(k), lineW, INK3);
   const sleepy = new THREE.Group();
   for (const x of [e[0], e[1]]) sleepy.add(tube3(sh, quad3([x - 6, e[2]], [x, e[2] + 5], [x + 6, e[2]], 10).concat([[x + 6, e[2]]]).map(k), lineW * 1.1, INK3));
   sleepy.add(tube3(sh, quad3([mx - hw * 0.35, my], [mx, my + hw * 0.3], [mx + hw * 0.35, my], 10).concat([[mx + hw * 0.35, my]]).map(k), lineW * 0.9, INK3));
