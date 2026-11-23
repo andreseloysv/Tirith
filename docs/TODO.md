@@ -890,6 +890,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Mezclar la rama openbot-daemon (lo que dicen el daemon y la fábrica usa el nombre OpenBot: avisos, teléfono, CLI, prompts; los identificadores siguen siendo tirith) sin cambiar nada más (check: `git merge-base --is-ancestor 25cd26d5 HEAD`)
 - [x] Mezclar la rama phone-room-role (la lista de salas del teléfono dice qué rol habla en cada sala, para que el selector de modelos del teléfono cambie el de ese bot o manager) sin cambiar nada más (check: `git merge-base --is-ancestor d0502c50 HEAD`)
 - [x] Mezclar la rama home-concept (la portada nueva para cualquiera: los dos negros del dueño, solo lo que espera al dueño y quién trabaja ahora, el Project Manager con su cara, tarjeta al pasar el ratón por una cara, orden de las caras arrastrando, Access dentro de Settings) sin cambiar nada más (check: `git merge-base --is-ancestor 9cdf47e6 HEAD`)
+- [ ] Mezclar la rama hero-face (una cara nueva de bot: la estrella del icono de la app, con su modelo 3D, ojos y boca vivos, en el selector de formas) sin cambiar nada más (check: `git merge-base --is-ancestor e37224a4 HEAD`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
