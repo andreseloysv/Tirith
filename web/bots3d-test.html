@@ -39,9 +39,9 @@ h1{font-size:26px;margin:0 0 4px}h2{font-size:15px;text-transform:uppercase;lett
 <p class="lead">Nada pre-renderizado: cada bot es un modelo 3D que el navegador dibuja en tiempo real con WebGL (un solo lienzo para toda la página). Pon el ratón encima de un bot y solo ese gira entero siguiéndolo; al salir, vuelve a su animación: flota, respira, mira alrededor y parpadea. El brillo sale de un shader propio: núcleo de luz, borde de su color, un brillo suave y su halo.</p></div>
 <button class="toggle" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='light'?'dark':'light'">Claro / oscuro</button></div>
 
-<h2>Tirith en el escritorio: la barra de bots y el chat de un proyecto</h2>
+<h2>OpenBot en el escritorio: la barra de bots y el chat de un proyecto</h2>
 <div class="app"><div class="rail" id="rail"></div>
-<div class="nav"><b>Tirith</b><div>Overview</div><div>Settings</div><div style="margin-top:14px">PROJECTS</div><div>Tirith</div><div>ChromaSol</div><div>AgentsMessenger</div><div>zoo</div></div>
+<div class="nav"><b>OpenBot</b><div>Overview</div><div>Settings</div><div style="margin-top:14px">PROJECTS</div><div>Tirith</div><div>ChromaSol</div><div>AgentsMessenger</div><div>zoo</div></div>
 <div class="chat"><div class="head" id="head"></div><div class="msg" id="m1"></div><div class="msg" id="m2"></div></div></div>
 
 <h2>La pantalla de un bot</h2>
@@ -61,9 +61,9 @@ const bots = [];
 function bot(name, size, mood = 'idle') { const el = document.createElement('span'); el.className = 'bot'; el.style.width = el.style.height = size + 'px'; queueMicrotask(() => { const b = attachBot3D(el, { shape: name, color: COLORS[name], state: mood }); if (b) bots.push(b); }); return el; }
 const $ = (id) => document.getElementById(id);
 [['round', 0], ['burst', 1], ['hex', 0], ['dome', 0]].forEach(([s, sel]) => { const w = document.createElement('div'); if (sel) w.className = 'sel'; w.append(bot(s, 48)); $('rail').append(w); });
-$('head').append(bot('hex', 30), 'Project Manager · Tirith');
+$('head').append(bot('hex', 30), 'Project Manager · OpenBot');
 $('m1').append(bot('hex', 34, 'work'), Object.assign(document.createElement('div'), { className: 'bubble', textContent: 'Arranqué la lane del icono nuevo; te aviso cuando entre en main.' }));
-$('m2').append(bot('hex', 34), Object.assign(document.createElement('div'), { className: 'bubble', textContent: 'Hecho: el icono de Tirith ya es el de los bots en 3D.' }));
+$('m2').append(bot('hex', 34), Object.assign(document.createElement('div'), { className: 'bubble', textContent: 'Hecho: el icono de OpenBot ya es el de los bots en 3D.' }));
 const bigEl = bot('burst', 230); $('big').append(bigEl);
 for (let i = 0; i < 9; i++) { const sp = document.createElement('i'); sp.className = 'spark'; const a = Math.random() * 6.28, d = 58 + Math.random() * 16; sp.style.cssText = `left:${50 + Math.cos(a) * d}%;top:${50 + Math.sin(a) * d}%;--td:${(1.8 + Math.random() * 2.4).toFixed(2)}s;--tl:-${(Math.random() * 3).toFixed(2)}s`; bigEl.append(sp); }
 [['idle', 'En guardia'], ['work', 'Trabajando'], ['sleep', 'Durmiendo']].forEach(([m, t]) => {

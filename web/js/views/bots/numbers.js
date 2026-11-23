@@ -47,7 +47,7 @@ function memory(m) {
   return html`<ul class="bnm">
     <li><span class="bmut">Loading it costs ${int(m.tokens.own)} tokens (its own) and ${int(m.tokens.shared)} (shared)</span></li>
     <li><span class="bmut">${cited.length ? `Cited in its last ${m.runs} runs: ${cited.map((x) => `[${x.id}] ×${x.cited}`).join(' · ')}` : `No note cited in its last ${m.runs} runs`}</span></li>
-    ${unc.length ? html`<li><span class="bmut">Never cited, candidates to delete (Tirith never deletes them):</span>
+    ${unc.length ? html`<li><span class="bmut">Never cited, candidates to delete (OpenBot never deletes them):</span>
       ${unc.map((x) => html`<span key=${x.id} class="bnn"><b class="bmono">[${x.id}]</b> ${x.text}</span>`)}</li>` : null}
     <li><span class="bmut">${m.misses ? `Memory misses: ${m.misses} (you had to repeat yourself)` : 'No memory miss: you never had to repeat yourself'}</span>
       ${(m.missed || []).map((t, i) => html`<span key=${i} class="bnn">“${t}”</span>`)}</li>
