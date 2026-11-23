@@ -3,7 +3,10 @@ use super::admits::admits;
 use super::claims::{after, could_not, line, FAILED, NOTHING};
 use super::found::oldest;
 use super::store::RUNNING;
-use super::{reasons::failure, words::short};
+use super::{
+    reasons::failure,
+    words::{not_able, short},
+};
 use crate::app::{redact_secrets, Shared};
 use crate::turns::{Looks, Turn};
 
@@ -41,14 +44,10 @@ pub(super) fn judged(
         return Some("su agente terminó sin responder".into());
     }
     if let Some(rest) = after(answer, FAILED) {
-        return Some(format!("no pudo: {}", shown(rest, 160)));
+        return Some(not_able("", &shown(rest, 160)));
     }
     let proof = looks.proof();
-    let error = || {
-        proof
-            .as_ref()
-            .map(|p| format!("no pudo: {}", shown(p.line, 160)))
-    };
+    let error = || proof.as_ref().map(|p| not_able("", &shown(p.line, 160)));
     if proof.as_ref().is_some_and(|p| p.hard) {
         return error(); // the tool's own error is proof enough, whatever the words
     }
@@ -58,7 +57,7 @@ pub(super) fn judged(
     };
     let claim = line(rest);
     if admits(claim) || could_not(claim) {
-        error().or_else(|| Some(format!("dijo ∅, pero no pudo: {}", shown(rest, 160))))
+        error().or_else(|| Some(not_able("dijo ∅, pero ", &shown(rest, 160))))
     } else if let Some(look) = looks.blind() {
         error().or_else(|| Some(format!("dijo ∅, pero no pudo mirar ({})", shown(look, 80))))
     } else if proof.is_some() {

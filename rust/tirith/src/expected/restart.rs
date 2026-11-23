@@ -39,7 +39,7 @@ fn cut(app: &Shared, run: &Expected) {
         "UPDATE turns SET why = ?1 WHERE id = ?2",
         params![MIDDLE, turn],
     );
-    notice::failed(app, run, MIDDLE);
+    notice::failed(app, run, MIDDLE, false);
 }
 
 /// It had not started.
