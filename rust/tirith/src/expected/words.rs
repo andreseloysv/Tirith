@@ -71,3 +71,28 @@ pub fn first(r: &Value, now: DateTime<Local>) -> String {
     }
     runs(r, now, "primera vez")
 }
+
+/// What a failed run's reason reads: `cause` after "no pudo: ", unless it already begins with a could-not (never "no pudo: no pudo …"). `lead` goes first.
+pub(super) fn not_able(lead: &str, cause: &str) -> String {
+    const STARTS: [&str; 11] = [
+        "no pudo",
+        "no se pudo",
+        "no pude",
+        "no puedo",
+        "no he podido",
+        "no ha podido",
+        "could not",
+        "couldn't",
+        "couldn’t",
+        "unable to",
+        "cannot",
+    ];
+    let low = cause
+        .trim_start_matches(['«', '"', '`', '*'])
+        .to_lowercase();
+    if STARTS.iter().any(|s| low.starts_with(s)) {
+        format!("{lead}{cause}")
+    } else {
+        format!("{lead}no pudo: {cause}")
+    }
+}

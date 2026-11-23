@@ -32,14 +32,14 @@ pub(super) fn check(app: &Shared, event: i64) {
     let sql = "SELECT score, COALESCE(why, '') FROM scores WHERE event = ?1 AND eval = ?2 ORDER BY id DESC LIMIT 1";
     let words = app.query(sql, params![event, EVAL], |r| Ok((r.get(0)?, r.get(1)?)));
     let word: Option<(Option<f64>, String)> = words.into_iter().next();
-    let (judge, why) = match &word {
-        Some((Some(score), why)) => (true, cause(*score, why)),
-        Some((None, _)) => (false, None),
+    let (judge, why, partial) = match &word {
+        Some((Some(score), why)) => (true, cause(*score, why), *score > 0.0),
+        Some((None, _)) => (false, None, false),
         None if graded(app, event) => return, // it is still reading
-        None => (false, None),
+        None => (false, None, false),
     };
     if why.is_some() || !judge {
-        crate::expected::admitted(app, turn, &answer, why);
+        crate::expected::admitted_by(app, turn, &answer, (why, partial));
     }
     crate::expected::settled(app, turn);
 }

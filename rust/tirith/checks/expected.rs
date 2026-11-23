@@ -78,7 +78,10 @@ fn a_run_is_judged_by_what_it_did() {
         assert!(got.as_deref().is_some_and(|w| w.contains(part)), "{got:?}")
     };
     no(judged(true, "∅ Nada nuevo", 0), "sin mirar");
-    no(judged(true, "∅ No pude abrir la página", 2), "no pudo");
+    no(
+        judged(true, "∅ No pude abrir la página", 2),
+        "No pude abrir",
+    );
     no(
         judged(true, "Miré una.\n\n∅ nada, la otra no pude abrirla", 2),
         "no pudo",
@@ -366,7 +369,7 @@ async fn a_false_silence_is_a_failure_that_is_said() {
     until("its row", || !kept(&app, &key).0.is_empty()).await;
     let (rows, said) = kept(&app, &key);
     assert_eq!(rows[0]["status"], "failed", "{}", rows[0]);
-    assert!(said.len() == 1 && said[0].contains("no pudo"), "{said:?}");
+    assert!(said.len() == 1 && said[0].contains("No pude"), "{said:?}");
     let shown = app.query(
         "SELECT text FROM chat WHERE project = ?1 AND role = 'manager'",
         [&key],
