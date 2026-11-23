@@ -1,4 +1,4 @@
-//! What the service of one Tirith home is: its names and files.
+//! What the service of one OpenBot home is: its names and files.
 use std::path::PathBuf;
 
 pub struct Unit {

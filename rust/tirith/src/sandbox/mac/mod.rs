@@ -1,4 +1,4 @@
-//! macOS: whether a process runs under Tirith's own sandbox profile. The profile allows everything but a few things, one a name nothing registers (`OUTSIDE`): denied that and allowed another is Tirith's; a browser's sandbox denies both.
+//! macOS: whether a process runs under OpenBot's own sandbox profile. The profile allows everything but a few things, one a name nothing registers (`OUTSIDE`): denied that and allowed another is OpenBot's; a browser's sandbox denies both.
 mod socket;
 
 use libc::{c_char, c_int, pid_t};
@@ -30,12 +30,12 @@ fn denied(pid: pid_t, name: &CStr) -> bool {
     }
 }
 
-/// Whether `pid` runs under Tirith's profile.
+/// Whether `pid` runs under OpenBot's profile.
 pub(super) fn ours(pid: pid_t) -> bool {
     denied(pid, OUTSIDE)
 }
 
-/// Whether `pid` runs under a profile tighter than Tirith's.
+/// Whether `pid` runs under a profile tighter than OpenBot's.
 pub(super) fn tighter(pid: pid_t) -> bool {
     denied(pid, TIGHTER)
 }

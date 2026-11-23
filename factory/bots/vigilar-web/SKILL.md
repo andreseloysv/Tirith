@@ -8,7 +8,7 @@ En la rutina «Vigilar la web» y cuando el dueño dé una página que vigilar o
 
 ## Entradas y accesos
 - Las páginas, en memory.md bajo «Páginas que vigilo»: una línea por página con su dirección y la parte que importa.
-- El navegador de Tirith (las herramientas de tirith_browser).
+- El navegador de OpenBot (las herramientas de tirith_browser).
 - La copia de la última vez de cada página, en watch/<nombre>.md de tu carpeta.
 
 ## Pasos

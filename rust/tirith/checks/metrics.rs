@@ -222,7 +222,7 @@ fn needless_cards_ignores_superseded() {
             .format("%Y-%m-%dT%H:%M:%SZ")
             .to_string()
     };
-    let auto = "closed by Tirith: its lane no longer waits for an answer";
+    let auto = "closed by OpenBot: its lane no longer waits for an answer";
     let card = |id: &str,
                 ago: u64,
                 kind: &str,

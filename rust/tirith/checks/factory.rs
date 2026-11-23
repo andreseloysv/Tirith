@@ -270,7 +270,7 @@ fn roles_extend_and_prompts_resolve() {
     );
     assert!(f
         .prompts_of("manager")
-        .starts_with("You are the manager inside Tirith"));
+        .starts_with("You are the manager inside OpenBot"));
     assert!(f
         .prompts_of("manager")
         .contains("only about the project {id}"));

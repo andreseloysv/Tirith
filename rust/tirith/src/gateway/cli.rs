@@ -14,7 +14,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
             &bot,
         ),
         None => {
-            Err("usage: tirith mcp --bot <id> (a bot run's MCP server, started by Tirith)".into())
+            Err("usage: tirith mcp --bot <id> (a bot run's MCP server, started by OpenBot)".into())
         }
     })
 }

@@ -1,4 +1,4 @@
-//! `codex` inside Tirith's sandbox (the wrapper of `<home>/net/bin`): its limit is read and the daemon is asked to apply it.
+//! `codex` inside OpenBot's sandbox (the wrapper of `<home>/net/bin`): its limit is read and the daemon is asked to apply it.
 use super::{ask::ask, asked, other, program, settings, ROLE, WORD};
 use crate::sandbox::mac;
 use std::os::unix::process::CommandExt;
@@ -15,7 +15,7 @@ pub fn launcher(args: &[String]) -> Option<i32> {
     (word == WORD || word == ROLE).then(|| run(program, rest, word == ROLE))
 }
 
-/// `argv` of a Codex that Tirith starts for a read-only role inside its sandbox, through this client.
+/// `argv` of a Codex that OpenBot starts for a read-only role inside its sandbox, through this client.
 pub fn inside(argv: &mut Vec<String>) {
     if let Some(exe) = crate::app::exe() {
         argv.splice(0..0, [exe.display().to_string(), ROLE.to_string()]);

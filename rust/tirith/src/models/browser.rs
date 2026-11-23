@@ -15,7 +15,7 @@ pub(super) fn browser_server(app: &Shared, lane: bool) -> Option<(String, Vec<St
             .collect(),
     ))
 }
-/// Lanes always `--isolated`; the others Tirith's persistent profile, `--isolated` while another live session holds it, or `--extension` with `[browser] use = "mine"`.
+/// Lanes always `--isolated`; the others OpenBot's persistent profile, `--isolated` while another live session holds it, or `--extension` with `[browser] use = "mine"`.
 fn profile_mode(app: &Shared, lane: bool) -> Option<&'static str> {
     let busy = profile_busy(app);
     (!lane && get::<String>(&app.cfg().raw, &["browser", "use"]).as_deref() == Some("mine"))

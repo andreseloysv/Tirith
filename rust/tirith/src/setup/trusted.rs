@@ -1,4 +1,4 @@
-//! Who signs in on a server whose Tirith is another user's (install.sh's `tirith`): their SSH tunnel may reach the page, so `[server] users` names them.
+//! Who signs in on a server whose OpenBot is another user's (install.sh's `tirith`): their SSH tunnel may reach the page, so `[server] users` names them.
 use super::edit::{edit, table};
 use std::path::Path;
 use toml_edit::{value, Array};

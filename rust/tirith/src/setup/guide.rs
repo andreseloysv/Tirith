@@ -5,7 +5,7 @@ use crate::service;
 
 pub(super) fn setup(o: &Opts) -> Result<bool, String> {
     let cx = Context::new(o.yes)?;
-    println!("Tirith {}", crate::bundle::VERSION);
+    println!("OpenBot {}", crate::bundle::VERSION);
     println!("Setting it up in {}.\n", cx.home.display());
     let mut pending = needs::machine(&cx);
     pending.iter().for_each(|p| println!("! {p}")); // at once, not only at the end
@@ -42,7 +42,7 @@ fn start(cx: &Context, o: &Opts, pending: &mut Vec<String>) -> Result<(), String
     let server = o.server
         || o.boot
         || cx.ask.yes_no(
-            "Run Tirith as a service of this machine (server mode: it starts by itself and stays up)?",
+            "Run OpenBot as a service of this machine (server mode: it starts by itself and stays up)?",
             cfg!(target_os = "linux"),
         ) && cx.ask.person();
     if !server {
@@ -52,7 +52,7 @@ fn start(cx: &Context, o: &Opts, pending: &mut Vec<String>) -> Result<(), String
         if older {
             service::stop(&unit, &cx.ask)?; // installed over an older one: the new binary takes over
         }
-        println!("Tirith runs: {}.", service::start(&unit, &cx.ask)?.said());
+        println!("OpenBot runs: {}.", service::start(&unit, &cx.ask)?.said());
         return Ok(());
     }
     let boot = o.boot
@@ -62,7 +62,7 @@ fn start(cx: &Context, o: &Opts, pending: &mut Vec<String>) -> Result<(), String
                 false,
             ));
     let (kind, notes) = service::install(&unit, &cx.ask, boot)?;
-    println!("Tirith runs as {}.", kind.said());
+    println!("OpenBot runs as {}.", kind.said());
     pending.extend(notes);
     Ok(())
 }

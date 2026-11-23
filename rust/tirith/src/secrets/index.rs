@@ -12,7 +12,7 @@ pub(super) enum Place {
 
 #[derive(Serialize, Deserialize)]
 pub(super) struct Held {
-    /// This home's own mark in the accounts: the OS store is one for every Tirith home of a user, and all of them have a bot `ceo`.
+    /// This home's own mark in the accounts: the OS store is one for every OpenBot home of a user, and all of them have a bot `ceo`.
     tag: String,
     pub names: BTreeMap<String, Place>,
 }

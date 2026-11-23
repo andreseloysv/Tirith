@@ -70,7 +70,7 @@ pub(super) async fn step(
     let own =
         cmd["kind"] == "open" && super::own_page::own_page(&s(&cmd, "target"), app.cfg().port);
     let own =
-        own.then(|| "that is Tirith's own page, where a click is the owner's yes".to_string());
+        own.then(|| "that is OpenBot's own page, where a click is the owner's yes".to_string());
     if let Some(why) = own.or_else(|| why(app, key, &cmd)) {
         return Ok(refused(app, key, &cmd, &why));
     }

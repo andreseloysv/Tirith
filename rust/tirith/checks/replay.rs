@@ -6,7 +6,7 @@ use std::process::Command;
 const KEY: &str = "bot-mail01";
 const TASK: &str = "Routine «gmail-safari» is due now. Check the inbox and list the new offers";
 
-/// A fake stream-json agent. As the bot, it asks Tirith's hook (over HTTP, as an agent's hooks do) for two reads of the web, a search, a local read, a write in its folder and a `tirith say`, keeps what the hook answered in `<home>/heard-<conversation>.txt` and what it was handed in `told-<conversation>.txt`, and answers. As anyone else (the judge) it says «tie».
+/// A fake stream-json agent. As the bot, it asks OpenBot's hook (over HTTP, as an agent's hooks do) for two reads of the web, a search, a local read, a write in its folder and a `tirith say`, keeps what the hook answered in `<home>/heard-<conversation>.txt` and what it was handed in `told-<conversation>.txt`, and answers. As anyone else (the judge) it says «tie».
 const AGENT: &str = r#"#!/bin/sh
 read -r line
 if [ "$TIRITH_ROLE" != "KEY" ]; then
@@ -47,7 +47,7 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-/// A Tirith home with the bot «Correo» and its routine `r1`, on the fake agent (the judge too) that calls the hook on `port`.
+/// A OpenBot home with the bot «Correo» and its routine `r1`, on the fake agent (the judge too) that calls the hook on `port`.
 fn app_with_a_bot(name: &str, port: u16) -> (crate::app::Shared, PathBuf) {
     app_with_agent(name, port, AGENT)
 }

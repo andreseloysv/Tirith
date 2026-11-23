@@ -1,4 +1,4 @@
-//! The text of Tirith's launchd job.
+//! The text of OpenBot's launchd job.
 use super::unit::Unit;
 use std::path::Path;
 

@@ -1,4 +1,4 @@
-//! Open questions that no longer apply, closed by Tirith.
+//! Open questions that no longer apply, closed by OpenBot.
 use super::cards::card_done;
 use super::open::owner_open;
 use crate::app::Shared;
@@ -71,5 +71,5 @@ fn close_if_stale(app: &Shared, o: &Value) {
         crate::lanes::free_gb(&app.home.join("lanes")),
     )
     .into_iter()
-    .for_each(|why| card_done(app, id, "closed", &format!("closed by Tirith: {why}")));
+    .for_each(|why| card_done(app, id, "closed", &format!("closed by OpenBot: {why}")));
 }

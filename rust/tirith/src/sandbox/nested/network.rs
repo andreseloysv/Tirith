@@ -3,7 +3,7 @@ use super::{doors::Doors, sb::Sb, Request};
 
 /// `own`: Codex's own process, in its part.
 pub(super) fn network(sb: &mut Sb, r: &Request, doors: Doors, own: Option<&str>) {
-    // each by name: a rule with no filter takes back no earlier one that has a filter (Tirith's loopback and sockets)
+    // each by name: a rule with no filter takes back no earlier one that has a filter (OpenBot's loopback and sockets)
     sb.line("(deny network-outbound (remote ip \"localhost:*\"))");
     sb.line("(deny network-outbound (remote unix-socket))");
     if let Some(own) = own {

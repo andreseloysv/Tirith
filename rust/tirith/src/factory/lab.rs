@@ -4,7 +4,7 @@ use serde::Deserialize;
 #[derive(Deserialize, Clone)]
 #[serde(default, deny_unknown_fields)]
 pub struct Lab {
-    /// Comparisons an experiment waits for before Tirith decides.
+    /// Comparisons an experiment waits for before OpenBot decides.
     pub inputs: u32,
     /// The share of comparisons B must win or tie to be no worse.
     pub not_worse_share: f64,

@@ -212,7 +212,7 @@ async fn chat_roles_may_not_wait() {
     // A manager (a chat role, named by its token and no lane) waiting inside its turn is refused, with the reason that says what to do instead.
     let long = pre_bash(&app, "manager", "", "sleep 30; tirith status").await;
     assert!(deny(&long), "a manager's sleep 30 is refused: {long}");
-    assert_eq!(reason(&long), "no esperes dentro del turno: contesta y termina; Tirith te avisa cuando una lane entre, falle o pregunte");
+    assert_eq!(reason(&long), "no esperes dentro del turno: contesta y termina; OpenBot te avisa cuando una lane entre, falle o pregunte");
     // Five seconds is already a wait; a loop's short sleep is one too (it adds up behind the owner's messages).
     assert!(
         deny(&pre_bash(&app, "manager", "", "sleep 5").await),
@@ -331,7 +331,7 @@ async fn every_agent_obeys_the_rules() {
             .to_string()
     };
     let repo = app.cfg().project("p1").unwrap().repo.clone();
-    let wait = "no esperes dentro del turno: contesta y termina; Tirith te avisa cuando una lane entre, falle o pregunte";
+    let wait = "no esperes dentro del turno: contesta y termina; OpenBot te avisa cuando una lane entre, falle o pregunte";
     let cmd = |c: &str| serde_json::json!({"command": c});
     // The muse names for a shell: `bash` (its command in `command`) and `monitor`. A manager waiting in either is refused, as with `clocksleep`, its tool for waiting outright.
     let looped = pre(
@@ -392,7 +392,7 @@ async fn every_agent_obeys_the_rules() {
         !deny(&pre(&app, "manager", "", &repo, "bash", cmd("sleep 2")).await),
         "a manager's bash sleep 2 passes"
     );
-    // From a lane, the muse names obey the other rules too: no skipping the commit checks, no writing the plan or Tirith's own files, by `edit_file` (the file in `path`) or by `apply_patch` (its files on the patch's `*** … File:` lines, relative to its folder).
+    // From a lane, the muse names obey the other rules too: no skipping the commit checks, no writing the plan or OpenBot's own files, by `edit_file` (the file in `path`) or by `apply_patch` (its files on the patch's `*** … File:` lines, relative to its folder).
     let ws = "/tmp/ws-lane-agents";
     app.save_lane(&crate::app::Lane {
         id: "lane-agents".into(),

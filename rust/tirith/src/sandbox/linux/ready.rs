@@ -1,4 +1,4 @@
-//! Whether this Linux lets Tirith confine what it starts, asked by trying it, and what to do when it does not.
+//! Whether this Linux lets OpenBot confine what it starts, asked by trying it, and what to do when it does not.
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 

@@ -18,7 +18,7 @@ pub fn tunnel(host: &str, port: &str) -> Result<(), String> {
 /// The proxy's address and credentials, from HTTPS_PROXY.
 fn proxy() -> Result<(String, String), String> {
     let url = std::env::var("HTTPS_PROXY")
-        .map_err(|_| "no HTTPS_PROXY: the tunnel works inside Tirith's sandbox")?;
+        .map_err(|_| "no HTTPS_PROXY: the tunnel works inside OpenBot's sandbox")?;
     let rest = url
         .strip_prefix("http://")
         .ok_or("HTTPS_PROXY is not an http:// proxy")?

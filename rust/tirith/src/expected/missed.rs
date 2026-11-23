@@ -1,4 +1,4 @@
-//! Occurrences that nothing ever wrote down and that will not run: Tirith was stopped, or the machine slept, across them. The one `catch_up` still runs is not lost; with "skip" one is lost as soon as it is late. Each gets its row, and each routine one line.
+//! Occurrences that nothing ever wrote down and that will not run: OpenBot was stopped, or the machine slept, across them. The one `catch_up` still runs is not lost; with "skip" one is lost as soon as it is late. Each gets its row, and each routine one line.
 use super::calendar::{gone_today, local, on, over, utc};
 use super::found::known;
 use super::store::{close, expect, select, Expected, New, FAILED};

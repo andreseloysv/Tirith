@@ -1,4 +1,4 @@
-//! Dynamic client registration (RFC 7591), when the server offers it: Tirith as a public client of the daemon's own callback.
+//! Dynamic client registration (RFC 7591), when the server offers it: OpenBot as a public client of the daemon's own callback.
 use serde_json::{json, Value};
 
 /// A client of a server: its id, and its secret when it gave one.
@@ -9,14 +9,14 @@ pub(super) struct Client {
     pub secret: Option<String>,
 }
 
-/// Tirith registered at `endpoint` for `redirect`.
+/// OpenBot registered at `endpoint` for `redirect`.
 pub(super) async fn register(
     http: &reqwest::Client,
     endpoint: &str,
     redirect: &str,
 ) -> Result<Client, String> {
     let body = json!({
-        "client_name": "Tirith",
+        "client_name": "OpenBot",
         "redirect_uris": [redirect],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],

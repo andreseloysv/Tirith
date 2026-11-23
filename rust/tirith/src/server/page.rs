@@ -19,12 +19,12 @@ pub(super) fn routes() -> Router<Shared> {
         .route("/auth/{code}", get(enter))
 }
 
-/// A link's row: it is this Tirith's alone.
+/// A link's row: it is this OpenBot's alone.
 fn row(app: &App, code: &str) -> String {
     sha_hex(format!("{}\n{code}", app.keys.owner).as_bytes())
 }
 
-/// `<name>=<value>` of this Tirith's cookie. Every port of 127.0.0.1 shares cookies, so the name is this home's.
+/// `<name>=<value>` of this OpenBot's cookie. Every port of 127.0.0.1 shares cookies, so the name is this home's.
 pub(super) fn cookie(app: &App) -> String {
     let of = |what: &str| sha_hex(format!("{what}\n{}", app.keys.owner).as_bytes());
     format!("tirith-{}={}", &of("name")[..8], of("page"))
@@ -84,6 +84,6 @@ async fn enter(State(app): State<Shared>, Path(code): Path<String>) -> Response 
         cookie(&app)
     );
     // Not a redirect: the code leaves the history with it.
-    let on = "<!doctype html><title>Tirith</title><script>location.replace('/')</script>";
+    let on = "<!doctype html><title>OpenBot</title><script>location.replace('/')</script>";
     ([("set-cookie", kept)], Html(on)).into_response()
 }

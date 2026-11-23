@@ -1,4 +1,4 @@
-//! root on a server whose Tirith runs as the user `tirith` (install.sh made it): root's `tirith …` is that user's, not a second Tirith of root's.
+//! root on a server whose OpenBot runs as the user `tirith` (install.sh made it): root's `tirith …` is that user's, not a second OpenBot of root's.
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 
@@ -37,7 +37,7 @@ pub fn in_anothers_terminal() {
     }
 }
 
-/// Goes on as that user when root calls and that user has the Tirith of this machine; it returns only when it does not.
+/// Goes on as that user when root calls and that user has the OpenBot of this machine; it returns only when it does not.
 pub fn as_service_user(args: &[String]) {
     let root = cfg!(target_os = "linux") && unsafe { libc::geteuid() } == 0;
     if !root || roots_own(args) || std::env::var_os("TIRITH_HOME").is_some() {
@@ -49,7 +49,7 @@ pub fn as_service_user(args: &[String]) {
     };
     let own = crate::config::home_dir().join(".tirith/config.toml");
     if own.exists() || !Path::new(&home).join(".tirith").is_dir() {
-        return; // root has a Tirith of its own, or that user has none
+        return; // root has a OpenBot of its own, or that user has none
     }
     let Some(exe) = crate::app::exe() else {
         return;
@@ -66,6 +66,6 @@ pub fn as_service_user(args: &[String]) {
         .args(args)
         .current_dir(&home)
         .exec();
-    eprintln!("cannot go on as the user {USER}, whose Tirith this is: {why}");
+    eprintln!("cannot go on as the user {USER}, whose OpenBot this is: {why}");
     std::process::exit(1);
 }

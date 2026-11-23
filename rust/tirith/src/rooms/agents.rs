@@ -40,7 +40,7 @@ fn braked(r: &mut Room, brake: u32, out: &mut Out) {
     let _ = (!std::mem::replace(&mut r.brake.braked, true))
         .then(|| out.send.push((format!("I stopped answering: {brake} messages in a row came from agents and none from the owner. I answer again when the owner writes from a paired phone."), readers)));
 }
-/// Its further lines are quoted, so none of them can pass for a line of the owner or of Tirith.
+/// Its further lines are quoted, so none of them can pass for a line of the owner or of OpenBot.
 fn quote(text: &str) -> String {
     text.replace(
         [

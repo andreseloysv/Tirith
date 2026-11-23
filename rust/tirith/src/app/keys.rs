@@ -1,4 +1,4 @@
-//! What proves who calls, kept 0600 in Tirith's home where no confined process reads or writes it (`sandbox/confine.rs`): the owner's token, the secret every caller's token derives from, and the file that opens the page once.
+//! What proves who calls, kept 0600 in OpenBot's home where no confined process reads or writes it (`sandbox/confine.rs`): the owner's token, the secret every caller's token derives from, and the file that opens the page once.
 use crate::rooms::sealed::hex;
 use rusqlite::Connection;
 use std::io::{Read, Write};

@@ -71,7 +71,7 @@ fn linger(ask: &Ask) -> Option<String> {
     let user = run::output("id", &["-un"]).unwrap_or(uid.clone());
     if let Some(sudo) = root::sudo().filter(|_| ask.person()) {
         println!(
-            "  So that Tirith starts at boot, with nobody logged in, sudo asks for your password:"
+            "  So that OpenBot starts at boot, with nobody logged in, sudo asks for your password:"
         );
         let args = ["loginctl", "enable-linger", user.as_str()];
         if run::shown(ask, &sudo, &args, &[]) && on() {

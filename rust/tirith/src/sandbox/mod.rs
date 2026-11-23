@@ -1,4 +1,4 @@
-//! Network sandbox: every process Tirith starts reaches the network only through the daemon's own proxy (`sandbox/proxy/`): a macOS `sandbox-exec` profile that only allows loopback, on Linux a network namespace of its own (`sandbox/linux/`).
+//! Network sandbox: every process OpenBot starts reaches the network only through the daemon's own proxy (`sandbox/proxy/`): a macOS `sandbox-exec` profile that only allows loopback, on Linux a network namespace of its own (`sandbox/linux/`).
 mod blocks;
 mod caller;
 mod check;

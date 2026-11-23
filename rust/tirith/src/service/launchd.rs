@@ -10,7 +10,7 @@ pub(super) fn install(u: &Unit, ask: &Ask, boot: bool) -> Result<Vec<String>, St
         let user = run::output("id", &["-un"]).ok_or("cannot tell who you are")?;
         let sudo = root::sudo().ok_or("sudo is missing")?;
         println!("  To start at boot with nobody logged in, sudo asks for your password:");
-        // straight to root's hands: a draft in Tirith's home could be swapped while the password is typed
+        // straight to root's hands: a draft in OpenBot's home could be swapped while the password is typed
         root::write(&sudo, &u.boot_file(), &plist::text(u, &log, Some(&user)))
             .then_some(())
             .ok_or("sudo could not install the boot service")?;

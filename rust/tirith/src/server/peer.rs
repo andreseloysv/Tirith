@@ -3,7 +3,7 @@ use crate::app::Shared;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 
-/// True when the caller may use this Tirith. An unknown caller may not.
+/// True when the caller may use this OpenBot. An unknown caller may not.
 #[cfg(target_os = "linux")]
 pub(super) fn welcome(app: &Shared, stream: &TcpStream, from: SocketAddr) -> bool {
     let Ok(to) = stream.local_addr() else {

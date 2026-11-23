@@ -1,4 +1,4 @@
-//! Teaching a bot a task: the owner's Edge records the steps through Tirith's extension (tools/teach/), the daemon keeps them with what the owner wrote in the bot's chat meanwhile, and at stop the bot is handed both to write a draft skill and ask its questions; the bot then rehearses the draft in the same Edge through the extension, and the owner approves it (docs/DAEMON.md).
+//! Teaching a bot a task: the owner's Edge records the steps through OpenBot's extension (tools/teach/), the daemon keeps them with what the owner wrote in the bot's chat meanwhile, and at stop the bot is handed both to write a draft skill and ask its questions; the bot then rehearses the draft in the same Edge through the extension, and the owner approves it (docs/DAEMON.md).
 mod api;
 mod approvals;
 mod approve;

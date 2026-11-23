@@ -21,11 +21,11 @@ pub(super) fn refused(app: &Shared, cfg: &Config, call: &Call, l: &Lane) -> Opti
         ));
     }
     if call.bash && MAIN.is_match(call.cmd) {
-        return Some("A lane never pushes or touches main. Commit on your branch and end your turn: Tirith runs the checks and merges.".into());
+        return Some("A lane never pushes or touches main. Commit on your branch and end your turn: OpenBot runs the checks and merges.".into());
     }
     let starts =
         call.tool == "Task" || call.tool == "Agent" || (call.bash && spawns(cfg, call.cmd));
-    starts.then(|| "Agents start only through Tirith, so the owner sees them. If the item needs more hands, ask the manager: tirith ask \"<question>\".".into())
+    starts.then(|| "Agents start only through OpenBot, so the owner sees them. If the item needs more hands, ask the manager: tirith ask \"<question>\".".into())
 }
 
 /// A shell command that runs one of the configured agent commands.
