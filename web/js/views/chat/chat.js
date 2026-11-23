@@ -27,7 +27,7 @@ const DRAFT_KEY = 'tirith.chat.draft';
 export function Chat({ project = '', who = '', hint = '' }) {
   project = project || 'manager-general';   /* no project: the manager of no project's conversation */
   const sp = useSpeaker(project, who);
-  const { talk, busy, isProject, whoName, role } = sp;
+  const { talk, busy, isProject, role } = sp;
   const draftKey = project ? `${DRAFT_KEY}:${project}` : DRAFT_KEY;
   const [shown, setShown] = useState(SHOWN);
   const [draft, setDraft] = useState(() => store(draftKey));
@@ -51,7 +51,7 @@ export function Chat({ project = '', who = '', hint = '' }) {
   return html`<section class=${`mchat${att.drag ? ' drop' : ''}`}>
     ${head(sp, project, interrupt)}
     ${thread({ sp, project, hint, items, hidden, scroll, onEarlier, setZoom, send, turns, notes })}
-    <${ChatModels} role=${role} label=${whoName} note=${isProject ? `The model of the ${whoName}: it applies to all projects.` : `The model of ${whoName}.`} />
+    <${ChatModels} role=${role} note=${isProject ? 'Applies to every project.' : ''} />
     ${composer({ sp, err, att, ta, file, draft, edit, keys, send: send.send })}
     ${zoom ? html`<${Lightbox} src=${zoom} onClose=${() => setZoom(null)} />` : null}
   </section>`;

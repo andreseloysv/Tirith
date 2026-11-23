@@ -6,7 +6,6 @@ export const element = (tag, cls, text) => {
   if (text !== undefined) e.textContent = text;
   return e;
 };
-export const title = value => value ? value[0].toUpperCase() + value.slice(1) : 'Default';
 
 export const button = (disabled, words, selected, action) => {
   const b = element('button', 'choice', words); b.type = 'button'; b.disabled = disabled;

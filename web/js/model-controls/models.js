@@ -1,47 +1,22 @@
-// The Model section: the agent default, the listed models (searchable when there are more than four), and a
-// custom model ID for agents other than Codex.
-import { PROVIDERS, ownerOf, pickModel } from './options.js';
-import { element, button, section } from './dom.js';
+// The model list: every model that can run, as one menu, under its provider's name when there are several (the
+// caller's summary already says "Model"). A pick brings its agent along and keeps the effort when the model takes it.
+import { PROVIDERS } from './options.js';
+import { keptEffort } from './offer.js';
+import { element, button } from './dom.js';
 
-function modelList(ctl, { choices, value, disabled }, { codex, models }) {
-  const list = element('div', 'models'); list.setAttribute('role', 'group'); list.setAttribute('aria-label', 'Models');
-  list.append(button(disabled, 'Agent default', !value.model, () => ctl.change({ model: '', effort: '' })));
-  for (const m of models) {
-    const b = button(disabled, m.name || m.slug, m.slug === value.model, () => ctl.change({ ...pickModel(choices, value, m.slug), effort: '' }));
-    const owner = ownerOf(choices, m.slug);
-    b.title = m.slug; b.dataset.search = `${m.name || ''} ${m.slug} ${owner}`.toLowerCase();
-    if (m.name && m.name !== m.slug) b.append(element('small', '', m.slug));
-    if (owner && !codex) b.append(element('small', 'owner', PROVIDERS[owner] || owner));
-    list.append(b);
+export function drawModels(ctl, root, { value, disabled }, list) {
+  const field = element('div', 'model-field'); field.setAttribute('role', 'group'); field.setAttribute('aria-label', 'Model');
+  const agents = [...new Set(list.map(m => m.agent))];
+  for (const agent of agents) {
+    const name = PROVIDERS[agent] || agent;
+    if (agents.length > 1) field.append(element('p', 'group', name));
+    const menu = element('div', 'models'); menu.setAttribute('role', 'group'); menu.setAttribute('aria-label', name);
+    for (const m of list.filter(x => x.agent === agent)) {
+      const pick = () => ctl.change({ agent: m.agent, model: m.slug, effort: keptEffort(value.effort, m.efforts) });
+      menu.append(button(disabled, m.name, m.slug === value.model, pick));
+    }
+    field.append(menu);
   }
-  return list;
-}
-
-function searchBox(list, disabled) {
-  const search = element('input', 'search'); search.type = 'search'; search.placeholder = 'Search models'; search.setAttribute('aria-label', 'Search models'); search.disabled = disabled;
-  search.oninput = () => { for (const b of list.children) b.hidden = !`${b.dataset.search || b.textContent.toLowerCase()}`.includes(search.value.toLowerCase()); };
-  return search;
-}
-
-function customModel(ctl, list, models, { value, disabled }) {
-  const custom = element('details', 'custom'); custom.append(element('summary', '', 'Custom model'));
-  const input = element('input'); input.type = 'text'; input.value = value.model; input.placeholder = 'Model ID'; input.setAttribute('aria-label', 'Custom model'); input.disabled = disabled;
-  input.oninput = () => {
-    const model = input.value.trim();
-    [...list.children].forEach((b, i) => b.setAttribute('aria-pressed', String((i ? models[i - 1].slug : '') === model)));
-    ctl.change({ model }, false);
-  };
-  custom.append(input);
-  return custom;
-}
-
-export function drawModels(ctl, root, config, options) {
-  const { codex, models } = options;
-  const modelField = section(root, 'Model', 'model-field');
-  const list = modelList(ctl, config, options);
-  const search = searchBox(list, config.disabled);
-  if (models.length > 4) modelField.append(search);
-  modelField.append(list);
-  if (!codex) modelField.append(customModel(ctl, list, models, config));
-  else if (!models.length) modelField.append(element('p', 'hint', 'Open Codex on the computer to load its models.'));
+  if (!list.length) field.append(element('p', 'hint', 'No agent can run a model: connect one in Settings.'));
+  root.append(field);
 }
