@@ -1,12 +1,10 @@
-//! Running the Safari script outside the sandbox.
-use super::act::act_script;
+//! Running the Safari script outside the sandbox, and the browser the owner chose (`choice`).
+use super::act::{act_args, show_script};
 use super::script::{chat_role, safari_script};
 use crate::app::Shared;
 
-/// What Safari needs before it lets a script click or type, said when it refuses.
-const ALLOW: &str = " (turn on Safari's Develop › Allow JavaScript from Apple Events — Settings › Advanced › Show features for web developers — so OpenBot can click and type)";
-
-/// Runs `safari_script` (open, read) or `act_script` (click, type); a read's page text is cut at 20,000 characters.
+/// Runs `safari_script` (open, read), the fixed Accessibility script (click, type) or a browser command (browser,
+/// use, login); a read's page text is cut at 20,000 characters.
 pub async fn safari(
     app: &Shared,
     lane: &str,
@@ -16,36 +14,52 @@ pub async fn safari(
     target: &str,
     text: &str,
 ) -> Result<String, String> {
-    let script = match cmd {
-        "click" | "type" => {
-            chat_role(app, lane, role).and_then(|()| act_script(cmd, target, text, url))?
+    match cmd {
+        "click" | "type" => act(app, lane, role, cmd, url, target, text).await,
+        "browser" | "use" | "login" => super::choice::browser(app, lane, role, cmd, target, url),
+        _ => {
+            let script = safari_script(app, lane, role, cmd, url)?;
+            let out = osascript(&["-e".into(), script]).await?;
+            Ok(match cmd {
+                "open" => format!("opened {url}"),
+                _ => cut_page(&out),
+            })
         }
-        _ => safari_script(app, lane, role, cmd, url)?,
-    };
-    let acts = matches!(cmd, "click" | "type");
-    let text = osascript(&script)
-        .await
-        .map_err(|e| match acts && e.contains("JavaScript") {
-            true => format!("{e}{ALLOW}"),
-            false => e,
-        })?;
-    let Some(()) = (cmd != "open").then_some(()) else {
-        return Ok(format!("opened {url}"));
-    };
-    Ok(cut_page(&text))
+    }
 }
 
-/// The script's output, or its error as `Safari: …`.
-async fn osascript(script: &str) -> Result<String, String> {
+/// A click or typing: the tab brought forward when a URL names it, then the fixed script; its `ERROR …` is an error.
+async fn act(
+    app: &Shared,
+    lane: &str,
+    role: &str,
+    cmd: &str,
+    url: &str,
+    target: &str,
+    text: &str,
+) -> Result<String, String> {
+    chat_role(app, lane, role)?;
+    let args = act_args(cmd, target, text, url)?;
+    if !url.is_empty() {
+        osascript(&["-e".into(), show_script(url)]).await?;
+    }
+    let out = osascript(&args).await?;
+    match out.strip_prefix("ERROR ") {
+        Some(e) => Err(format!("Safari: {e}")),
+        None => Ok(out),
+    }
+}
+
+/// osascript's output for `args`, or its error as `Safari: …`.
+async fn osascript(args: &[String]) -> Result<String, String> {
     let out = tokio::process::Command::new("/usr/bin/osascript")
-        .args(["-e", script])
+        .args(args)
         .output()
         .await
         .map_err(|e| e.to_string())?;
-    let text = String::from_utf8_lossy(if out.status.success() {
-        &out.stdout
-    } else {
-        &out.stderr
+    let text = String::from_utf8_lossy(match out.status.success() {
+        true => &out.stdout,
+        false => &out.stderr,
     })
     .trim_end()
     .to_string();

