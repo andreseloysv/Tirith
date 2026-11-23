@@ -2,13 +2,21 @@
 use super::admits::{admits, pass_admits, trouble};
 use super::claims::{after, could_not, NOTHING};
 use super::store::{close, select, FAILED, OK};
-use super::{news, notice, words::short};
+use super::{
+    news, notice,
+    words::{not_able, short},
+};
 use crate::app::{redact_secrets, Shared};
 use rusqlite::params;
 use serde_json::json;
 
 /// Turn `turn`, which answered `answer`, could not, for `cause` (none: no judge read it): its run, its row, and one line.
 pub fn admitted(app: &Shared, turn: i64, answer: &str, cause: Option<&str>) {
+    admitted_by(app, turn, answer, (cause, false));
+}
+
+/// The same, told as `partial` when the judge scored it above 0: it did a part of its task.
+pub fn admitted_by(app: &Shared, turn: i64, answer: &str, (cause, partial): (Option<&str>, bool)) {
     let quiet = after(answer, NOTHING).is_some();
     if (cause.is_none() && !suspects(answer, quiet)) || crate::turns::asked(app, turn) {
         return; // (waiting for the owner's yes is how such a run is done)
@@ -17,8 +25,8 @@ pub fn admitted(app: &Shared, turn: i64, answer: &str, cause: Option<&str>) {
     let claimed: Vec<i64> = app.query(sql, params![FAILED, turn, OK], |r| r.get(0));
     for run in claimed.iter().flat_map(|id| select(app, "id = ?1", [*id])) {
         let why = match cause.map(|c| short(&redact_secrets(c), 160)) {
-            Some(cause) if quiet => format!("dijo ∅, pero no pudo: {cause}"),
-            Some(cause) => format!("no pudo: {cause}"),
+            Some(cause) if quiet => not_able("dijo ∅, pero ", &cause),
+            Some(cause) => not_able("", &cause),
             None => {
                 let said = answer.rsplit("\n\n").next().unwrap_or(answer);
                 format!(
@@ -35,7 +43,7 @@ pub fn admitted(app: &Shared, turn: i64, answer: &str, cause: Option<&str>) {
             "turn",
             json!({"id": turn, "conv": run.conv, "status": FAILED}),
         );
-        notice::failed(app, &run, &why);
+        notice::failed(app, &run, &why, partial);
     }
 }
 

@@ -23,7 +23,9 @@ mod unjudged;
 mod verdict;
 mod watch;
 mod words;
-pub use admitted::{admitted, ungraded};
+#[cfg(test)]
+pub use admitted::admitted;
+pub use admitted::{admitted_by, ungraded};
 pub use calendar::{today, utc as instant};
 pub use changed::changed;
 pub use claims::{honest, quiet};
@@ -48,6 +50,9 @@ pub const PASS_TITLE: &str = "Pasada programada";
 #[cfg(test)]
 #[path = "../../checks/catch_up.rs"]
 mod catch_up_tests;
+#[cfg(test)]
+#[path = "../../checks/partial.rs"]
+mod partial_tests;
 #[cfg(test)]
 #[path = "../../checks/expected.rs"]
 mod tests;

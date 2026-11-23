@@ -48,7 +48,7 @@ pub fn ended(
         "UPDATE turns SET why = ?1 WHERE id = ?2",
         params![why, turn],
     );
-    notice::failed(app, &run, why);
+    notice::failed(app, &run, why, false);
 }
 
 /// An occurrence ends with no turn: its row says why, and so does one line.
