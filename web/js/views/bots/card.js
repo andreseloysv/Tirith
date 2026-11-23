@@ -3,7 +3,7 @@
 import { html, useState, useEffect, useRef } from '../../../vendor/preact-htm.js';
 import { useFetch, api } from '../../store.js';
 import { ICON, Icon } from '../../common.js';
-import { Face, SHAPES, COLORS } from './face.js';
+import { Face, SHAPES, COLORS, ringOf } from './face.js';
 import { useCardModel, modelSection } from './card-model.js';
 import { factorySection } from './card-factory.js';
 import { connectorsSection } from './card-connectors.js';
@@ -21,7 +21,8 @@ function useCardKeys(input, onClose) {
 /** The shape and colour pickers. */
 function pickers(shape, setShape, color, setColor) {
   return html`<div class="bshapes" role="radiogroup" aria-label="Shape">${Object.keys(SHAPES).map((k) => html`<button type="button" role="radio" key=${k}
-          aria-checked=${k === shape} aria-label=${k} class=${k === shape ? 'on' : ''} onClick=${() => setShape(k)}><${Face} shape=${k} color=${color} size=${46} still /></button>`)}</div>
+          aria-checked=${k === shape} aria-label=${k} class=${k === shape ? 'on' : ''} onClick=${() => setShape(k)}><span class="bface"><${Face} shape=${k} color=${color} size=${58} still />${k === shape
+            ? html`<svg class="bring" viewBox="-12 -12 124 124" aria-hidden="true"><path d=${ringOf(k)} /></svg>` : null}</span></button>`)}</div>
         <div class="bcolors" role="radiogroup" aria-label="Colour">${COLORS.map((c) => html`<button type="button" role="radio" key=${c}
           aria-checked=${c === color} aria-label=${c} class=${c === color ? 'on' : ''} style=${`--c:${c}`} onClick=${() => setColor(c)}><i></i></button>`)}</div>`;
 }

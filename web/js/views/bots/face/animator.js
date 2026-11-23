@@ -1,6 +1,6 @@
 // The 2D face's animator: the float, breathing, glances, blinks, the ten acts (acts.js, as the 3D face plays them)
 // and, asleep, its own small ones and the z's, in the mood of its state. It computes the motion; `paint` (face.js)
-// writes the float and the halo to the face's layers, features.js the eyes and the mouth.
+// writes the float to the face's layers, features.js the eyes.
 import { R, TAU, MOOD, NUM, ACTS } from './motion.js';
 import { still, start, stop } from './clock.js';
 import { Acts } from './schedule.js';
@@ -29,7 +29,7 @@ export class Animator {
   bind(root, state) {
     this.root = root;
     this.float = root.querySelector('.ffloat');
-    this.halo = root.querySelector('.fhalo'); this.zg = root.querySelector('.zs');
+    this.zg = root.querySelector('.zs');
     this.zs.forEach((z) => z.el.remove()); this.zs = [];
     this.parts = partsOf(root);
     if (state !== this.state) {

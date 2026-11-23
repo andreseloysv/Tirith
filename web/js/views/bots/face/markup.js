@@ -1,40 +1,25 @@
-// The 2D face's SVG (the face without WebGL): three layers — the glow, the body and the eyes with the mouth of
-// each state.
+// The face without WebGL, drawn as the 3D one is: the body's outline in one flat colour, exactly the bot's, and two
+// dark capsule eyes where its shape has them — each a dash when shut — and no mouth. Two layers: the body, and on
+// top, alone in its own SVG, the eyes that the animator moves (features.js).
 import { SHAPES } from './shapes2d.js';
 
-const rgb = (hex) => { const n = parseInt(String(hex).slice(1, 7), 16) || 0; return [n >> 16, (n >> 8) & 255, n & 255]; };
-const mix = (hex, to, t) => '#' + rgb(hex).map((c) => Math.round(c + (to - c) * t).toString(16).padStart(2, '0')).join('');
+const INK = '#161616';
+const DEG = 180 / Math.PI;
 
-let uid = 0;
+/* a capsule `w` wide and `l` long about (x, y), turned `lean` radians counter-clockwise */
+const capsule = (x, y, lean, w, l) => `<rect x="${(x - w / 2).toFixed(2)}" y="${(y - l / 2).toFixed(2)}" width="${w}" height="${l}" rx="${(w / 2).toFixed(2)}" fill="${INK}" transform="rotate(${(-lean * DEG).toFixed(1)} ${x} ${y})"/>`;
+
+/* the dash an eye is when shut: half its width thick, along the line between the two eyes */
+function dash([x, y, , w], along) {
+  return capsule(x, y, along, w * 0.55, w * 1.43);
+}
+
 export function markup(shape, color, state) {
-  const [body, e, round, o] = SHAPES[shape] || SHAPES.round; /* `o`: a mouth of its own, at rest (the hero's) */
-  const id = `bf${uid++}`, ink = '#1d1030';
-  const core = mix(color, 255, 0.78), mid = mix(color, 255, 0.18), edge = mix(color, 0, 0.08), halo = mix(color, 255, 0.25);
-  const soft = ` stroke="url(#${id}b)" stroke-width="${round ? 14 : 6}" stroke-linejoin="round"`; /* every shape a little puffy */
-  const eyes = state === 'sleep'
-    ? `<path d="M${e[0] - 6} ${e[2]}q6 5 12 0M${e[1] - 6} ${e[2]}q6 5 12 0" stroke="${ink}" stroke-width="3.2" stroke-linecap="round" fill="none"/>`
-    : [e[0], e[1]].map((x) => `<g class="eye" data-x="${x}" data-y="${e[2]}"><ellipse cx="${x}" cy="${e[2]}" rx="${e[3]}" ry="${e[4]}" fill="${ink}"/><circle cx="${x + e[3] * 0.35}" cy="${e[2] - e[4] * 0.45}" r="${Math.max(1.4, e[3] * 0.28)}" fill="#fff"/></g>`
-      + `<g class="shut" data-x="${x}" data-y="${e[2]}" opacity="0"><path d="M${x - e[3]} ${e[2]}q${e[3]} ${e[4] * 0.8} ${2 * e[3]} 0" stroke="${ink}" stroke-width="3.6" stroke-linecap="round" fill="none"/></g>`).join('');
-  const w = o ? o[2] * 2.6 : (e[1] - e[0]) * 0.5, mx = o ? o[0] : (e[0] + e[1]) / 2, my = o ? o[1] - w * 0.45 : e[2] + e[4] + 6;
-  const mouth = state === 'work' /* a wide D, with the tongue inside */
-    ? `<path d="M${mx - w} ${my}C${mx - w} ${my + w * 1.35} ${mx + w} ${my + w * 1.35} ${mx + w} ${my}Q${mx} ${my + w * 0.16} ${mx - w} ${my}z" fill="${ink}"/><path d="M${mx - w * 0.55} ${my + w * 0.86}C${mx - w * 0.3} ${my + w * 0.45} ${mx + w * 0.3} ${my + w * 0.45} ${mx + w * 0.55} ${my + w * 0.86}C${mx + w * 0.3} ${my + w * 1.06} ${mx - w * 0.3} ${my + w * 1.06} ${mx - w * 0.55} ${my + w * 0.86}z" fill="#d2405d"/>`
-    : state === 'sleep'
-      ? `<path d="M${mx - w * 0.35} ${my}q${w * 0.35} ${w * 0.3} ${w * 0.7} 0" stroke="${ink}" stroke-width="2.6" stroke-linecap="round" fill="none"/>`
-      : o ? `<ellipse cx="${o[0]}" cy="${o[1]}" rx="${o[2]}" ry="${o[3]}" fill="${ink}"/><ellipse cx="${o[0]}" cy="${o[1] + o[3] * 0.45}" rx="${o[2] * 0.55}" ry="${o[3] * 0.3}" fill="#d2405d"/>`
-      : `<path d="M${mx - w * 0.6} ${my - 1}q${w * 0.6} ${w * 0.65} ${w * 1.2} 0" stroke="${ink}" stroke-width="3" stroke-linecap="round" fill="none"/>`;
-  const oy = my + w * 0.5; /* a yawn's mouth, unseen until one comes */
-  const yawn = `<g class="yawn" data-x="${mx}" data-y="${oy}" opacity="0"><ellipse cx="${mx}" cy="${oy}" rx="${w * 0.6}" ry="${w * 0.78}" fill="${ink}"/><ellipse cx="${mx}" cy="${oy + w * 0.4}" rx="${w * 0.34}" ry="${w * 0.22}" fill="#d2405d"/></g>`;
-  /* three layers, each its own SVG with its own defs: the glow (both blurs of the halo), the body (gradient, its
-     soft edge and the rim of light) and, filter-less on top, the eyes and mouth */
-  const blur4 = (f) => `<filter id="${f}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>`;
-  return {
-    halo: `<defs><filter id="${id}w" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="14"/></filter>${blur4(`${id}n`)}</defs>`
-      + `<g opacity=".85" fill="${halo}" stroke="${halo}" stroke-width="16" stroke-linejoin="round" filter="url(#${id}w)">${body}</g>`
-      + `<g opacity=".9" fill="${halo}" stroke="${halo}" stroke-width="8" stroke-linejoin="round" filter="url(#${id}n)">${body}</g>`,
-    body: `<defs><radialGradient id="${id}b" cx="46%" cy="42%" r="62%"><stop offset="0" stop-color="${core}"/><stop offset=".5" stop-color="${mid}"/><stop offset="1" stop-color="${edge}"/></radialGradient>`
-      + `<filter id="${id}s" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="0.7"/></filter>${blur4(`${id}m`)}</defs>`
-      + `<g fill="url(#${id}b)"${soft} filter="url(#${id}s)">${body}</g>`
-      + `<g opacity=".35" fill="none" stroke="#fff" stroke-width="2" filter="url(#${id}m)">${body}</g>`, /* a faint inner rim of light */
-    eyes: `<g class="look"><g class="eyes">${eyes}</g><g class="mouth" data-x="${mx}" data-y="${my}">${mouth}</g>${yawn}</g>`,
-  };
+  const [body, eyes] = SHAPES[shape] || SHAPES.round;
+  const [[x0, y0], [x1, y1]] = eyes, along = Math.atan2(y0 - y1, x1 - x0) - Math.PI / 2;
+  const all = state === 'sleep'
+    ? eyes.map((e) => dash(e, along)).join('')
+    : eyes.map((e) => `<g class="eye" data-x="${e[0]}" data-y="${e[1]}">${capsule(...e)}</g>`
+      + `<g class="shut" data-x="${e[0]}" data-y="${e[1]}" opacity="0">${dash(e, along)}</g>`).join('');
+  return { body: `<path d="${body}" fill="${color}"/>`, eyes: `<g class="look"><g class="eyes">${all}</g></g>` };
 }

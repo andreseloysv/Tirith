@@ -8,6 +8,8 @@ import { P, DEPTH, PX } from './config.js';
 // shape maths (the same as the Blender script)
 export function radiusAt(sh, th) { const n = sh.r.length; const f = (((th % TAU) + TAU) % TAU) / TAU * n; const i = Math.floor(f) % n, t = f - Math.floor(f); return sh.r[i] * (1 - t) + sh.r[(i + 1) % n] * t; }
 export function boxPt(sh, x, y) { return [((x + 25) * PX - sh.cx) / sh.rmax, ((512 - (y + 25) * PX) - sh.cy) / sh.rmax]; }
+/** How far out a point of the box (x, y) is: 0 at the middle, 1 on the outline. */
+export function outAt(sh, x, y) { const [u, w] = boxPt(sh, x, y); return Math.hypot(u, w) / radiusAt(sh, Math.atan2(w, u)); }
 export function frontPt(sh, u, w) { if (sh.front) return sh.front(u, w); const t = Math.min(Math.hypot(u, w) / radiusAt(sh, Math.atan2(w, u)), 0.995); return new THREE.Vector3(u, w, DEPTH * Math.pow(1 - Math.pow(t, P), 1 / P)); }
 export function normalAt(sh, u, w) { if (sh.normal) return sh.normal(u, w); const e = 1e-3, p = frontPt(sh, u, w); return frontPt(sh, u + e, w).sub(p).cross(frontPt(sh, u, w + e).sub(p)).normalize(); }
 const geoCache3 = {};

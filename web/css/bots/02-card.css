@@ -9,9 +9,13 @@
 .bmbody { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 22px 26px 26px; }
 .bprev { height: 140px; display: grid; place-items: center; }
 .bnamein { width: 100%; text-align: center; font-size: 17px; padding: 12px; border-radius: 14px !important; }
-.bshapes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; width: 100%; }
-.bshapes button { aspect-ratio: 1; display: grid; place-items: center; border-radius: 12px; transition: background .2s; }
-.bshapes button:hover { background: var(--b-soft); } .bshapes button.on { box-shadow: inset 0 0 0 1px var(--b-ink); }
+/* five to a row, the last row centred, as in the owner's example */
+.bshapes { display: flex; flex-wrap: wrap; justify-content: center; row-gap: 6px; width: 100%; }
+.bshapes button { flex: 0 0 20%; aspect-ratio: 1; display: grid; place-items: center; border-radius: 16px; transition: background .2s; }
+.bshapes button:hover { background: var(--b-soft); }
+/* the chosen shape: a ring that follows its outline, as in the owner's example */
+.bshapes .bface { position: relative; display: grid; place-items: center; }
+.bring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; fill: none; stroke: rgba(127, 127, 127, .55); stroke-width: 2.2px; vector-effect: non-scaling-stroke; }
 .bcolors { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 300px; }
 .bcolors button { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; }
 .bcolors i { width: 26px; height: 26px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(127,127,127,.35); }
