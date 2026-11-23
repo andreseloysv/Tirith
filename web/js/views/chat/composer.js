@@ -1,8 +1,9 @@
-// The box to write in: its error line, the files being attached, the text, the clip and Send.
+// The box to write in: its error line, the files being attached, the text, the clip, the model chip and Send.
 import { html } from '../../../vendor/preact-htm.js';
 import { CLIP, SEND } from './icons.js';
 import { size } from './util.js';
 import { FileChip } from './files.js';
+import { ModelChip } from './model-chip.js';
 
 /** The files waiting to go with the next message: pictures as thumbnails, the rest as chips. */
 function strip(pics, unpic) {
@@ -16,7 +17,7 @@ function strip(pics, unpic) {
 
 /** v: {sp, err, att: useAttach's answer, ta, file, draft, edit, keys: boxKeys' answer, send}. */
 export function composer({ sp, err, att, ta, file, draft, edit, keys, send }) {
-  const { isProject, whoName, name } = sp;
+  const { isProject, whoName, name, role } = sp;
   return html`<div class="mc-comp">
       ${err ? html`<div class="ierr mc-note">${err}</div>` : null}
       <div class="mc-box">
@@ -26,6 +27,7 @@ export function composer({ sp, err, att, ta, file, draft, edit, keys, send }) {
         <div class="mc-row">
           <button class="mc-clip" type="button" aria-label="Attach files" title="Attach images or files (or paste, or drop them here)" onClick=${() => file.current.click()}>${CLIP}</button>
           <input type="file" ref=${file} multiple hidden onChange=${(e) => { att.addFiles(e.target.files); e.target.value = ''; }} />
+          <${ModelChip} role=${role} isProject=${isProject} />
           <span class="mc-hint">Enter sends · Shift+Enter new line</span>
           <button class="mc-send" type="button" aria-label="Send" title=${`Send to ${whoName}`} onClick=${send}>${SEND}</button>
         </div>

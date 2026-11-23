@@ -1,6 +1,5 @@
-// The conversation of one project, one bot, or of no project: head, thread, model picker and the box.
+// The conversation of one project, one bot, or of no project: head, thread and the box (with its model chip).
 import { html, useState, useRef, useMemo } from '../../../vendor/preact-htm.js';
-import { ChatModels } from '../chat-models.js';
 import { store } from './util.js';
 import { group } from './turns.js';
 import { useSpeaker } from './speaker.js';
@@ -22,12 +21,12 @@ const DRAFT_KEY = 'tirith.chat.draft';
     files being attached and the scroll position belong to one conversation. A bot's conversation (`bot-<id>`, or a
     system bot's key) passes `who` (the bot's name) and `hint` (what an empty conversation says). Who speaks here —
     a project's Project Manager, or the bot — has its face and name in the head and its name on its messages (its face beside it only while it works), and the
-    model picker under the thread chooses only that one's model: a project's chat picks the Project Manager's
+    model chip in the box chooses only that one's model: a project's chat picks the Project Manager's
     (for every project), a bot's screen its bot's. The face and name come from /api/models (the factory role). */
 export function Chat({ project = '', who = '', hint = '' }) {
   project = project || 'manager-general';   /* no project: the manager of no project's conversation */
   const sp = useSpeaker(project, who);
-  const { talk, busy, isProject, role } = sp;
+  const { talk, busy } = sp;
   const draftKey = project ? `${DRAFT_KEY}:${project}` : DRAFT_KEY;
   const [shown, setShown] = useState(SHOWN);
   const [draft, setDraft] = useState(() => store(draftKey));
@@ -51,7 +50,6 @@ export function Chat({ project = '', who = '', hint = '' }) {
   return html`<section class=${`mchat${att.drag ? ' drop' : ''}`}>
     ${head(sp, project, interrupt)}
     ${thread({ sp, project, hint, items, hidden, scroll, onEarlier, setZoom, send, turns, notes })}
-    <${ChatModels} role=${role} note=${isProject ? 'Applies to every project.' : ''} />
     ${composer({ sp, err, att, ta, file, draft, edit, keys, send: send.send })}
     ${zoom ? html`<${Lightbox} src=${zoom} onClose=${() => setZoom(null)} />` : null}
   </section>`;

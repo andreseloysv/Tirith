@@ -1,22 +1,36 @@
-// The model list: every model that can run, as one menu, under its provider's name when there are several (the
-// caller's summary already says "Model"). A pick brings its agent along and keeps the effort when the model takes it.
-import { PROVIDERS } from './options.js';
-import { keptEffort } from './offer.js';
-import { element, button } from './dom.js';
+// The menu's list: the models of the open tab (or every match while searching), a check on the chosen one with its
+// effort at its end (a tap opens the efforts), and the tab's less-used models folded under "Other models".
+import { effortName, keptEffort, providerName } from './offer.js';
+import { element, icon, row } from './dom.js';
 
-export function drawModels(ctl, root, { value, disabled }, list) {
-  const field = element('div', 'model-field'); field.setAttribute('role', 'group'); field.setAttribute('aria-label', 'Model');
-  const agents = [...new Set(list.map(m => m.agent))];
-  for (const agent of agents) {
-    const name = PROVIDERS[agent] || agent;
-    if (agents.length > 1) field.append(element('p', 'group', name));
-    const menu = element('div', 'models'); menu.setAttribute('role', 'group'); menu.setAttribute('aria-label', name);
-    for (const m of list.filter(x => x.agent === agent)) {
-      const pick = () => ctl.change({ agent: m.agent, model: m.slug, effort: keptEffort(value.effort, m.efforts) });
-      menu.append(button(disabled, m.name, m.slug === value.model, pick));
-    }
-    field.append(menu);
-  }
-  if (!list.length) field.append(element('p', 'hint', 'No agent can run a model: connect one in Settings.'));
-  root.append(field);
+const FIRST = 5;   /* models of a tab shown before "Other models" (the chosen one is always shown) */
+
+const matches = (m, q) => `${m.name} ${m.slug} ${providerName(m.agent)}`.toLowerCase().includes(q.trim().toLowerCase());
+
+function modelRow(ctl, { value, disabled }, m, searching) {
+  const on = m.slug === value.model;
+  const more = on && m.efforts.length > 0;
+  const pick = () => ctl.change({ agent: m.agent, model: m.slug, effort: keptEffort(value.effort, m.efforts) }, true);
+  const again = () => (more ? ctl.set({ view: 'effort' }) : ctl.close());
+  const note = on ? effortName(value.effort) : searching ? providerName(m.agent) : '';
+  return row({ words: m.name, selected: on, note, more, disabled, action: on ? again : pick });
+}
+
+function fold(ctl) {
+  const b = element('button', `fold${ctl.ui.others ? ' open' : ''}`); b.type = 'button';
+  b.setAttribute('aria-expanded', String(ctl.ui.others));
+  b.append(icon('next'), element('span', '', 'Other models'));
+  b.onclick = () => ctl.set({ others: !ctl.ui.others });
+  return b;
+}
+
+export function fillList(ctl, box, config, list, tab) {
+  const searching = ctl.ui.query !== null;
+  const shown = searching ? list.filter(m => matches(m, ctl.ui.query)) : list.filter(m => m.agent === tab);
+  const first = searching ? shown : shown.filter((m, i) => i < FIRST || m.slug === config.value.model);
+  const rest = shown.filter(m => !first.includes(m));
+  const draw = m => modelRow(ctl, config, m, searching);
+  box.replaceChildren(...first.map(draw));
+  if (rest.length) box.append(fold(ctl), ...(ctl.ui.others ? rest.map(draw) : []));
+  if (!shown.length) box.append(element('p', 'hint', searching ? 'No model matches.' : 'No agent can run a model: connect one in Settings.'));
 }
