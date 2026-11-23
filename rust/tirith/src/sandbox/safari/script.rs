@@ -20,7 +20,7 @@ pub fn safari_script(
 }
 
 /// Only a chat role outside any lane may drive Safari.
-fn chat_role(app: &Shared, lane: &str, role: &str) -> Result<(), String> {
+pub(super) fn chat_role(app: &Shared, lane: &str, role: &str) -> Result<(), String> {
     let chat = lane.is_empty()
         && app.cfg().factory.role::<String>(role, "session").as_deref() == Some("chat");
     chat.then_some(()).ok_or(
