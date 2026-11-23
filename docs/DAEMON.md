@@ -1222,7 +1222,7 @@ Files:
 Network sandbox. Every process OpenBot starts (lane agents, the manager, turn-role reviews, merge-queue checks) runs confined (`confine.rs`): on Linux in a network namespace of its own (`sandbox/linux/`, below), on macOS inside a `sandbox-exec` profile that denies outbound network except loopback and local sockets and denies Apple Events (macOS refuses them from `sandbox-exec` anyway, whatever the profile says), with its proxy
 variables pointing at the daemon's own HTTP/CONNECT proxy (`sandbox/proxy/`). The proxy authenticates the caller by its token (the user name is for people to read; the same token is its `TIRITH_TOKEN` at the daemon's door, see `server/`), applies the block list, and records each new destination as an event.
 
-The owner's Safari is read through the daemon instead: `tirith safari open <url>` and `tirith safari read [<url>]` (URL, title and text of the current tab, or of the first tab whose URL starts with the one given; the text is cut at 20,000 characters) ask the daemon — which runs outside the sandbox — to run that one fixed AppleScript, never a script the agent sends, and only for the chat roles (the managers and the bots, never a lane or the CEO).
+The owner's Safari is read through the daemon instead: `tirith safari open <url>` and `tirith safari read [<url>]` (URL, title and text of the current tab, or of the first tab whose URL starts with the one given; the text is cut at 20,000 characters) ask the daemon — which runs outside the sandbox — to run that one fixed AppleScript, never a script the agent sends, and only for the chat roles (the managers and the bots, never a lane or the CEO). Since 2026-11-23 the owner lets the chat roles act there too, without asking: `tirith safari click <target> [<url>]` and `tirith safari type <target> <text> [<url>]` send only words — the target is a CSS selector or the words on the element or its label, a list takes its option's words — and the daemon runs its own fixed JavaScript through Safari's `do JavaScript` (which needs Safari's Develop › Allow JavaScript from Apple Events): it finds the visible element, clicks it as a person does or sets a field through its own setter with input and change events, and never reads cookies, storage or passwords. In a shadow run these count as acting outward (`lab::outward`: every `tirith` command but a read).
 
 Files:
 
@@ -1249,9 +1249,10 @@ Files:
 - `replay.rs`: Whether a replay's turn can run with the network closed: the sandbox must be in force for the processes OpenBot starts.
 - `routes.rs`: The sandbox's HTTP routes: its status, the block list, the destinations seen and Safari.
 - `rules.rs`: The shape of a block rule: a domain, an address or a CIDR range.
+- `safari/act.rs`: The fixed JavaScript of `tirith safari click <target> [<url>]` / `type <target> <text> [<url>]`, run through Safari's `do JavaScript`.
 - `safari/mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `safari/route.rs`: `POST /api/safari`: the lane and role come from the caller's token.
-- `safari/run.rs`: Running the Safari script outside the sandbox.
+- `safari/run.rs`: Running the Safari script outside the sandbox (with what Safari needs, when it refuses to click).
 - `safari/script.rs`: The fixed AppleScript of `tirith safari open <url>` / `read [<url>]`.
 - `start.rs`: Starting the sandbox's part of the daemon.
 - `tags.rs`: Access-audit tags of one tool call, recorded by the hook handler as `access` events.

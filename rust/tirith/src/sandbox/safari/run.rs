@@ -1,17 +1,34 @@
 //! Running the Safari script outside the sandbox.
-use super::script::safari_script;
+use super::act::act_script;
+use super::script::{chat_role, safari_script};
 use crate::app::Shared;
 
-/// Runs `safari_script`; a read's page text is cut at 20,000 characters.
+/// What Safari needs before it lets a script click or type, said when it refuses.
+const ALLOW: &str = " (turn on Safari's Develop › Allow JavaScript from Apple Events — Settings › Advanced › Show features for web developers — so OpenBot can click and type)";
+
+/// Runs `safari_script` (open, read) or `act_script` (click, type); a read's page text is cut at 20,000 characters.
 pub async fn safari(
     app: &Shared,
     lane: &str,
     role: &str,
     cmd: &str,
     url: &str,
+    target: &str,
+    text: &str,
 ) -> Result<String, String> {
-    let script = safari_script(app, lane, role, cmd, url)?;
-    let text = osascript(&script).await?;
+    let script = match cmd {
+        "click" | "type" => {
+            chat_role(app, lane, role).and_then(|()| act_script(cmd, target, text, url))?
+        }
+        _ => safari_script(app, lane, role, cmd, url)?,
+    };
+    let acts = matches!(cmd, "click" | "type");
+    let text = osascript(&script)
+        .await
+        .map_err(|e| match acts && e.contains("JavaScript") {
+            true => format!("{e}{ALLOW}"),
+            false => e,
+        })?;
     let Some(()) = (cmd != "open").then_some(()) else {
         return Ok(format!("opened {url}"));
     };
