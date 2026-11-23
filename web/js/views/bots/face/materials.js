@@ -27,17 +27,20 @@ void main(){
   c += mix(edge, vec3(1.0), 0.35) * pow(f, 2.4) * 0.6;                                           // light leaking at the silhouette
   gl_FragColor = vec4(c, 1.0);
 }`;
-export function bodyMaterial3(color) {
+/** `white`: how far its lit core goes towards white (a paler or a deeper glow). */
+export function bodyMaterial3(color, white = 0.62) {
   const base = hex3(color);
-  const core = base.clone().lerp(new THREE.Color(1, 1, 1), 0.62);
+  const core = base.clone().lerp(new THREE.Color(1, 1, 1), white);
   const low = base.clone().multiplyScalar(0.78).lerp(new THREE.Color(1, 0.55, 0.1), 0.18);
   return new THREE.ShaderMaterial({ vertexShader: ballVS, fragmentShader: bodyFS, uniforms: { ball: { value: 0 }, core: { value: core }, edge: { value: base }, low: { value: low }, L: { value: LIGHT3 }, glow: { value: 1.12 } } });
 }
-export const eyeMat3 = new THREE.ShaderMaterial({ vertexShader: bodyVS, uniforms: { L: { value: LIGHT3 } }, fragmentShader: `uniform vec3 L; varying vec3 vN; varying vec3 vV; varying vec3 vWN;
+/** Glossy dark lenses: `ink` is their colour (dark purple; the hero's maroon), lighter towards their rim. */
+export const eyeMaterial3 = (ink = [0.07, 0.035, 0.09]) => new THREE.ShaderMaterial({ vertexShader: bodyVS, uniforms: { L: { value: LIGHT3 }, ink: { value: new THREE.Vector3(...ink) } }, fragmentShader: `uniform vec3 L; uniform vec3 ink; varying vec3 vN; varying vec3 vV; varying vec3 vWN;
 void main(){ vec3 N = normalize(vN), V = normalize(vV), H = normalize(L + V);
-  vec3 c = vec3(0.07, 0.035, 0.09) + vec3(0.10, 0.07, 0.12) * pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.0);
+  vec3 c = ink + vec3(0.10, 0.07, 0.12) * pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.0);
   c += vec3(1.0) * smoothstep(0.86, 0.95, pow(max(dot(N, H), 0.0), 40.0));  // the catchlight
   gl_FragColor = vec4(c, 1.0); }` });
+export const eyeMat3 = eyeMaterial3();
 const flat3 = (c) => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide });
 export const EYE_GEO3 = new THREE.SphereGeometry(1, 24, 16), DOT_GEO3 = new THREE.SphereGeometry(1, 12, 8), DOT_MAT3 = new THREE.MeshBasicMaterial({ color: 0xffffff }), HALO_GEO3 = new THREE.PlaneGeometry(1, 1);
 export const MOUTH3 = flat3('#2a0a16'), TONGUE3 = flat3('#e2506d'), INK3 = flat3('#1d1030');

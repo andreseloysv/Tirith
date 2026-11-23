@@ -2,6 +2,7 @@
 // shared sheet (sheet.js) copies its picture into, and its pointer.
 import * as THREE from '../../../../vendor/three/three.module.min.js';
 import { SHAPES3D } from '../shapes3d.js';
+import { HERO3D } from './hero.js';
 import { still } from './clock.js';
 import { FREEZE } from './config.js';
 import { bodyGeometry3 } from './geometry.js';
@@ -11,9 +12,11 @@ import { frozenPose, stillPose, livePose } from './bot3d-pose.js';
 import { Acts } from './schedule.js';
 import { bots3, seen3 } from './registry.js';
 
+const ALL3 = { ...SHAPES3D, hero: HERO3D }; /* the inflated outlines, and the hero with its own body */
+
 export class Bot3D {
   constructor(el, name, color, mood, frozen, lively = false) {
-    this.el = el; this.name = SHAPES3D[name] ? name : 'round'; this.sh = SHAPES3D[this.name]; this.color = color;
+    this.el = el; this.name = ALL3[name] ? name : 'round'; this.sh = ALL3[this.name]; this.color = color;
     this.reduced = !!(still && still.matches);
     this.quiet = !!frozen || this.reduced; // drawn once; moves only under the pointer (never, with reduced motion)
     this.drawnOnce = false; this.dirty = true; this.settled = true; this.pointerOver = false; this.hovered = false;
@@ -27,7 +30,7 @@ export class Bot3D {
     this.round = THREE.MathUtils.clamp((Math.min(...this.sh.r) - 0.68) / 0.3, 0, 1); // how far it can be a ball (a spin)
     this.acts = new Acts({ lively, key: `${this.name}:${color}` });
     const seg = el.offsetWidth > 90 ? 128 : 64;
-    this.body = new THREE.Mesh(bodyGeometry3(this.name, seg), bodyMaterial3(this.color)); this.rig.add(this.body);
+    this.body = new THREE.Mesh(this.sh.mesh ? this.sh.mesh() : bodyGeometry3(this.name, seg), bodyMaterial3(this.color, this.sh.white)); this.rig.add(this.body);
     this.eyes = eyes3(this.sh);
     this.eyes.forEach((eye) => this.rig.add(eye));
     Object.assign(this, mouths3(this.sh));
@@ -40,6 +43,7 @@ export class Bot3D {
   mountCanvas(el) {
     this.cv = el.querySelector('canvas.botcv');
     if (!this.cv) { this.cv = document.createElement('canvas'); this.cv.className = 'botcv'; el.append(this.cv); }
+    this.cv.width = this.cv.height = 0; // not 300 by default: the sheet sizes its corner from the element until it is drawn
     this.ctx = this.cv.getContext('2d');
     this.visible = true; el.bot3d = this; if (seen3) seen3.observe(el); this.id = Bot3D.n = (Bot3D.n || 0) + 1;
     this.onEnter = () => { this.pointerOver = true; };
@@ -64,7 +68,6 @@ export class Bot3D {
     this.el.removeEventListener('pointerleave', this.onLeave);
     if (this.el.bot3d === this) this.el.bot3d = null;
     this.body.material.dispose(); this.halo.material.dispose();
-    for (const g of [this.grin, this.sleepy, this.yawn]) g.children.forEach((m) => m.geometry.dispose());
-    for (const m of [this.smile, ...this.shut]) m.geometry.dispose();
+    for (const g of [this.grin, this.sleepy, this.yawn, this.smile, ...this.shut]) g.traverse((m) => { if (m.geometry) m.geometry.dispose(); });
   }
 }

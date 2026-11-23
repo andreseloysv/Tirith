@@ -7,7 +7,7 @@ const mix = (hex, to, t) => '#' + rgb(hex).map((c) => Math.round(c + (to - c) * 
 
 let uid = 0;
 export function markup(shape, color, state) {
-  const [body, e, round] = SHAPES[shape] || SHAPES.round;
+  const [body, e, round, o] = SHAPES[shape] || SHAPES.round; /* `o`: a mouth of its own, at rest (the hero's) */
   const id = `bf${uid++}`, ink = '#1d1030';
   const core = mix(color, 255, 0.78), mid = mix(color, 255, 0.18), edge = mix(color, 0, 0.08), halo = mix(color, 255, 0.25);
   const soft = ` stroke="url(#${id}b)" stroke-width="${round ? 14 : 6}" stroke-linejoin="round"`; /* every shape a little puffy */
@@ -15,11 +15,12 @@ export function markup(shape, color, state) {
     ? `<path d="M${e[0] - 6} ${e[2]}q6 5 12 0M${e[1] - 6} ${e[2]}q6 5 12 0" stroke="${ink}" stroke-width="3.2" stroke-linecap="round" fill="none"/>`
     : [e[0], e[1]].map((x) => `<g class="eye" data-x="${x}" data-y="${e[2]}"><ellipse cx="${x}" cy="${e[2]}" rx="${e[3]}" ry="${e[4]}" fill="${ink}"/><circle cx="${x + e[3] * 0.35}" cy="${e[2] - e[4] * 0.45}" r="${Math.max(1.4, e[3] * 0.28)}" fill="#fff"/></g>`
       + `<g class="shut" data-x="${x}" data-y="${e[2]}" opacity="0"><path d="M${x - e[3]} ${e[2]}q${e[3]} ${e[4] * 0.8} ${2 * e[3]} 0" stroke="${ink}" stroke-width="3.6" stroke-linecap="round" fill="none"/></g>`).join('');
-  const mx = (e[0] + e[1]) / 2, my = e[2] + e[4] + 6, w = (e[1] - e[0]) * 0.5;
+  const w = o ? o[2] * 2.6 : (e[1] - e[0]) * 0.5, mx = o ? o[0] : (e[0] + e[1]) / 2, my = o ? o[1] - w * 0.45 : e[2] + e[4] + 6;
   const mouth = state === 'work' /* a wide D, with the tongue inside */
     ? `<path d="M${mx - w} ${my}C${mx - w} ${my + w * 1.35} ${mx + w} ${my + w * 1.35} ${mx + w} ${my}Q${mx} ${my + w * 0.16} ${mx - w} ${my}z" fill="${ink}"/><path d="M${mx - w * 0.55} ${my + w * 0.86}C${mx - w * 0.3} ${my + w * 0.45} ${mx + w * 0.3} ${my + w * 0.45} ${mx + w * 0.55} ${my + w * 0.86}C${mx + w * 0.3} ${my + w * 1.06} ${mx - w * 0.3} ${my + w * 1.06} ${mx - w * 0.55} ${my + w * 0.86}z" fill="#d2405d"/>`
     : state === 'sleep'
       ? `<path d="M${mx - w * 0.35} ${my}q${w * 0.35} ${w * 0.3} ${w * 0.7} 0" stroke="${ink}" stroke-width="2.6" stroke-linecap="round" fill="none"/>`
+      : o ? `<ellipse cx="${o[0]}" cy="${o[1]}" rx="${o[2]}" ry="${o[3]}" fill="${ink}"/><ellipse cx="${o[0]}" cy="${o[1] + o[3] * 0.45}" rx="${o[2] * 0.55}" ry="${o[3] * 0.3}" fill="#d2405d"/>`
       : `<path d="M${mx - w * 0.6} ${my - 1}q${w * 0.6} ${w * 0.65} ${w * 1.2} 0" stroke="${ink}" stroke-width="3" stroke-linecap="round" fill="none"/>`;
   const oy = my + w * 0.5; /* a yawn's mouth, unseen until one comes */
   const yawn = `<g class="yawn" data-x="${mx}" data-y="${oy}" opacity="0"><ellipse cx="${mx}" cy="${oy}" rx="${w * 0.6}" ry="${w * 0.78}" fill="${ink}"/><ellipse cx="${mx}" cy="${oy + w * 0.4}" rx="${w * 0.34}" ry="${w * 0.22}" fill="#d2405d"/></g>`;

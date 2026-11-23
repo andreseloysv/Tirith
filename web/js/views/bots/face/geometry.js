@@ -1,5 +1,5 @@
 // The 3D bot's body: inflated from its shape's outline r(theta) (shapes3d.js), on a sphere made by hand; and the
-// points and normals of its front, where the eyes and mouths sit.
+// points and normals of its front, where the eyes and mouths sit (a shape with a body of its own, hero.js, answers those).
 import * as THREE from '../../../../vendor/three/three.module.min.js';
 import { SHAPES3D } from '../shapes3d.js';
 import { TAU } from './motion.js';
@@ -8,8 +8,8 @@ import { P, DEPTH, PX } from './config.js';
 // shape maths (the same as the Blender script)
 export function radiusAt(sh, th) { const n = sh.r.length; const f = (((th % TAU) + TAU) % TAU) / TAU * n; const i = Math.floor(f) % n, t = f - Math.floor(f); return sh.r[i] * (1 - t) + sh.r[(i + 1) % n] * t; }
 export function boxPt(sh, x, y) { return [((x + 25) * PX - sh.cx) / sh.rmax, ((512 - (y + 25) * PX) - sh.cy) / sh.rmax]; }
-export function frontPt(sh, u, w) { const t = Math.min(Math.hypot(u, w) / radiusAt(sh, Math.atan2(w, u)), 0.995); return new THREE.Vector3(u, w, DEPTH * Math.pow(1 - Math.pow(t, P), 1 / P)); }
-export function normalAt(sh, u, w) { const e = 1e-3, p = frontPt(sh, u, w); return frontPt(sh, u + e, w).sub(p).cross(frontPt(sh, u, w + e).sub(p)).normalize(); }
+export function frontPt(sh, u, w) { if (sh.front) return sh.front(u, w); const t = Math.min(Math.hypot(u, w) / radiusAt(sh, Math.atan2(w, u)), 0.995); return new THREE.Vector3(u, w, DEPTH * Math.pow(1 - Math.pow(t, P), 1 / P)); }
+export function normalAt(sh, u, w) { if (sh.normal) return sh.normal(u, w); const e = 1e-3, p = frontPt(sh, u, w); return frontPt(sh, u + e, w).sub(p).cross(frontPt(sh, u, w + e).sub(p)).normalize(); }
 const geoCache3 = {};
 /** An indexed sphere made by hand — the same points THREE.SphereGeometry(1, seg, round(seg * 0.75)) has after
  *  mergeVertices (seam and poles welded), so the body below needs no BufferGeometryUtils addon. */
