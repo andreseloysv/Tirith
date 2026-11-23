@@ -16,13 +16,17 @@ pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
             "tirith net status|list|block <domain|ip|cidr>|unblock <rule>|tunnel <host> <port>|allow"
                 .into(),
         ),
-        ["safari", cmd @ ("open" | "read"), rest @ ..] => crate::client::call(
-            "POST",
-            "/api/safari",
-            Some(json!({"cmd": cmd, "url": rest.join(" ")})),
-        )
-        .map(|b| println!("{b}")),
-        ["safari", ..] => Err("tirith safari open <url> | tirith safari read [<url>]".into()),
+        ["safari", cmd @ ("open" | "read"), rest @ ..] => safari(json!({"cmd": cmd, "url": rest.join(" ")})),
+        ["safari", "click", target, rest @ ..] => {
+            safari(json!({"cmd": "click", "target": target, "url": rest.join(" ")}))
+        }
+        ["safari", "type", target, text, rest @ ..] => safari(
+            json!({"cmd": "type", "target": target, "text": text, "url": rest.join(" ")}),
+        ),
+        ["safari", ..] => Err(
+            "tirith safari open <url> | read [<url>] | click <target> [<url>] | type <target> <text> [<url>]"
+                .into(),
+        ),
         _ => return None,
     })
 }
@@ -31,4 +35,9 @@ pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
 fn change(method: &str, rule: &str, done: &str) -> Result<(), String> {
     crate::client::call_json(method, "/api/net/blocks", Some(json!({"rule": rule})))
         .map(|v| println!("{done} {}", v["rule"].as_str().unwrap_or("")))
+}
+
+/// Asks the daemon to drive the owner's Safari and says what it answered.
+fn safari(body: serde_json::Value) -> Result<(), String> {
+    crate::client::call("POST", "/api/safari", Some(body)).map(|b| println!("{b}"))
 }

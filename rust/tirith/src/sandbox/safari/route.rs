@@ -16,6 +16,8 @@ pub async fn safari_route(
         &agent.role,
         b["cmd"].as_str().unwrap_or(""),
         b["url"].as_str().unwrap_or(""),
+        b["target"].as_str().unwrap_or(""),
+        b["text"].as_str().unwrap_or(""),
     )
     .await
     .map_err(bad)
