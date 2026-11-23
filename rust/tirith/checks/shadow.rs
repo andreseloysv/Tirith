@@ -6,7 +6,7 @@ use std::process::Command;
 const KEY: &str = "bot-mail01";
 const TASK: &str = "Routine «gmail-safari» is due now. Check the inbox and list the new offers";
 
-/// A fake stream-json agent. As the bot (a shadow B run), it keeps its folder and what it was handed, asks Tirith's hook (over HTTP, as an agent's hooks do) for a live read, a write in its folder, a `tirith safari read`, a browser look, and then for what reaches outside — `tirith say`, `ask-owner`, `safari open`, a POST, a click on «Send» — keeping each answer in `<home>/heard-<conversation>.txt`, and answers. As anyone else (the judge) it says «tie».
+/// A fake stream-json agent. As the bot (a shadow B run), it keeps its folder and what it was handed, asks OpenBot's hook (over HTTP, as an agent's hooks do) for a live read, a write in its folder, a `tirith safari read`, a browser look, and then for what reaches outside — `tirith say`, `ask-owner`, `safari open`, a POST, a click on «Send» — keeping each answer in `<home>/heard-<conversation>.txt`, and answers. As anyone else (the judge) it says «tie».
 const AGENT: &str = r#"#!/bin/sh
 read -r line
 if [ "$TIRITH_ROLE" != "KEY" ]; then
@@ -52,7 +52,7 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-/// A Tirith home with the bot «Correo» (routine `r1`) on the fake agent, a branch `v3` with one commit on its main, a server for its hooks, and a shadow experiment started: the app, its home and the experiment.
+/// A OpenBot home with the bot «Correo» (routine `r1`) on the fake agent, a branch `v3` with one commit on its main, a server for its hooks, and a shadow experiment started: the app, its home and the experiment.
 async fn shadowed(name: &str, slow: u32) -> (crate::app::Shared, PathBuf, i64) {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
         .await
@@ -304,6 +304,7 @@ fn a_shadow_run_cannot_act_by_a_path_or_a_word_that_reads() {
     let dir = Path::new("/home/tirith/w");
     let outward = |cmd: &str| super::outward::outward("Bash", &json!({"command": cmd}), dir);
     for cmd in [
+        "/Applications/OpenBot.app/Contents/MacOS/tirith lane start p 1 x",
         "/Applications/Tirith.app/Contents/MacOS/tirith lane start p 1 x",
         "\"/opt/x/tirith\" say hola",
         "cd /tmp\n./tirith room say r hola",

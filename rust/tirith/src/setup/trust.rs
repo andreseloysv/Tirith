@@ -1,4 +1,4 @@
-//! Codex runs a hook only once it is trusted: Tirith's own are trusted through Codex's app-server, as its /hooks screen does. Nobody else's are.
+//! Codex runs a hook only once it is trusted: OpenBot's own are trusted through Codex's app-server, as its /hooks screen does. Nobody else's are.
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -62,10 +62,10 @@ impl Drop for Server {
     }
 }
 
-/// Trusts Tirith's hooks in Codex's settings; how many needed it.
+/// Trusts OpenBot's hooks in Codex's settings; how many needed it.
 pub fn trust(program: &std::path::Path) -> Result<usize, String> {
     let mut codex = Server::start(program)?;
-    let me = json!({"name": "tirith", "title": "Tirith", "version": env!("CARGO_PKG_VERSION")});
+    let me = json!({"name": "tirith", "title": "OpenBot", "version": env!("CARGO_PKG_VERSION")});
     codex.call(1, "initialize", json!({"clientInfo": me}))?;
     codex.tell(json!({"method": "initialized"}))?;
     let at = crate::config::home_dir().display().to_string();

@@ -1,4 +1,4 @@
-//! What Tirith says in rooms by itself, sent in order by one task.
+//! What OpenBot says in rooms by itself, sent in order by one task.
 use super::{sealed, settings::base, store::room, store::update, Room};
 use crate::app::Shared;
 use serde_json::json;
@@ -38,7 +38,7 @@ async fn send_until_done(app: &Shared, id: &str, text: &str, readers: &[String])
         tokio::time::sleep(Duration::from_secs(10)).await;
     }
 }
-/// Posts `text` in the room as this Tirith: sealed for `readers` in a private room, plain in a public one.
+/// Posts `text` in the room as this OpenBot: sealed for `readers` in a private room, plain in a public one.
 pub(super) async fn send(
     app: &Shared,
     r: &Room,

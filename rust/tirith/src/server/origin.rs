@@ -11,7 +11,7 @@ pub(super) fn set_port(port: u16) {
     let _ = PORT.set(port);
 }
 
-/// A browser page from another origin may not call the API (no CSRF against 127.0.0.1). It also checks Host, so a DNS-rebinding page (Host: evil.example) cannot read the API either. Tirith's own extension may call the teach API only, where its token is checked.
+/// A browser page from another origin may not call the API (no CSRF against 127.0.0.1). It also checks Host, so a DNS-rebinding page (Host: evil.example) cannot read the API either. OpenBot's own extension may call the teach API only, where its token is checked.
 pub(super) async fn same_origin(req: Request, next: Next) -> Response {
     let extension = req.uri().path().starts_with("/api/teach/")
         && req

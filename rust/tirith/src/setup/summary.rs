@@ -1,12 +1,12 @@
-//! The end of the guide: what is connected, what is left, and how to open Tirith.
+//! The end of the guide: what is connected, what is left, and how to open OpenBot.
 use super::context::Context;
 
 pub(super) fn show(cx: &Context, connected: &[String], pending: &[String]) {
     println!("\n----------------------------------------");
     if connected.is_empty() {
-        println!("Tirith runs, but no agent is connected yet: it can do no work.");
+        println!("OpenBot runs, but no agent is connected yet: it can do no work.");
     } else {
-        println!("Tirith is ready. Connected: {}.", connected.join(", "));
+        println!("OpenBot is ready. Connected: {}.", connected.join(", "));
     }
     if !pending.is_empty() {
         println!("\nStill to do:");
@@ -48,5 +48,5 @@ fn open(port: u16) {
     println!("\nOn your own computer (the page never listens on the network):");
     println!("  ssh -N -L {port}:127.0.0.1:{port} {user}@{at}");
     println!("  then here: tirith open link, and open what it prints in that browser ({page}, once signed in)");
-    println!("  (the port is the same at both ends; taken there, by a Tirith of that computer say: tirith setup --server --port {})", port.wrapping_add(84).max(1024));
+    println!("  (the port is the same at both ends; taken there, by a OpenBot of that computer say: tirith setup --server --port {})", port.wrapping_add(84).max(1024));
 }

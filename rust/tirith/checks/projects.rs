@@ -105,8 +105,8 @@ fn project_add_refuses_folders_that_cannot_be_projects() {
     let mine = [
         ("file", "no folder"),
         ("repo/sub", "inside the project"),
-        ("home/lanes/repo/slot-1", "Tirith's own"),
-        ("home", "Tirith's own"),
+        ("home/lanes/repo/slot-1", "OpenBot's own"),
+        ("home", "OpenBot's own"),
         ("", "holds the project"),
         ("repo/.git/info", ".git"),
         ("wt", "worktree"),

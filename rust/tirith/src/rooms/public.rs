@@ -1,4 +1,4 @@
-//! The public rooms Tirith watches, as config.toml lists them.
+//! The public rooms OpenBot watches, as config.toml lists them.
 use super::settings::{my_name, public_rooms};
 use super::store::{room, save, update};
 use super::Room;

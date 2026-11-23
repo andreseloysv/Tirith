@@ -46,7 +46,7 @@ fn port(t: &toml::Table) -> u16 {
 }
 
 impl Config {
-    /// The config of one Tirith home, named instead of read from the process-wide `TIRITH_HOME` (a test opens its App at its own folder; moving the variable would move every parallel test's home too).
+    /// The config of one OpenBot home, named instead of read from the process-wide `TIRITH_HOME` (a test opens its App at its own folder; moving the variable would move every parallel test's home too).
     pub fn load_at(home: &Path) -> Config {
         let (mut t, parsed) = read(home);
         migrate(&mut t);

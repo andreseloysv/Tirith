@@ -82,7 +82,7 @@ fn settle(
     match failed {
         None => manager::emit_event(app, pid, "deploy.done", &format!("deployed {pid} at {sha8}"), None),
         Some(e) if prev == 0 => {
-            manager::emit_event(app, pid, "deploy.failed", &format!("the deploy of {pid} at {sha8} failed. The merge stays on main; Tirith tries the deploy again by itself until it passes (Retry on its pipeline: at once).\n{e}"), None)
+            manager::emit_event(app, pid, "deploy.failed", &format!("the deploy of {pid} at {sha8} failed. The merge stays on main; OpenBot tries the deploy again by itself until it passes (Retry on its pipeline: at once).\n{e}"), None)
         }
         _ => {}
     }

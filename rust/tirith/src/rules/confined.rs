@@ -1,9 +1,9 @@
-//! A role confined by its `writes` key (the Coach): its edits land only in the bots' folders and in the folders of Tirith's home `writes` names (`bots`, `lab`), never in a hidden folder there but a skill's own (an agent's settings could turn Tirith's hooks off).
+//! A role confined by its `writes` key (the Coach): its edits land only in the bots' folders and in the folders of OpenBot's home `writes` names (`bots`, `lab`), never in a hidden folder there but a skill's own (an agent's settings could turn OpenBot's hooks off).
 use super::call::Call;
 use crate::app::Shared;
 use std::path::{Component, Path, PathBuf};
 
-/// The folders of Tirith's home that `role`'s `writes` names, if it names any.
+/// The folders of OpenBot's home that `role`'s `writes` names, if it names any.
 fn writes(app: &Shared, role: Option<&str>) -> Option<Vec<PathBuf>> {
     let names = app.cfg().factory.role::<Vec<String>>(role?, "writes")?;
     Some(names.iter().map(|n| app.home.join(n)).collect())

@@ -28,7 +28,7 @@ impl Hidden {
         hidden
     }
 
-    /// What to hide for everything kept in this Tirith home.
+    /// What to hide for everything kept in this OpenBot home.
     pub fn in_home(home: &Path) -> Hidden {
         let files = std::fs::read_dir(home.join("auth")).into_iter().flatten();
         let mut vars = vec![];

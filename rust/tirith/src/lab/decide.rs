@@ -1,4 +1,4 @@
-//! Tirith decides an experiment alone, by the `[lab]` rule it started with, once it has `inputs` comparisons or is `max_days` old: adopted, its branch is merged into the bot's main (its own folder is that checkout, so the bot uses it from its next run); discarded, it goes. The worktree and the branch go in both cases, and the bot's chat gets one line.
+//! OpenBot decides an experiment alone, by the `[lab]` rule it started with, once it has `inputs` comparisons or is `max_days` old: adopted, its branch is merged into the bot's main (its own folder is that checkout, so the bot uses it from its next run); discarded, it goes. The worktree and the branch go in both cases, and the bot's chat gets one line.
 use super::adopt::adopt;
 use super::due::{due, minimum, on_way, Due};
 use super::git::clear;

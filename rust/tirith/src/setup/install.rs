@@ -2,7 +2,7 @@
 use super::{ask::Ask, catalog::Known, find, run};
 use std::path::Path;
 
-/// Downloads the installer over HTTPS into Tirith's home, then runs it: never a pipe into a shell, which would run half a script of a cut download.
+/// Downloads the installer over HTTPS into OpenBot's home, then runs it: never a pipe into a shell, which would run half a script of a cut download.
 pub fn install(ask: &Ask, known: &Known, home: &Path) -> Result<(), String> {
     if let Some(package) = super::npm::package(known) {
         return super::npm::install(ask, package);

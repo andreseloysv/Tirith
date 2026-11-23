@@ -1,4 +1,4 @@
-//! The block list for agent sessions NOT started by Tirith (the owner's own sessions), checked in the hook.
+//! The block list for agent sessions NOT started by OpenBot (the owner's own sessions), checked in the hook.
 use super::blocks::{blocked, none};
 use regex::Regex;
 use serde_json::Value;
@@ -15,7 +15,7 @@ pub fn check_command(tool: &str, input: &Value) -> Option<String> {
     HOSTS.captures_iter(text).find_map(|c| {
         blocked(&c[1]).map(|rule| {
             format!(
-                "{} is blocked by the owner (rule {rule}): Tirith refuses calls to it. Use another source, or ask the \
+                "{} is blocked by the owner (rule {rule}): OpenBot refuses calls to it. Use another source, or ask the \
          owner to allow it again (tirith net unblock {rule}, or Desbloquear in the Red section of the page).",
                 &c[1]
             )

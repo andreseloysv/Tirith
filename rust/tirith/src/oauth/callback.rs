@@ -14,7 +14,7 @@ pub fn own_route(method: &Method, path: &str) -> bool {
 }
 
 fn page(code: StatusCode, said: &str) -> Response {
-    let html = format!("<!doctype html><meta charset=\"utf-8\"><title>Tirith</title><body style=\"font:16px/1.5 system-ui;margin:20vh auto;max-width:28rem;padding:0 1.5rem;color-scheme:light dark\"><h1>Tirith</h1><p>{said}</p>");
+    let html = format!("<!doctype html><meta charset=\"utf-8\"><title>OpenBot</title><body style=\"font:16px/1.5 system-ui;margin:20vh auto;max-width:28rem;padding:0 1.5rem;color-scheme:light dark\"><h1>OpenBot</h1><p>{said}</p>");
     (code, Html(html)).into_response()
 }
 

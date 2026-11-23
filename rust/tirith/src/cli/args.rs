@@ -9,7 +9,7 @@ pub(super) fn flag(args: &[String], name: &str) -> Option<String> {
         .cloned()
 }
 
-/// The project a command is about: `--project`, else the project of the session Tirith started it in.
+/// The project a command is about: `--project`, else the project of the session OpenBot started it in.
 pub(super) fn project(flag: Flag) -> String {
     flag("--project")
         .or_else(|| std::env::var("TIRITH_PROJECT").ok())

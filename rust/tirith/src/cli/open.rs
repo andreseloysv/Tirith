@@ -24,7 +24,7 @@ pub(super) fn open() -> Result<(), String> {
             && std::env::var_os("DISPLAY").is_none()
             && std::env::var_os("WAYLAND_DISPLAY").is_none());
     if !remote && shown(&url) {
-        println!("opened Tirith's page");
+        println!("opened OpenBot's page");
     } else {
         println!("open this within 10 minutes (it works once):\n{url}");
     }
@@ -34,7 +34,7 @@ pub(super) fn open() -> Result<(), String> {
 fn shown(url: &str) -> bool {
     let file = crate::config::tirith_home().join(crate::app::PAGE);
     let html = format!(
-        "<!doctype html><meta http-equiv=\"refresh\" content=\"0;url={url}\"><title>Tirith</title>"
+        "<!doctype html><meta http-equiv=\"refresh\" content=\"0;url={url}\"><title>OpenBot</title>"
     );
     let program = if cfg!(target_os = "macos") {
         "open"

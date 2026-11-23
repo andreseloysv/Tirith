@@ -14,9 +14,9 @@ pub(in crate::sandbox) struct Request {
     pub state: String,
     /// The file `-o` names.
     pub out: String,
-    /// The commands may use the network (as Tirith's sandbox lets it).
+    /// The commands may use the network (as OpenBot's sandbox lets it).
     pub net: bool,
-    /// Tirith's own role: its commands keep the daemon, as that agent. No wider than what any confined caller has.
+    /// OpenBot's own role: its commands keep the daemon, as that agent. No wider than what any confined caller has.
     #[serde(default)]
     pub agent: bool,
 }

@@ -16,7 +16,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
         ["room", "invite", id] => {
             call_json("POST", &format!("/api/rooms/{id}/invite"), None).map(|v| {
                 println!(
-                    "{}\nThe other Tirith runs: tirith room join <that code>",
+                    "{}\nThe other OpenBot runs: tirith room join <that code>",
                     v["peer_code"].as_str().unwrap_or("")
                 )
             })

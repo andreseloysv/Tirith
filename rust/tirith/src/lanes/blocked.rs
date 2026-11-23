@@ -44,7 +44,7 @@ pub fn paused_fix(project: &str, why: &str) -> String {
     .find(|(w, _)| why.contains(w))
     .map(|(_, f)| f.to_string());
     said.or(known).unwrap_or_else(|| {
-        if why.contains("core.hooksPath") || why.contains("not Tirith's") {
+        if why.contains("core.hooksPath") || why.contains("not OpenBot's") {
             "fix the git hooks by hand, then tirith guard install ".to_string() + project
         } else {
             format!("tirith guard install {project}")

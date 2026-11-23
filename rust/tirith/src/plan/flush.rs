@@ -1,4 +1,4 @@
-//! Committing the plan files Tirith changed.
+//! Committing the plan files OpenBot changed.
 use super::lookup::path;
 use crate::app::{git, Shared};
 
@@ -65,7 +65,7 @@ async fn commit(repo: &std::path::Path, rel: &str) -> Result<String, String> {
     }
     git(
         repo,
-        &["commit", "-q", "-m", "Plan: update from Tirith", "--", rel],
+        &["commit", "-q", "-m", "Plan: update from OpenBot", "--", rel],
     )
     .await
 }

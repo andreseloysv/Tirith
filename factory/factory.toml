@@ -129,7 +129,7 @@ color = "#f2a93b"
 # (routine.worse), with the "bots" brief (each bot's numbers, routines,
 # skills with the sections they lack and memory sizes), its max_per_day and
 # its answer in its own conversation. It may write only in the bots'
-# folders and in the folders of Tirith's home `writes` names: <home>/bots
+# folders and in the folders of OpenBot's home `writes` names: <home>/bots
 # and <home>/lab (the hooks' rules refuse the rest).
 [roles.coach]
 name = "Coach"
@@ -183,7 +183,7 @@ shape = "hex"
 color = "#8c8c8c"
 
 # Who hears each event the code emits. mode: turn wakes the role (gathered over
-# limits.batch_seconds), note waits for its next turn. chat: a Tirith line in
+# limits.batch_seconds), note waits for its next turn. chat: a OpenBot line in
 # the conversation. phone: that line, and the answer of a turn the event
 # starts, reach the owner's phones. These defaults reproduce the behaviour
 # the daemon had when the calls were fixed in Rust, except merge.landed,
@@ -415,7 +415,7 @@ sample = 1.0
 
 # A live experiment's run of B (the branch) against the run of A (the bot's
 # main) before it: the judge reads the task and the two answers in an order
-# Tirith draws at random and keeps, and says a, b or tie; Tirith maps it
+# OpenBot draws at random and keeps, and says a, b or tie; OpenBot maps it
 # back to B winning, losing or tying (the lab's comparisons, never shown).
 [[evals]]
 id = "ab-compare"

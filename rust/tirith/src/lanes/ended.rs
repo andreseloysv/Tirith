@@ -5,7 +5,7 @@ use super::session::codex_session;
 use crate::app::{now_iso, tail, Lane, Shared};
 use crate::{models, plan};
 
-/// Only what the agent program itself said counts: its plain-text output and its final result event, never the files and command output it read (a lane working on Tirith reads the very patterns that detect it).
+/// Only what the agent program itself said counts: its plain-text output and its final result event, never the files and command output it read (a lane working on OpenBot reads the very patterns that detect it).
 fn agent_said(raw: &str) -> String {
     raw.lines()
         .filter_map(|l| match serde_json::from_str::<serde_json::Value>(l) {

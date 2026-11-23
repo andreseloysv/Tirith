@@ -15,7 +15,7 @@ pub(super) struct Where<'a> {
     pub cwd: &'a Path,
     pub home: &'a Path,
     pub tmp: Option<&'a Path>,
-    /// Tirith's own read-only role.
+    /// OpenBot's own read-only role.
     pub role: bool,
 }
 
@@ -46,7 +46,7 @@ pub(super) fn limit(a: &Asked, at: &Where) -> Result<Option<(Request, String)>, 
         return Ok(None);
     }
     if a.worktree {
-        return Err("codex --worktree cannot keep its limit inside Tirith's sandbox: make the worktree first and pass -C <folder>".into());
+        return Err("codex --worktree cannot keep its limit inside OpenBot's sandbox: make the worktree first and pass -C <folder>".into());
     }
     let write = mode == Mode::Write;
     let net = write && set.is("sandbox_workspace_write.network_access");

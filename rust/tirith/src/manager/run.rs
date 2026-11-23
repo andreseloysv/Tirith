@@ -16,7 +16,7 @@ pub(super) async fn run(app: Shared, project: String) {
             .err()
             .filter(|_| backoff == 2 && !super::unstarted::only_runs(&project))
             .into_iter()
-            .for_each(|e| (app.event("", &project, "error", "manager", e, ""), report(&app, &project, &format!("The manager could not start: {e}. Tirith keeps trying; what you wrote waits for it."))).1);
+            .for_each(|e| (app.event("", &project, "error", "manager", e, ""), report(&app, &project, &format!("The manager could not start: {e}. OpenBot keeps trying; what you wrote waits for it."))).1);
         let _ = result.is_err().then(|| release_run(&app, &project)); // a session that never started held what its run took
         super::unstarted::after(&app, &project, &result, &mut failed);
         typing_stop(&project); // a session that ended, failed or never got ready leaves no turn typing on the phones

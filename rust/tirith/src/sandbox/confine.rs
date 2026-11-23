@@ -1,4 +1,4 @@
-//! How this system confines what Tirith starts: `sandbox-exec` on macOS, an empty network namespace on Linux.
+//! How this system confines what OpenBot starts: `sandbox-exec` on macOS, an empty network namespace on Linux.
 use crate::app::Shared;
 
 /// Whether this system can confine, else why not (and what to do).

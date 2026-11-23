@@ -1,4 +1,4 @@
-//! The profiles of a limited Codex's two parts (`pair.rs`): Tirith's, then the limit that was asked. macOS lets a rule name the program it is for (`process-path`), so in Codex's own part what its process needs (its state, the proxy, the system's services) is that binary's alone, and not its children's. They only take away from Tirith's.
+//! The profiles of a limited Codex's two parts (`pair.rs`): OpenBot's, then the limit that was asked. macOS lets a rule name the program it is for (`process-path`), so in Codex's own part what its process needs (its state, the proxy, the system's services) is that binary's alone, and not its children's. They only take away from OpenBot's.
 use super::sb::{real, Sb};
 use super::{commands, doors::Doors, network::network, services, writes, Request};
 
@@ -17,7 +17,7 @@ pub(super) enum Part {
 pub(super) struct Around {
     /// The daemon's ports: a limited one's commands have the rules' door alone.
     pub doors: Doors,
-    /// What nobody in there writes: the broker's socket, Tirith's program, its wrappers and its settings.
+    /// What nobody in there writes: the broker's socket, OpenBot's program, its wrappers and its settings.
     pub kept: Vec<String>,
     /// What nobody in there reads either (`app/keys.rs`).
     pub hidden: Vec<std::path::PathBuf>,

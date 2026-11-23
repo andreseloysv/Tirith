@@ -2,7 +2,7 @@
 use serde_json::Value;
 use std::path::Path;
 
-/// The argv of one Copilot turn: the message comes on stdin, its usage goes to `usage`. It runs unattended inside Tirith's sandbox and rules, as Codex and Muse do, so nothing asks; its folder is Tirith's, so its skills load.
+/// The argv of one Copilot turn: the message comes on stdin, its usage goes to `usage`. It runs unattended inside OpenBot's sandbox and rules, as Codex and Muse do, so nothing asks; its folder is OpenBot's, so its skills load.
 pub(super) fn copilot_argv(
     command: &str,
     read_only: bool,

@@ -1,4 +1,4 @@
-//! The owner has Tirith forget a phone.
+//! The owner has OpenBot forget a phone.
 use super::{store::store, store::ROOMS, Peer, Room, PHONE};
 use crate::app::{bad, Shared, R};
 use axum::{extract::State, Json};

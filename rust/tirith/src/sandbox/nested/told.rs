@@ -10,10 +10,10 @@ pub(super) fn said(mode: Mode, net: bool, unread: bool, role: bool, servers: &[S
         _ => "read-only",
     };
     let mut line = format!(
-        "macOS keeps one sandbox, so Codex's {limit} limit is applied by Tirith's around all of Codex"
+        "macOS keeps one sandbox, so Codex's {limit} limit is applied by OpenBot's around all of Codex"
     );
     if role {
-        line += "; its commands still reach Tirith, as this role's";
+        line += "; its commands still reach OpenBot, as this role's";
     }
     if !servers.is_empty() {
         line += &format!(

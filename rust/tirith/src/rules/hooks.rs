@@ -21,5 +21,5 @@ pub(super) fn waiting(call: &Call, in_lane: bool, role: Option<&str>) -> Option<
         && ((call.bash
             && (WAIT.is_match(call.cmd) || FOLLOW.is_match(&QUOTED.replace_all(call.cmd, " "))))
             || call.tool == "clocksleep");
-    waits.then(|| "no esperes dentro del turno: contesta y termina; Tirith te avisa cuando una lane entre, falle o pregunte".into())
+    waits.then(|| "no esperes dentro del turno: contesta y termina; OpenBot te avisa cuando una lane entre, falle o pregunte".into())
 }

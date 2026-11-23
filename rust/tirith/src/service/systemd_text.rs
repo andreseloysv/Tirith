@@ -1,4 +1,4 @@
-//! The text of Tirith's systemd user unit.
+//! The text of OpenBot's systemd user unit.
 use super::unit::Unit;
 use std::path::Path;
 
@@ -29,7 +29,7 @@ pub(super) fn text(u: &Unit, log: &Path) -> Result<String, String> {
     Ok(format!(
         "# Written by `tirith service install`.
 [Unit]
-Description=Tirith
+Description=OpenBot
 After=network-online.target
 StartLimitIntervalSec=0
 

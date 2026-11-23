@@ -1,7 +1,7 @@
 //! The chat role a hook belongs to, read from its folder.
 use crate::app::Shared;
 
-/// The role whose folder under Tirith's home holds `cwd` — `<home>/<role>/…`, a bot's `<home>/manager/<role>`, and a project's chat in `<home>/manager/<project>` (the manager) — never a lane under `<home>/lanes` (no role of that name runs a chat or a turn there). It names a hook's chat role when the agent passed none on to its hooks.
+/// The role whose folder under OpenBot's home holds `cwd` — `<home>/<role>/…`, a bot's `<home>/manager/<role>`, and a project's chat in `<home>/manager/<project>` (the manager) — never a lane under `<home>/lanes` (no role of that name runs a chat or a turn there). It names a hook's chat role when the agent passed none on to its hooks.
 pub fn role_at(app: &Shared, cwd: &str) -> Option<String> {
     let rel = std::path::Path::new(cwd).strip_prefix(&app.home).ok()?;
     let mut parts = rel.iter().map(|c| c.to_string_lossy().into_owned());

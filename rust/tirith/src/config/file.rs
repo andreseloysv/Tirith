@@ -1,4 +1,4 @@
-//! The config of one Tirith home, as read from its config.toml.
+//! The config of one OpenBot home, as read from its config.toml.
 use super::project::Project;
 use std::sync::Arc;
 

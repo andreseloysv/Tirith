@@ -1,4 +1,4 @@
-//! Tirith's own page is never a rehearsal's step: there a click would be the owner's yes.
+//! OpenBot's own page is never a rehearsal's step: there a click would be the owner's yes.
 
 /// Whether `url` is this daemon's page, however its address is written (a name, 127.x, a number: a browser sends all of them as loopback).
 pub(super) fn own_page(url: &str, port: u16) -> bool {

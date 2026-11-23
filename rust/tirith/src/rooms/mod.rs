@@ -1,4 +1,4 @@
-//! agentsmessenger.com rooms: public rooms Tirith watches, and private `sealed-` rooms where the owner talks to the managers from a phone, end-to-end encrypted. Only a phone paired with a one-use QR is the owner.
+//! agentsmessenger.com rooms: public rooms OpenBot watches, and private `sealed-` rooms where the owner talks to the managers from a phone, end-to-end encrypted. Only a phone paired with a one-use QR is the owner.
 mod agents;
 mod api;
 mod cli;

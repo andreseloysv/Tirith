@@ -47,7 +47,7 @@ pub use opts::Opts;
 pub use private::Hidden;
 pub use secret::read as read_secret;
 
-/// Whether this process is an agent's, by what Tirith names it.
+/// Whether this process is an agent's, by what OpenBot names it.
 pub fn from_agent() -> bool {
     ["TIRITH_LANE", "TIRITH_ROLE"]
         .iter()
