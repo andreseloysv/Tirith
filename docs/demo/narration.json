@@ -1,7 +1,7 @@
 [
   {
     "id": "problem",
-    "text": "I run several coding agents at once. All day I ask: what is everyone doing, is something stuck, is something waiting for me? So I built Tirith, a manager that runs the plan."
+    "text": "I run several coding agents at once. All day I ask: what is everyone doing, is something stuck, is something waiting for me? So I built OpenBot, a manager that runs the plan."
   },
   {
     "id": "ask",
@@ -9,7 +9,7 @@
   },
   {
     "id": "plan",
-    "text": "The plan now has two new steps, each with a progress bar and the agent working on it. No plan item, no agent: Tirith refuses to start one without it."
+    "text": "The plan now has two new steps, each with a progress bar and the agent working on it. No plan item, no agent: OpenBot refuses to start one without it."
   },
   {
     "id": "rule",
@@ -17,11 +17,11 @@
   },
   {
     "id": "merge",
-    "text": "When Wren reports done, Tirith checks the claims against the real change: the files, the tests, the recorded test run. They match, so it merges on its own, and the plan ticks itself. Merging is never a question for me."
+    "text": "When Wren reports done, OpenBot checks the claims against the real change: the files, the tests, the recorded test run. They match, so it merges on its own, and the plan ticks itself. Merging is never a question for me."
   },
   {
     "id": "health",
-    "text": "The dot in the header watches Tirith itself. New code landed, the collector reloaded: amber, then green again, with nobody touching it."
+    "text": "The dot in the header watches OpenBot itself. New code landed, the collector reloaded: amber, then green again, with nobody touching it."
   },
   {
     "id": "decision",
@@ -33,6 +33,6 @@
   },
   {
     "id": "close",
-    "text": "Tirith. Built during the hackathon, and on GitHub. If it saves you a question, star it."
+    "text": "OpenBot. Built during the hackathon, and on GitHub. If it saves you a question, star it."
   }
 ]

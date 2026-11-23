@@ -32,4 +32,4 @@ with temporary state and does not call a model. Screenshots are left in its prin
 
 After browser setup, `python3 scripts/checks/browser.py` exercises the real MCP in a disposable profile. It checks
 tool discovery, persistence across browser restarts and an authenticated proxy including a blocked destination.
-On macOS it runs inside the same loopback-only network sandbox as Tirith; no real account or model is used.
+On macOS it runs inside the same loopback-only network sandbox as OpenBot; no real account or model is used.

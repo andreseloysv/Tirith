@@ -53,7 +53,7 @@ Files:
 - `lanes.rs`: The lanes in memory, each change written to SQLite and shown on the page.
 - `migrate.rs`: Moves kept from older names.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
-- `open.rs`: Opening the shared state at a Tirith home: its folders, its database and the lanes it kept.
+- `open.rs`: Opening the shared state at an OpenBot home: its folders, its database and the lanes it kept.
 - `path.rs`: The PATH agents and checks run with.
 - `process.rs`: Signalling processes.
 - `query.rs`: The store's reads: rows mapped by a function, or as JSON objects.
@@ -87,11 +87,11 @@ time); the lanes scheduler's tick hands a due one to the bot once for each of it
 follow the route's `catch_up`: `"once"`, the default, runs the routine one time, however many of its times passed since its last run, and tells the bot how late
 that is, counted from the latest of them; `"skip"` waits for the next time. Up to 5 minutes after its time is on time, and a routine that never ran only has
 today's time to catch up. `POST /api/bots/<id>/routines` takes `catch_up` too, and the bot makes them itself with `tirith routine add|remove|list`. The page writes config.toml
-with `toml_edit`, keeping its comments, and the bots that used to live in kv move there once, at daemon start. A bot learns in its folder (`<tirith home>/manager/<key>`): `memory.md`, which Tirith hands it as it is now at
+with `toml_edit`, keeping its comments, and the bots that used to live in kv move there once, at daemon start. A bot learns in its folder (`<tirith home>/manager/<key>`): `memory.md`, which OpenBot hands it as it is now at
 the start of every turn and routine, and skills in `.agents/skills/<name>/SKILL.md`, its own and the shared ones of `<tirith home>/bots/skills` (linked in before every turn).
 Both are git repositories (`bots/versioned.rs`): a bot's folder follows only its `memory.md` and its own skills — its `.gitignore`
 says so, and leaves out the links to the shared skills and its working files — and `<tirith home>/bots` (the shared
-`memory.md` and `skills/`) is another. Tirith commits, as Tirith, when a turn of the bot's own role in its own
+`memory.md` and `skills/`) is another. OpenBot commits, as OpenBot, when a turn of the bot's own role in its own
 conversation ends having changed them (message «turn <id>», the turn's row id), and after each change from the Library
 («library»); nothing changed, nothing is committed. So the `versions` of a turn (git blob hashes) are blobs of that
 history, and `git log` in a bot's folder says which memory and skills each run used.
@@ -100,7 +100,7 @@ The bots' agent finds them natively: Muse reads `.agents/skills`, and the agent'
 (never in its hidden folders, where agent settings live, except skills folders) and in the shared skills; the page's Library shows, corrects and deletes all of it.
 The shared memory, `<tirith home>/bots/memory.md` (what holds for every bot: the owner's name, time zone, language), is handed before the bot's own, as `[tirith] Shared memory.md as it is now: …`, and the
 Library shows it above the bot's memory and edits it (`POST /api/bots/<id>/library` with `memory` and `shared`; `GET` gives it as `shared_memory`). Memory notes are numbered: when it hands a memory over,
-Tirith puts `[m<N>]` (the bot's own) or `[s<N>]` (the shared one) before every note line (one that starts with `-` or `*`) that has none yet, the number after the highest already there, and saves
+OpenBot puts `[m<N>]` (the bot's own) or `[s<N>]` (the shared one) before every note line (one that starts with `-` or `*`) that has none yet, the number after the highest already there, and saves
 the file so; numbered notes, headings and every other line stay as they are, and the bot cites `[m<N>]` or `[s<N>]` when its answer uses a note. The chat and turns keep
 those marks (the `cited` count needs them); the page draws each as a small raised number on the word before it that shows its note on hover or tap and is left out of a copy
 (`web/js/views/chat/cite.js`), and what goes to the phones and answers a room has them taken out with the spaces before them (`rooms/uncite.rs`). Every skill follows the factory's template,
@@ -118,7 +118,7 @@ even with no phone paired), signs with its room key a `request` event in that ro
 `{"hook": "create", "readers": ["<its public key>"], "seal": "once"}`), sends it to `POST <[messenger] url>/hooks` and keeps `{id, url, from, room}` in kv
 `webhook:<bot>` (`from`: the key of the platform's `webhook` agent of that room); `POST /api/bots/<id>/webhook/delete` deletes it the same way
 (`{"hook": "delete", "id": "<id>"}`), and deleting the bot forgets it. What a service posts to the URL arrives in the room sealed for this
-Tirith alone, as `tirith-hook {"v":1,"at":…,"headers":{…},"body":…}`. The room's watcher (`rooms/hooked.rs`) never makes such a line one of
+OpenBot alone, as `tirith-hook {"v":1,"at":…,"headers":{…},"body":…}`. The room's watcher (`rooms/hooked.rs`) never makes such a line one of
 the owner's or of another agent: from the `from` agent it becomes the bot's `webhook` event (`bots/hook_event.rs`) — `source` (`github`
 when it has `x-github-event`; `mail` for the owner's mail script, a body with `from` and `subject`; else the user-agent), `kind` (`github:<x-github-event>.<action>`, `mail:received`, or `hook`), `title` and `url` (of
 GitHub's pull request, issue, release or comment, else the body's own `title` and `url`), `text` (the body as text, 4000 characters at most)
@@ -156,7 +156,7 @@ Files:
 - `fragment.rs`: The bots as a TOML fragment: the owner's bots' roles, and every written bot's routes and routines.
 - `handed.rs`: What a bot is handed with its next message, from the folder that turn runs in (an experiment's B: the branch's); a skill that changed is read again in a session of its own.
 - `from_template.rs`: A bot made from a template: its card, its routine, its skill and its first words.
-- `hook.rs`: A bot's webhook as Tirith keeps it (kv `webhook:<bot>`: the platform's id, url and from, and the room), and what arrives through it.
+- `hook.rs`: A bot's webhook as OpenBot keeps it (kv `webhook:<bot>`: the platform's id, url and from, and the room), and what arrives through it.
 - `hook_api.rs`: A bot's webhook from the page: its URL (made once on the platform), deleted, and «Probar».
 - `hook_clean.rs`: What a webhook event shows outside its data block: a label of name characters only, a title as one quoted line, and a value fenced inside a task.
 - `hook_event.rs`: What a webhook call brought, as a bot's `webhook` event: where from, what kind, its title, link and text, and the body.
@@ -191,7 +191,7 @@ Files:
 
 - `checkout.rs`: The checkout a development build was built from, and none in a build to hand out.
 - `files.rs`: The carried files, by their path in the repository.
-- `launcher.rs`: The browser MCP's launcher: the checkout's, else the carried one written into Tirith's home.
+- `launcher.rs`: The browser MCP's launcher: the checkout's, else the carried one written into OpenBot's home.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `zip.rs`: A zip with its files stored as they are.
 
@@ -358,13 +358,13 @@ Files:
 
 Files:
 
-- `file.rs`: The config of one Tirith home, as read from its config.toml.
+- `file.rs`: The config of one OpenBot home, as read from its config.toml.
 - `known.rs`: The sections of config.toml something reads (`connectors` among them, see `connectors/`), and the keys nothing does.
 - `load.rs`: Loading config.toml: parse it, move yesterday's sections, lay it over the factory and name what is wrong.
 - `manifest.rs`: A project's `tirith.toml`: its plan file, lane excludes, pipeline stages and extra rules.
 - `migrate.rs`: Yesterday's sections of config.toml read under today's names, in memory only.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
-- `paths.rs`: The owner's home, Tirith's home, and paths written with `~/`.
+- `paths.rs`: The owner's home, OpenBot's home, and paths written with `~/`.
 - `project.rs`: One `[[projects]]` entry of config.toml.
 - `table.rs`: Reading one typed value out of a TOML table by its path.
 
@@ -385,24 +385,24 @@ Files:
 - `changed.rs`: What the conversation is told when a routine's schedule changes: nobody waits for it on a day, or at a time, it no longer has.
 - `claims.rs`: What an answer claims. «∅» is "I looked and nothing is new"; «✗» is "I could not"; a «∅» that says it could not is a «✗».
 - `found.rs`: Which occurrence a question is about: a scheduled one by when it was due, or a routine's oldest in a state.
-- `gaps.rs`: When Tirith was away: it keeps that it is alive, so what was missed says whether Tirith was stopped or the machine slept.
+- `gaps.rs`: When OpenBot was away: it keeps that it is alive, so what was missed says whether OpenBot was stopped or the machine slept.
 - `life.rs`: An expected run's life: it starts, and its turn ends it; or it never becomes a turn and ends without one (`lost.rs`).
 - `lost.rs`: The row in `turns` of a run that never was a turn: failed, with no agent, no time and no tokens (the numbers count the failure and nothing else), and why.
-- `missed.rs`: Occurrences that nothing ever wrote down and that will not run: Tirith was stopped, or the machine slept, across them. The one `catch_up` still runs is not lost; with "skip" one is lost as soon as it is late. Each gets its row, and each routine one line.
+- `missed.rs`: Occurrences that nothing ever wrote down and that will not run: OpenBot was stopped, or the machine slept, across them. The one `catch_up` still runs is not lost; with "skip" one is lost as soon as it is late. Each gets its row, and each routine one line.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `news.rs`: The news of a good run wait for its judge, so a "could not" that it finds is one line; never long, and in the store.
 - `notice.rs`: The one line the owner gets of a run that did not work, written by code and kept until the phones have it.
 - `overdue.rs`: Runs that wait, or work, too long (`[limits] routine_minutes`), counted on a clock that stops while the machine sleeps; and a pass whose day ended while it waited and that `catch_up` runs no more.
 - `passes.rs`: A turn role's scheduled pass as an expected run: written down when due, waiting while something keeps it, and never twice.
 - `reasons.rs`: Why a turn failed, in a few words for the owner: the kind of failure and the agent's own last line.
-- `restart.rs`: What a start finds open: a run Tirith was stopped in the middle of failed and is not done again (it may have acted); one that had not started is handed again on the day it was due or caught up, and else is lost.
+- `restart.rs`: What a start finds open: a run OpenBot was stopped in the middle of failed and is not done again (it may have acted); one that had not started is handed again on the day it was due or caught up, and else is lost.
 - `stands.rs`: Where one occurrence stands, for whoever reports it (`/status`): the register's word, and its turn's where it left one, so it is the truth the numbers and the notice have.
 - `store.rs`: The expected runs as kept (`expected_runs`): one row for each occurrence, waiting, running, then ok or failed.
 - `timed.rs`: Everything that has a time of day: the bots' routines and the turn roles' scheduled passes.
 - `told.rs`: Whose words an answer holds: what it quotes, and what it tells of someone's, are theirs. What it tells of its own tool or helper is its own.
 - `unjudged.rs`: A good run that no judge will read any more: code's plain words decide, as when a judge gave no verdict; and whether an experiment's run still waits for its judge, before the experiment is decided.
 - `verdict.rs`: Whether a routine's turn did what it was started for, as far as code is certain: its agent ended well, no «✗», no tool's error proves it could not, and a «∅» says no "could not" on its line and comes from having looked.
-- `watch.rs`: The scheduler's tick: Tirith says it is alive, what was missed is written down, what takes too long is ended, news that waited too long for a judge go out, and a run no judge will read is looked at by code.
+- `watch.rs`: The scheduler's tick: OpenBot says it is alive, what was missed is written down, what takes too long is ended, news that waited too long for a judge go out, and a run no judge will read is looked at by code.
 - `words.rs`: Times, days and texts as the owner reads them in one line.
 
 ## `factory/`
@@ -437,7 +437,7 @@ plus a short hash of what config.toml lays over it (`<commit>+<hash>`; `embedded
 Every lane, chat (turn) row, owner card, event, review and score is born carrying it in its `factory` column,
 with `role_hash` next to it: a short hash of the setting of the role it ran with — its resolved table, its
 agent's table, its prompt texts and the page's model override for it (`Factory::role_hash`, `App::stamp_for`).
-A lane's events and cards carry the lane's stamp; a line no role wrote (the owner's, a room's, Tirith's own)
+A lane's events and cards carry the lane's stamp; a line no role wrote (the owner's, a room's, OpenBot's own)
 keeps the version with an empty hash. Comparing two versions, two models or two prompts is then one query
 (`GROUP BY factory, role_hash` over `lanes`, `chat`, `owner_items`, `events` or `scores`), with no extra runs.
 
@@ -489,7 +489,7 @@ and every `tools/call` to the daemon (`/api/mcp/<session>/tools`, `/api/mcp/<ses
 The daemon keeps the session's connectors open: each one the bot's role is granted and not `blocked`. A local one
 (`command`) is started through `sandbox::wrap` as the bot's run, in its sandbox, with the bot's values of the
 connector's `secrets` added to that process's environment alone; a remote one (`url`, MCP's streamable HTTP: a POST
-per message, the answer JSON or an event stream, `Mcp-Session-Id` kept) is reached always through Tirith's proxy with
+per message, the answer JSON or an event stream, `Mcp-Session-Id` kept) is reached always through OpenBot's proxy with
 the bot's run's credentials (`sandbox/proxy_url.rs`), so the proxy counts it as the bot's, never the daemon's; its
 first secret goes as `Authorization: Bearer <value>` and any other as a header of its own name (`_` as `-`), marked
 sensitive; a bot signed in to it (`tirith connector login`, `oauth/`) sends its access as that Bearer first, renewed by the daemon when it ends or the server answers 401. The values come from the per-bot store (`secrets::value`) at open time and stay in the daemon. A connector
@@ -548,7 +548,7 @@ Files:
 - `open.rs`: Opening a bot's gateway: the caller proven by its token alone, then every connector its role is granted.
 - `permit.rs`: One-use permits keyed by the sha256 of connector, tool and canonical arguments, bound to their card: granted by the owner's yes alone, used by one call.
 - `record.rs`: Every attempt as a row of `connector_calls`: hashes and the verdict, never the content.
-- `remote.rs`: A remote connector: MCP's streamable HTTP through Tirith's proxy as the bot.
+- `remote.rs`: A remote connector: MCP's streamable HTTP through OpenBot's proxy as the bot.
 - `renew.rs`: A signed-in remote connector's renewal on a 401: the daemon renews the sign-in, the connection sends the new bearer.
 - `rpc.rs`: JSON-RPC 2.0 as MCP speaks it, both ways, and an HTTP answer's messages.
 - `session.rs`: The gateways open now, each found again only by the run that opened it.
@@ -575,7 +575,7 @@ Files:
 
 ## `lab/`
 
-The lab (docs/BOTS.md, part 3): the Coach's experiments on a bot's routine, one change each, decided by Tirith alone
+The lab (docs/BOTS.md, part 3): the Coach's experiments on a bot's routine, one change each, decided by OpenBot alone
 with the factory's `[lab]` rule. An experiment is a branch of the bot's repository (`bots/versioned.rs`) with exactly
 one commit over its main; the Coach makes it in a draft worktree under `<home>/lab` and removes that worktree
 (`factory/prompts/coach.md`), then starts it:
@@ -603,7 +603,7 @@ under kept in `lab_comparisons` (`b_is`), and the eval `ab-compare` (rubric `fac
 A pair whose two answers are the same words is a `tie` at once, with no event and no judge.
 
 **Captures.** Every turn of a bot (`turns/capture*.rs`) keeps what it read in `<home>/captures/<turn>.jsonl`: a first
-line with what started it — the event or task handed over, the notes and the owner's words, never the memory Tirith
+line with what started it — the event or task handed over, the notes and the owner's words, never the memory OpenBot
 lays before them (`manager/deliver.rs` calls `turns::told`) — with its conversation, routine and trigger, then one line
 per tool call in order: the tool as its agent named it, its input and its result as the agent saw it (Anthropic's
 `tool_use` blocks matched with the `tool_result` blocks of its `user` lines; Muse's `tool.result`, its command as the
@@ -619,7 +619,7 @@ of the bot's role (`manager::run_turn`), handed that worktree's memory and skill
 and `sandbox::wrap` gives its processes the proxy caller `replay:<experiment>`, to which the proxy refuses every
 destination but, over TLS, the `model_hosts` of the bot's agent (factory.toml, plus the agents' catalog: `reach.rs`),
 since a cloud agent cannot think without them; an agent with none is not replayed. Its `replay_args` are added
-(Codex's own web search and apps, which no hook hears, are off). In Tirith's `PreToolUse` hook (`server/hook.rs`, Anthropic's and Muse's alike) a call from the
+(Codex's own web search and apps, which no hook hears, are off). In OpenBot's `PreToolUse` hook (`server/hook.rs`, Anthropic's and Muse's alike) a call from the
 worktree that reads outside — the web, a browser or any MCP tool, `tirith safari` or `tirith teach`, shell commands
 with network such as curl, ssh or git fetch (`outside.rs`) — is refused with the next unanswered call of the same
 call in the capture that asks for the same thing as its reason, «Recorded result (replay): <its result>»
@@ -647,7 +647,7 @@ experiment's worktree, with the same instructions and recent chat as A's fresh s
 no chat, phone, room or card knows (kv `lab:pairs:<experiment>` counts the pairs; while a B is still on its way, a
 new real run is no pair). A tokio task-local makes the worktree every folder of the bot for B's turn (`lab::seat`),
 and the rules let it write there (`lab::in_replay`). Its reads are live (the web, a browser, `tirith safari read`),
-but Tirith's `PreToolUse` hook refuses every outward action from that worktree (`shadow_open.rs`) as «not
+but OpenBot's `PreToolUse` hook refuses every outward action from that worktree (`shadow_open.rs`) as «not
 available in a shadow run»: a `tirith` command that is not a plain read — `say`, `ask`, `ask-owner`, `chat`,
 `safari open`, `teach`, rooms, cards, lanes — and shell commands that send, buy, delete or publish (curl or wget
 with a writing method, data or a form, `gh` writes, a push or a publish, mail, ssh and rsync, `open`, AppleScript, a
@@ -682,7 +682,7 @@ Files:
 - `adopt.rs`: Adopting a branch: merged into the bot's main without losing a note written in memory.md meanwhile.
 - `answers.rs`: A replay's tool calls in the hook: an outside read answered from the capture's call that asked for the same, one it lacks (counted) or one for the owner refused.
 - `call_key.rs`: What a tool call asks for (the tool and its URL, query or command), so a replay answers only a call that asks for the same thing.
-- `own_folder.rs`: What a run of an experiment is to the rest of Tirith: a live B's worktree stands for the bot's own folder, and no history is handed to either side.
+- `own_folder.rs`: What a run of an experiment is to the rest of OpenBot: a live B's worktree stands for the bot's own folder, and no history is handed to either side.
 - `reach.rs`: What a replay's processes may reach (its agent's model and nothing else), and what its agent is also started with.
 - `recorded.rs`: A capture's calls that read outside, as a replay answers them, and whether each has an answer.
 - `replay_runs.rs`: The captured runs a replay does again: enough of them, each answerable.
@@ -696,7 +696,7 @@ Files:
 - `blind.rs`: What the judge reads of a pair and what its answer means for B; when two answers are the same, so none is needed.
 - `compare.rs`: A B run against the A run before it (or against the A of its shadow pair), judged blind by `ab-compare`, and the judge's answer mapped back to B's verdict.
 - `decide.rs`: The decision once an experiment is due and none of its runs is on its way or waits for its judge: the numbers read, the rule it started with applied, the branch merged or deleted, the line emitted.
-- `git.rs`: Git in a bot's repository as Tirith: the branch's one commit checked, a branch merged (its text winning where main moved on the same lines), the worktree and the branch removed.
+- `git.rs`: Git in a bot's repository as OpenBot: the branch's one commit checked, a branch merged (its text winning where main moved on the same lines), the worktree and the branch removed.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `numbers.rs`: An experiment's numbers from the store: each side's runs (mean tokens, dollars, time; left out those of a void pair or of one whose two runs failed, also late), B's comparisons, new failures and 👎, the void pairs, and the comparisons the judge has not answered.
 - `outside.rs`: Which tool calls read outside (web, browser, MCP, `tirith safari`, network commands) and which would reach the owner.
@@ -810,12 +810,12 @@ Files:
 - `queue.rs`: Reports and events for a conversation that wait for its next turn: the newest 30 kept, the older ones counted.
 - `unheard.rs`: A note for a conversation's next message, in the store until a message hands it over, so a restart loses none.
 - `run.rs`: A conversation's sessions, one after another while messages wait, started again more slowly when they fail young.
-- `commands.rs`: The owner's commands that Tirith answers itself, with no turn (`/status`, `/models`, `/model`).
+- `commands.rs`: The owner's commands that OpenBot answers itself, with no turn (`/status`, `/models`, `/model`).
 - `say.rs`: What the owner, a room or an agent writes to a conversation (a paired phone's words are judged as the owner's).
 - `session.rs`: The stream-json session of a conversation: started with what waits for it, read until it ends or rests.
 - `session_end.rs`: The end of a stream-json session: what its dead turn left, its process, and what waits again when it never got ready.
 - `spawn.rs`: Starting a streaming chat agent, and the answers to its permission requests.
-- `stale.rs`: Open questions that no longer apply, closed by Tirith.
+- `stale.rs`: Open questions that no longer apply, closed by OpenBot.
 - `stream.rs`: Reading a stream-json session's output: its start, its words and tools, its turn ends and permission requests.
 - `talk.rs`: One conversation's state, kept under its project's id (or "" for the one of no project): its session, its messages on their way, its waiting reports and routine runs, and what lists or ends its sessions.
 - `turn.rs`: The loose turn: one fresh turn of a `session = "turn"` role, its text the answer.
@@ -998,7 +998,7 @@ runs of experiments do not count; a replay's or a shadow's run is in a conversat
   `tokens_before`, `tokens_after`, `saved_percent`.
 - `memory`: `tokens` (`own` and `shared`: characters / 4 of its memory.md and of `bots/memory.md`), `notes` (every
   numbered note with how many of its last 30 runs cited it), `uncited` (the bot's own notes none of those runs cited
-  and written at least 30 runs ago, by the history of its memory.md: candidates to delete, which Tirith never deletes;
+  and written at least 30 runs ago, by the history of its memory.md: candidates to delete, which OpenBot never deletes;
   a shared note is never proposed from one bot's runs), `misses` and `missed` (owner messages in its conversation that owner-mood labelled `repeat`).
 
 The page shows them in the bot's «Números» tab (`web/js/views/bots/numbers.js`) in short lines, and every answer of a
@@ -1025,7 +1025,7 @@ The daemon (`start.rs`) discovers the server (`discover.rs`): its protected-reso
 `/.well-known/oauth-protected-resource<path>`, then at the origin; its first `authorization_servers` entry's metadata
 (RFC 8414 `/.well-known/oauth-authorization-server<path>`, then OpenID's `openid-configuration`); without either the
 server's origin with `/authorize`, `/token` and `/register`. A server that lists PKCE methods without `S256` is
-refused. Tirith registers itself (`register.rs`, RFC 7591 dynamic registration, a public client: `token_endpoint_auth_method
+refused. OpenBot registers itself (`register.rs`, RFC 7591 dynamic registration, a public client: `token_endpoint_auth_method
 = "none"`) at the `registration_endpoint`, with the daemon's own callback `http://127.0.0.1:<port>/oauth/callback` as
 its one redirect; a server that offers no registration cannot be signed in to. The sign-in address carries `S256`
 PKCE (`pkce.rs`, a 32-byte verifier that never leaves the daemon), a random state, the connector's url as `resource`
@@ -1088,7 +1088,7 @@ Files:
 - `change.rs`: Changing a plan's lines under the writer lock.
 - `check.rs`: Item checks that can never pass.
 - `delete.rs`: Removing an old step from the plan: its heading, prose and items, never renumbering the others. `tirith plan step delete <project> <number>` (`POST /api/plan/{project}/steps/{num}/delete`) refuses, without touching the file, a number that is not all digits, a step the plan lacks, or a step with a lane that is not merged (it names them); merged lanes do not block it.
-- `flush.rs`: Committing the plan files Tirith changed.
+- `flush.rs`: Committing the plan files OpenBot changed.
 - `item.rs`: A plan's steps and their items, with the line each one is on.
 - `lookup.rs`: Finding a project's plan and its items.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
@@ -1132,12 +1132,12 @@ Files:
 
 ## `rooms/`
 
-agentsmessenger.com rooms: public rooms Tirith watches (`[[rooms]]` in config.toml), and private `sealed-` rooms where the owner talks to the managers from a phone, end-to-end encrypted, compatible with `am.mjs` and
+agentsmessenger.com rooms: public rooms OpenBot watches (`[[rooms]]` in config.toml), and private `sealed-` rooms where the owner talks to the managers from a phone, end-to-end encrypted, compatible with `am.mjs` and
 the agentsmessenger.com chat page. One task per room long-polls it.
 
 Who gives orders: only a phone paired with a one-use QR code (`tirith-pair <code>`) is the owner, in every room made
 here (each project gets a room, each room gets every phone). Other agents reach the manager as information. After 30
-agent messages in a row with nothing from a paired phone, Tirith stops delivering and says so once, until a phone writes.
+agent messages in a row with nothing from a paired phone, OpenBot stops delivering and says so once, until a phone writes.
 A `tirith-hook` line is never a line for people: only the one sealed by the room's webhook agent (kv `webhook:<bot>`)
 is handed on, as its bot's `webhook` event (see Routines on an event from outside, above).
 
@@ -1149,7 +1149,7 @@ Files:
 - `create.rs`: A private room this manager makes on the platform for a conversation, where its phones are paired.
 - `deliver.rs`: What a poll decided is done: lines sent, the phones' model controls and commands answered, cards answered, the rest handed to the manager.
 - `files.rs`: The pictures the phones send, kept as files for a day.
-- `forget.rs`: The owner has Tirith forget a phone.
+- `forget.rs`: The owner has OpenBot forget a phone.
 - `handle.rs`: The rules for one message of a room, in order: only genuine events, who wrote it, what it says, pairing, history, and who it is for.
 - `history.rs`: The room's last messages, as the page shows them.
 - `hooked.rs`: What a bot's sealed webhook posts in its room: `tirith-hook <JSON>`, sealed by the platform's agent of that room.
@@ -1158,11 +1158,11 @@ Files:
 - `keeper.rs`: The rooms' start, and the loop that keeps them as the config and the phones need them.
 - `listing.rs`: The list of the owner's rooms the phones get (`tirith-rooms [{"r": room, "t": name, "f": face}]`), one chat per project.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
-- `outbox.rs`: What Tirith says in rooms by itself, sent in order by one task.
+- `outbox.rs`: What OpenBot says in rooms by itself, sent in order by one task.
 - `pair.rs`: Pairing: a phone scans the one-use QR (`tirith-pair <code>`), another manager joins with its one-use code (`tirith-join <code>`).
 - `poll.rs`: One long poll of a room: read, handle each new message once (the cursor moves past it), answer.
 - `provide.rs`: A phone paired in one room is the owner's in all: every project gets a room and every room every phone.
-- `public.rs`: The public rooms Tirith watches, as config.toml lists them.
+- `public.rs`: The public rooms OpenBot watches, as config.toml lists them.
 - `record.rs`: What is kept of a room and of the people in it (SQLite table `am_rooms`, one JSON row per room). Pairing codes live only here.
 - `roster.rs`: Each paired phone is told who else is in the room (`tirith-roster <ids>`) when that changed.
 - `routes.rs`: The rooms' HTTP API for the page and the CLI.
@@ -1175,7 +1175,7 @@ Files:
 - `tophones.rs`: What a project's conversation says reaches the phones in its rooms.
 - `turns.rs`: The manager's turns for rooms: what a turn received stops being owed only when it ends, and what no turn answered is handed again.
 - `typing.rs`: The phones see a turn typing, and its tools, while it runs.
-- `uncite.rs`: A bot's memory citations (`[m<N>]`, `[s<N>]`) stay off the phones and the rooms: they are for Tirith's count of the notes that serve (`turns::cited`), noise for the owner. The chat and the turns keep them.
+- `uncite.rs`: A bot's memory citations (`[m<N>]`, `[s<N>]`) stay off the phones and the rooms: they are for OpenBot's count of the notes that serve (`turns::cited`), noise for the owner. The chat and the turns keep them.
 - `unsent.rs`: Lines that must reach the phones (a routine that failed): kept (kv `rooms:unsent`) until sent, so a restart while the platform is away loses none.
 - `view.rs`: The page's view of a room (no secret but the current one-use QR, which the page shows), and its chat links.
 - `watch.rs`: One task per room listens to it, polling again and again, slower while the platform fails.
@@ -1189,9 +1189,9 @@ ed25519 keys converted to curve25519, one wrapped key per reader).
 Files:
 
 - `envelope.rs`: The sealed envelope: a message only its readers can open, signed inside by its author (sealed once: by a key thrown away, so not even for its author).
-- `events.rs`: Posting signed events, registering this Tirith's key when the platform does not know it yet.
+- `events.rs`: Posting signed events, registering this OpenBot's key when the platform does not know it yet.
 - `http.rs`: Requests to the platform.
-- `identity.rs`: This Tirith's identity in the rooms: its ed25519 key in `<home>/am/<name>.json`.
+- `identity.rs`: This OpenBot's identity in the rooms: its ed25519 key in `<home>/am/<name>.json`.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `reading.rs`: Reading from the platform: its key, a room's pages and keys, and a new private room.
 - `signed.rs`: Signatures and event ids: an event is genuine when its id, its author's signature and the platform's stamp all hold.
@@ -1199,7 +1199,7 @@ Files:
 
 ## `rules/`
 
-Rules as code, checked in memory on every `PreToolUse` hook call: a lane writes only in its own copy, never touches main and never starts agents; commit checks are never skipped; no agent edits Tirith's own files or the agents' settings; a project's `tirith.toml` adds its own. A refusal says what to do instead.
+Rules as code, checked in memory on every `PreToolUse` hook call: a lane writes only in its own copy, never touches main and never starts agents; commit checks are never skipped; no agent edits OpenBot's own files or the agents' settings; a project's `tirith.toml` adds its own. A refusal says what to do instead.
 
 Files:
 
@@ -1209,17 +1209,17 @@ Files:
 - `hooks.rs`: The rules about the turn itself: commit checks are never skipped, and a chat's turn never waits.
 - `judge.rs`: A judge (an eval's read-only turn role that nobody talks to) uses no tool but its agent's own book-keeping: what it is handed is data.
 - `lane.rs`: A lane's rules: it writes only in its own copy, never touches main and never starts agents.
-- `manifest.rs`: The rules a project's tirith.toml brings: its plan is written only by Tirith, and its own `[[rules]]`.
+- `manifest.rs`: The rules a project's tirith.toml brings: its plan is written only by OpenBot, and its own `[[rules]]`.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `normalize.rs`: Every agent's tool call in the names the rules know.
-- `owned.rs`: Tirith's own files and the agents' settings: no agent edits them, except in the parts of Tirith's home agents write in.
+- `owned.rs`: OpenBot's own files and the agents' settings: no agent edits them, except in the parts of OpenBot's home agents write in.
 - `patterns.rs`: The shell command shapes the rules look for.
 - `role_at.rs`: The chat role a hook belongs to, read from its folder.
 - `summary.rs`: A tool call in one short line, for logs and the chat.
 
 ## `sandbox/`
 
-Network sandbox. Every process Tirith starts (lane agents, the manager, turn-role reviews, merge-queue checks) runs confined (`confine.rs`): on Linux in a network namespace of its own (`sandbox/linux/`, below), on macOS inside a `sandbox-exec` profile that denies outbound network except loopback and local sockets and denies Apple Events (macOS refuses them from `sandbox-exec` anyway, whatever the profile says), with its proxy
+Network sandbox. Every process OpenBot starts (lane agents, the manager, turn-role reviews, merge-queue checks) runs confined (`confine.rs`): on Linux in a network namespace of its own (`sandbox/linux/`, below), on macOS inside a `sandbox-exec` profile that denies outbound network except loopback and local sockets and denies Apple Events (macOS refuses them from `sandbox-exec` anyway, whatever the profile says), with its proxy
 variables pointing at the daemon's own HTTP/CONNECT proxy (`sandbox/proxy/`). The proxy authenticates the caller by its token (the user name is for people to read; the same token is its `TIRITH_TOKEN` at the daemon's door, see `server/`), applies the block list, and records each new destination as an event.
 
 The owner's Safari is read through the daemon instead: `tirith safari open <url>` and `tirith safari read [<url>]` (URL, title and text of the current tab, or of the first tab whose URL starts with the one given; the text is cut at 20,000 characters) ask the daemon — which runs outside the sandbox — to run that one fixed AppleScript, never a script the agent sends, and only for the chat roles (the managers and the bots, never a lane or the CEO).
@@ -1227,7 +1227,7 @@ The owner's Safari is read through the daemon instead: `tirith safari open <url>
 Files:
 
 - `blocks.rs`: The owner's block list: in memory (mirroring the `net_blocks` table), checked for every destination.
-- `check.rs`: The block list for agent sessions NOT started by Tirith (the owner's own sessions), checked in the hook.
+- `check.rs`: The block list for agent sessions NOT started by OpenBot (the owner's own sessions), checked in the hook.
 - `cli/commands.rs`: Which command runs for the words given.
 - `cli/list.rs`: `tirith net list`: the destinations seen, then the rules blocking.
 - `cli/mod.rs`: Declares the folder's files and re-exports what other modules use.
@@ -1238,15 +1238,15 @@ Files:
 - `env.rs`: The environment of a sandboxed process: the proxy for every tool that reads one, ssh through the proxy and the tool wrappers first on PATH.
 - `handover.rs`: Handing descriptors to another process over a Unix socket (SCM_RIGHTS): Linux's launcher gets its relay's sockets, macOS's broker its caller's stdio.
 - `jvm.rs`: Gradle and the JVM ignore HTTPS_PROXY; the JDK refuses Basic proxy auth on tunnels unless re-enabled.
-- `launch.rs`: What a process Tirith starts runs as: the program, its arguments and the environment the sandbox adds.
+- `launch.rs`: What a process OpenBot starts runs as: the program, its arguments and the environment the sandbox adds.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `owner.rs`: Who a sandboxed process belongs to.
-- `mac/mod.rs`: macOS: whether a process runs under Tirith's own profile (a browser's sandbox is told apart).
+- `mac/mod.rs`: macOS: whether a process runs under OpenBot's own profile (a browser's sandbox is told apart).
 - `mac/socket.rs`: macOS: which processes of this user hold a loopback connection (libproc).
 - `profile.rs`: The sandbox profile, the proxy's port and whether processes run inside the sandbox.
 - `proxy_url.rs`: The proxy's address with a caller's credentials, for what the daemon reaches on that caller's behalf (a bot's remote connector).
 - `quiet.rs`: `tirith quiet`: an agent that was given private values (a token, an enterprise's host) starts through it, and they are hidden in all it writes before that reaches a log, a chat or an event.
-- `replay.rs`: Whether a replay's turn can run with the network closed: the sandbox must be in force for the processes Tirith starts.
+- `replay.rs`: Whether a replay's turn can run with the network closed: the sandbox must be in force for the processes OpenBot starts.
 - `routes.rs`: The sandbox's HTTP routes: its status, the block list, the destinations seen and Safari.
 - `rules.rs`: The shape of a block rule: a domain, an address or a CIDR range.
 - `safari/mod.rs`: Declares the folder's files and re-exports what other modules use.
@@ -1258,7 +1258,7 @@ Files:
 - `hidden.rs`: macOS: the profile's rules that keep the owner's token, the secret and the page's file from everyone confined.
 - `token.rs`: The token of each who, its proxy password and its proof at the daemon's door: derived from `<home>/net.secret`, findable from itself alone.
 - `tunnel.rs`: `tirith net tunnel <host> <port>`: stdin/stdout through the proxy (ssh's ProxyCommand inside the sandbox).
-- `wrap.rs`: Putting a process Tirith starts inside the sandbox.
+- `wrap.rs`: Putting a process OpenBot starts inside the sandbox.
 - `wrappers.rs`: The wrappers in `<home>/net/bin` that turn off the inner sandbox of tools that start their own (on macOS Codex's is `sandbox/nested/`).
 
 ## `sandbox/linux/`
@@ -1280,23 +1280,23 @@ Files:
 - `source.rs`: The address the relay calls from (127.0.0.2) at the daemon's port alone, by which the daemon knows a confined caller.
 - `hide.rs`: The files that prove who calls bound over with /dev/null, in the confined process's own mounts.
 - `namespace.rs`: The namespaces entered (user, network, mounts): the same user, a loopback that is up; root one further in, where the mounts are locked.
-- `ready.rs`: Whether this Linux lets Tirith confine, by trying it, and what to do when it does not.
+- `ready.rs`: Whether this Linux lets OpenBot confine, by trying it, and what to do when it does not.
 - `relay.rs`: A forwarded port's connections copied to the machine's loopback.
 - `run.rs`: The launcher: fork, take the listeners, relay, wait.
 - `supervise.rs`: Signals passed on to the program, and its exit code.
 
 ## `sandbox/nested/`
 
-macOS alone: Codex inside Tirith's sandbox. macOS refuses a sandbox inside another ("sandbox_apply: Operation not permitted"),
+macOS alone: Codex inside OpenBot's sandbox. macOS refuses a sandbox inside another ("sandbox_apply: Operation not permitted"),
 so a `codex exec` or `codex review` found by its name on the sandboxed PATH asks the daemon, which starts it as two processes under
-Tirith's profile plus the limit it was asked: Codex's own, which alone keeps its state and renews its sign-in and writes in no
+OpenBot's profile plus the limit it was asked: Codex's own, which alone keeps its state and renews its sign-in and writes in no
 folder, and its exec-server, which alone runs the model's commands and patches. On Linux Codex's sandbox nests by itself.
 
-What differs from Codex by itself on macOS: its commands get nothing of Tirith but, for a role of Tirith's, its API; MCP servers
+What differs from Codex by itself on macOS: its commands get nothing of OpenBot but, for a role of OpenBot's, its API; MCP servers
 that are programs run under the commands' limit; its other subcommands that run commands do not get a sandbox there, and the caller
 is told; started by its whole path, so round the wrapper, it fails loudly; one message between the two parts holds 16 MiB at most.
 It leans on the exec-server of Codex 0.165: a Codex without it is refused a limit, and says so.
-With danger-full-access there is no limit to keep: it runs under Tirith's profile alone. A permission profile or an
+With danger-full-access there is no limit to keep: it runs under OpenBot's profile alone. A permission profile or an
 administrator's managed settings count as read-only, and a limited Codex's tool calls leave no `access` events.
 
 Files:
@@ -1307,10 +1307,10 @@ Files:
 - `asked.rs`: What a `codex exec` or `codex review` command line asks of Codex's sandbox, and that line without the words that ask it. `codex review` is `codex exec review`, which takes the limit.
 - `bridge.rs`: The one way to the process that runs a limited Codex's commands and patches (`exec-server --listen stdio`): a WebSocket on loopback that takes one connection, of that Codex's own process as the kernel tells, and hands each message over that process's pipes. Nobody else reaches it: it listens nowhere. The bridge keeps its port for as long as the run lives, so nobody can stand in its place when Codex comes back for another connection.
 - `broken.rs`: When a limited Codex is stopped while it runs: what would run its commands is gone, or was never its.
-- `broker.rs`: The daemon's side: it starts what a caller under Tirith's own profile asks, under one at least as tight, waits, and gives its exit code. Anyone else gets nothing: it is no way out of another sandbox. A caller that is gone takes it along, and so does a daemon that stops (`watch.rs`).
+- `broker.rs`: The daemon's side: it starts what a caller under OpenBot's own profile asks, under one at least as tight, waits, and gives its exit code. Anyone else gets nothing: it is no way out of another sandbox. A caller that is gone takes it along, and so does a daemon that stops (`watch.rs`).
 - `capable.rs`: Whether a Codex will hand its commands and patches to the process that has their limit. One that would not is never started under a limit: they would run in the process that holds its state.
 - `carry.rs`: The bridge's two ways, once Codex's own process is on it. Whichever end is gone first says whether the run is lost.
-- `client.rs`: `codex` inside Tirith's sandbox (the wrapper of `<home>/net/bin`): its limit is read and the daemon is asked to apply it.
+- `client.rs`: `codex` inside OpenBot's sandbox (the wrapper of `<home>/net/bin`): its limit is read and the daemon is asked to apply it.
 - `commands.rs`: What Codex's own sandbox refuses a command besides writing and the network; and the Codex program is no deputy of its commands.
 - `doors.rs`: The daemon's two ports as a limit's profile knows them.
 - `ending.rs`: Ending what the broker started. Codex gives each command a session of its own, so its process group is not all of it: every descendant goes.
@@ -1318,23 +1318,23 @@ Files:
 - `frames.rs`: The WebSocket frames (RFC 6455) of the bridge: one peer on this machine, whole messages, no extensions.
 - `here.rs`: Where and when Codex runs, as its own environment note would say it: that note goes, for it calls the sandbox none.
 - `layers.rs`: A setting as Codex reads it: `-c`, then the chosen profile, the trusted project's file, and its config.toml.
-- `limits.rs`: The profiles of a limited Codex's two parts (`pair.rs`): Tirith's, then the limit that was asked. macOS lets a rule name the program it is for (`process-path`), so in Codex's own part what its process needs (its state, the proxy, the system's services) is that binary's alone, and not its children's. They only take away from Tirith's.
+- `limits.rs`: The profiles of a limited Codex's two parts (`pair.rs`): OpenBot's, then the limit that was asked. macOS lets a rule name the program it is for (`process-path`), so in Codex's own part what its process needs (its state, the proxy, the system's services) is that binary's alone, and not its children's. They only take away from OpenBot's.
 - `line.rs`: The command line Codex is started with: its own sandbox off, and its model told the true limit.
 - `listen.rs`: What the broker opens when the daemon starts: its socket, and the rules' door for the limited ones.
-- `mod.rs`: macOS: Codex inside Tirith's sandbox. Its own sandbox cannot start there (macOS refuses any profile but the same one again: «sandbox_apply: Operation not permitted»), and no flag keeps both. So the limit its caller asked for becomes part of the profile: a `codex` on the sandboxed PATH reads what was asked (`asked.rs`, `settings.rs`), and the daemon, from outside, starts Codex under Tirith's profile plus that limit (`limits.rs`, `broker.rs`), its own sandbox off only there, as two processes (`pair.rs`): Codex's own, which alone has its state, and its `exec-server`, which alone runs the model's commands and patches. Such a profile is never looser than Tirith's, the broker serves only a caller under Tirith's, and what runs under one gets no other. On Linux Codex's sandbox nests by itself: nothing here runs.
+- `mod.rs`: macOS: Codex inside OpenBot's sandbox. Its own sandbox cannot start there (macOS refuses any profile but the same one again: «sandbox_apply: Operation not permitted»), and no flag keeps both. So the limit its caller asked for becomes part of the profile: a `codex` on the sandboxed PATH reads what was asked (`asked.rs`, `settings.rs`), and the daemon, from outside, starts Codex under OpenBot's profile plus that limit (`limits.rs`, `broker.rs`), its own sandbox off only there, as two processes (`pair.rs`): Codex's own, which alone has its state, and its `exec-server`, which alone runs the model's commands and patches. Such a profile is never looser than OpenBot's, the broker serves only a caller under OpenBot's, and what runs under one gets no other. On Linux Codex's sandbox nests by itself: nothing here runs.
 - `mode.rs`: The three limits Codex's sandbox knows.
 - `network.rs`: What a limit leaves of this machine's ports: none of them the commands', unless the network was asked for, and the daemon's only a role's.
 - `notice.rs`: What the daemon says to a caller while its Codex runs, on that caller's own stderr: Codex's report of a failed patch drops the reason it was given.
-- `other.rs`: The other `codex` subcommands that run commands: their sandbox does not nest in Tirith's on macOS, and the caller is told.
+- `other.rs`: The other `codex` subcommands that run commands: their sandbox does not nest in OpenBot's on macOS, and the caller is told.
 - `pair.rs`: A limited Codex is two processes. Its own keeps what is its alone (its state with the sign-in it renews, the proxy) and writes in none of the folders; what runs the model's commands and patches, `apply_patch` too, is its `exec-server`, under the limit and with nothing of that state. A patch cannot be told apart inside one process, so it is not in that process.
-- `place.rs`: The broker's socket: in the user's own temporary folder of macOS (0700, whatever TMPDIR says), one for each Tirith home. Who calls is told by the kernel.
+- `place.rs`: The broker's socket: in the user's own temporary folder of macOS (0700, whatever TMPDIR says), one for each OpenBot home. Who calls is told by the kernel.
 - `profiles.rs`: Which profile of Codex's settings is chosen, and which MCP servers they start.
 - `program.rs`: Which program a name on the command line is, and Codex's own binary in it: the profile's rules name that one file.
 - `request.rs`: What a client and the broker pass between them.
 - `roots.rs`: The folders workspace-write opens for writing.
 - `sb.rs`: A profile's text as it is written: paths travel as parameters, never as profile text, each as the kernel names it.
 - `servers.rs`: MCP servers that are programs: Codex's own process takes none once it is told where commands run (it has no environment of its own then), so each runs where the commands do, under their limit, from a whole path.
-- `services.rs`: The system services a command may look up: those of Codex's own macOS policy. Codex's process keeps what Tirith's profile lets it.
+- `services.rs`: The system services a command may look up: those of Codex's own macOS policy. Codex's process keeps what OpenBot's profile lets it.
 - `settings.rs`: The limit that holds for one `codex exec`: what it asked, else what its settings say, else Codex's own default.
 - `spawn.rs`: One process started for a caller under the profile of its part, with that environment alone.
 - `stalled.rs`: Whether what runs a limited Codex's commands was stopped: a command can signal its own sandbox, that process included, and a stopped one answers no more.
@@ -1343,7 +1343,7 @@ Files:
 - `too_big.rs`: A message past the bridge's cap is not carried: its call is answered that it failed, and the daemon never holds more.
 - `upgrade.rs`: The bridge's half of a WebSocket's opening. A web page's is refused: it says where it comes from.
 - `values.rs`: TOML as Codex's settings are read from it.
-- `watch.rs`: A watch on what the broker started, outliving the daemon: when Tirith stops in the middle, also by force, that Codex and all below it are ended, never left running with nobody to answer to. The watcher is Tirith's own program with none of the caller's environment: it runs outside every sandbox.
+- `watch.rs`: A watch on what the broker started, outliving the daemon: when OpenBot stops in the middle, also by force, that Codex and all below it are ended, never left running with nobody to answer to. The watcher is OpenBot's own program with none of the caller's environment: it runs outside every sandbox.
 - `writes.rs`: What may be written: the folders workspace-write opens, less what it protects, but not by Codex's own process, whose writing is its state's alone (and only what it must). A folder above what stays cannot be renamed, or the rule would stay behind.
 
 ## `sandbox/proxy/`
@@ -1377,7 +1377,7 @@ transcript or a capture.
 
 A value lies in the system's credential store when there is one, called in-process: macOS's login Keychain, Windows
 Credential Manager, Linux's Secret Service, as service `tirith.bot.<id>` and account `<NAME>@<tag>` (the tag keeps
-two Tirith homes of one user apart). Only where no store exists is it in `<home>/bot-secrets/`: one file per bot,
+two OpenBot homes of one user apart). Only where no store exists is it in `<home>/bot-secrets/`: one file per bot,
 0600 in a 0700 folder, sealed (XSalsa20-Poly1305) with a key of that bot's made from the daemon's random key there
 (`key`, 0600, refused when others could read it). A store that is there but refuses (locked, a prompt denied) is an
 error, never a move to the file; a value in the file moves up when it is set again and a store exists. Where each
@@ -1467,7 +1467,7 @@ Files:
 - `hook_reply.rs`: What a lane's agent hears back from a hook call that was not refused.
 - `hook_rules.rs`: A tool call that breaks a rule is refused before it runs.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
-- `door.rs`: The daemon's door: loopback only, and on Linux only for this Tirith's own user, root and `[server] users`.
+- `door.rs`: The daemon's door: loopback only, and on Linux only for this OpenBot's own user, root and `[server] users`.
 - `origin.rs`: The same-origin guard in front of every route.
 - `caller.rs`: A caller's connection, and whether it comes from inside the sandbox, where nobody is the owner.
 - `peer.rs`: Who is at the other end of a loopback connection, from the kernel's table of sockets (Linux).
@@ -1485,7 +1485,7 @@ Files:
 
 ## `service/`
 
-Server mode (`tirith service …`, `tirith setup --server`): the daemon as a service of its machine, one per Tirith
+Server mode (`tirith service …`, `tirith setup --server`): the daemon as a service of its machine, one per OpenBot
 home. On Linux a systemd user unit with linger (no root, up from boot); on macOS a launchd job of the owner's, or
 with `--boot` one of the system's that runs as the owner with nobody logged in (sudo); where there is neither (a
 container) it is started in a session of its own and says that nothing brings it back. Its launchd label is
@@ -1510,7 +1510,7 @@ Files:
 
 The guide (`tirith setup`, `tirith connect [<agent>]`, `tirith doctor`). It takes a bare Mac or Linux machine to
 agents that work: what the machine needs (git, curl, bash, a git identity, the sandbox), the daemon, then for each
-agent its program (or its maker's installer), its hooks at Tirith (for Codex also trusted, through its app-server),
+agent its program (or its maker's installer), its hooks at OpenBot (for Codex also trusted, through its app-server),
 its sign-in (its own login, which works over SSH, or a token on stdin kept 0600 in `<home>/auth/` and handed to
 that agent's processes alone) and the proof: one cheap real turn as the hidden role `check`
 (`POST /api/setup/check/<agent>`), which is connected only when it answered **and** the rules heard its tool call.
@@ -1520,7 +1520,7 @@ repository does not name a release build lays over it (`TIRITH_AGENTS_FILE`, rea
 Files:
 
 - `api.rs`: The daemon's side: who it is (`GET /api/setup`) and the connection check.
-- `as_user.rs`: root's `tirith` on a server goes on as the service's user, not as a second Tirith.
+- `as_user.rs`: root's `tirith` on a server goes on as the service's user, not as a second OpenBot.
 - `ask.rs`: Asking the owner on the terminal, also under `curl | sh`.
 - `auth.rs`: An agent's token, kept private and handed to its processes alone.
 - `catalog.rs`: The agents the guide knows.
@@ -1533,8 +1533,8 @@ Files:
 - `edit.rs`: config.toml changed one change at a time, its comments kept.
 - `find.rs`: Where a program is on this machine.
 - `guide.rs`: `tirith setup`: the whole guide.
-- `hook_lines.rs`: Tirith's hook in an agent's hooks, and telling it from everyone else's.
-- `hooks.rs`: An agent's hooks pointed at Tirith, the rest of its settings kept.
+- `hook_lines.rs`: OpenBot's hook in an agent's hooks, and telling it from everyone else's.
+- `hooks.rs`: An agent's hooks pointed at OpenBot, the rest of its settings kept.
 - `host.rs`: An agent that may live on an enterprise's GitHub host (Copilot): asked, kept with its token, given to its login and all its processes, never shown.
 - `install.rs`: An agent installed with its maker's installer.
 - `login.rs`: An agent's own login on the owner's terminal, and how to do it later.
@@ -1553,13 +1553,13 @@ Files:
 - `run.rs`: Running another program in the owner's sight, or quietly.
 - `secret.rs`: A secret read from stdin, not shown.
 - `signin.rs`: An agent signed in, then proven.
-- `summary.rs`: The guide's end: what is connected, what is left, how to open Tirith.
-- `trust.rs`: Tirith's hooks trusted in Codex through its app-server.
-- `trusted.rs`: Who signs in on a server whose Tirith is another user's is added to `[server] users`, for their tunnel.
+- `summary.rs`: The guide's end: what is connected, what is left, how to open OpenBot.
+- `trust.rs`: OpenBot's hooks trusted in Codex through its app-server.
+- `trusted.rs`: Who signs in on a server whose OpenBot is another user's is added to `[server] users`, for their tunnel.
 
 ## `status/`
 
-`/status`, written by the owner in a chat or from a paired phone in its room: Tirith answers it from its own data and no
+`/status`, written by the owner in a chat or from a paired phone in its room: OpenBot answers it from its own data and no
 turn opens (no `owner.message` or `room.message` event, so no eval either, and no trigger for a next turn). It says how
 long the daemon has been up, each project's active lanes by state, today's timed routines of the bots and the last error.
 A routine is done when its own first run after its `schedule` event ended well; it is pending until then, unless it
@@ -1577,7 +1577,7 @@ Files:
 
 ## `teach/`
 
-Teaching a bot a task (docs/BOTS.md, part 5). The owner does the task once in their own Edge with Tirith's
+Teaching a bot a task (docs/BOTS.md, part 5). The owner does the task once in their own Edge with OpenBot's
 extension, `tools/teach/` (Manifest V3; the tab «Enseñar» downloads it from `/teach-extension.zip`, which the daemon serves from what it
 carries, so it works on a headless server reached through an SSH tunnel; installed with «Load unpacked», its README says how): pages (URL
 and title), clicks (the element's text, role and a short selector) and typing (the field's label and value), each
@@ -1629,7 +1629,7 @@ judge a `tirith teach do` step like any other action). From its session (`TIRITH
   answer, the screenshot a data URL from `chrome.tabs.captureVisibleTab` (16 MB at most). Its worker
   (`tools/teach/rehearse.js`) polls while a rehearsal is on, waking on its 30 s alarm, opens the page in the
   rehearsal's tab, and `act.js` clicks (a selector, else the shown element with that text) or types (a selector, else
-  the field with that label, placeholder or name) there, under the visible notice «Tirith está ensayando» until the
+  the field with that label, placeholder or name) there, under the visible notice «OpenBot está ensayando» until the
   rehearsal ends.
 - A click is refused by code before it reaches the extension (`outward.rs`, in `run.rs`) when its target's words send, buy, pay, delete or publish
   (English and Spanish, as `tools/teach/outward.js` reads them) or name what the skill lists under «Qué requiere aprobación»; the extension
@@ -1649,14 +1649,14 @@ form with the task written.
 Files:
 
 - `api.rs`: The teach API: the recording read, started and stopped (by the page, or by the extension with the token).
-- `own_page.rs`: Tirith's own page is no step of a rehearsal.
+- `own_page.rs`: OpenBot's own page is no step of a rehearsal.
 - `approvals.rs`: What the skill lists under «Qué requiere aprobación»: the click a rehearsal must stop at because the skill names it.
 - `approve.rs`: «Aprobar» on the tab «Enseñar»: the draft rehearsed loses `draft: true` from its header, so from then on the bot uses it; it is told with its next message.
 - `clock.rs`: A step's time rebuilt on the daemon's clock from the extension's `at` and `sent`.
 - `cli.rs`: `tirith teach rehearse|do|stop`: a bot rehearses a draft in the owner's Edge, from its session (`TIRITH_PROJECT` is its conversation).
 - `caller.rs`: Who may act for a bot: the page, or that bot by its own token.
 - `door.rs`: The routes that carry the bot's own token, which the gate leaves to it.
-- `cors.rs`: Who may call the teach API: the page (same origin) and Tirith's extension with the bot's token. CORS answers only the extension's origin.
+- `cors.rs`: Who may call the teach API: the page (same origin) and OpenBot's extension with the bot's token. CORS answers only the extension's origin.
 - `events.rs`: The extension's steps: one, or `{"steps": [...]}`, kept only while recording, masked again and timed on the daemon's clock.
 - `ext_api.rs`: The extension's side of a rehearsal, with the bot's token: the long poll for the next step, and its answer with a result and a screenshot.
 - `hand.rs`: The owner's words while recording, and the turn at stop: the steps with those words, the skill template, what to ask.
