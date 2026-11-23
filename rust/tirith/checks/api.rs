@@ -222,6 +222,11 @@ async fn api_rejects_a_spoofed_role() {
     assert_eq!(d.code("POST", &path, &owner, yes).await, 200);
     let answer = format!("SELECT COUNT(*) FROM owner_items WHERE id = '{CARD}' AND answer = 'yes'");
     assert_eq!(d.count(&answer), 1);
+    // The answer also stands in the chat as the owner's own message.
+    assert_eq!(
+        d.count("SELECT COUNT(*) FROM chat WHERE role = 'owner' AND text = 'yes'"),
+        1
+    );
 }
 
 #[tokio::test]
