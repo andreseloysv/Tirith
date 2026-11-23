@@ -194,7 +194,9 @@ color = "#8c8c8c"
 # last good factory kept running; the manager and the page still hear it.
 # metric.red and review.done to the manager are phone = false too: nobody
 # asked for that answer, and when the owner is needed the manager opens
-# a card.
+# a card. plan.empty too: its answers announced merges already kept off
+# the phones (8 in 24 h put Interrupciones por ítem in red); the manager
+# still wakes, and opens a card when the next goal is missing.
 [[routes]]
 on = "owner.message"
 to = "manager"
@@ -267,7 +269,7 @@ phone = false
 on = "plan.empty"
 to = "manager"
 mode = "turn"
-phone = true
+phone = false
 
 [[routes]]
 on = "deploy.done"
