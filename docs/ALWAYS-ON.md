@@ -1,6 +1,6 @@
-# Tirith always on, on a Mac mini
+# OpenBot always on, on a Mac mini
 
-A Mac mini on mains power can run Tirith day and night, with no screen, and your phone reaches it from anywhere.
+A Mac mini on mains power can run OpenBot day and night, with no screen, and your phone reaches it from anywhere.
 It needs five things:
 
 1. [The daemon starts by itself](#1-the-daemon-starts-by-itself): `tirith service install`.
@@ -14,7 +14,7 @@ Names of settings are given in English, then as a Mac in Spanish shows them.
 
 ## 1. The daemon starts by itself
 
-If Tirith already runs (started by `./run` or by the app), stop it first, when no lane is working, because two
+If OpenBot already runs (started by `./run` or by the app), stop it first, when no lane is working, because two
 daemons cannot share the port (7717 unless `[server] port` says otherwise):
 
 ```bash
@@ -22,7 +22,7 @@ tirith status                                        # wait for "no lane is work
 kill $(lsof -t -iTCP:7717 -sTCP:LISTEN)
 ```
 
-Then, as the user who will run Tirith (no `sudo`):
+Then, as the user who will run OpenBot (no `sudo`):
 
 ```bash
 tirith service install
@@ -82,7 +82,7 @@ sudo pmset -a autorestart 1
 pmset -g custom | grep autorestart
 ```
 
-This only turns the Mac on. Tirith starts when you are logged in, which is the next step.
+This only turns the Mac on. OpenBot starts when you are logged in, which is the next step.
 
 ## 4. Someone is logged in
 
@@ -92,14 +92,14 @@ This only turns the Mac on. Tirith starts when you are logged in, which is the n
 |---|---|---|
 | The disk | locked until someone types the password | readable by whoever has the Mac |
 | Automatic login | does not exist | can be turned on |
-| After a power cut | the Mac waits: log in by hand | Tirith comes back by itself |
+| After a power cut | the Mac waits: log in by hand | OpenBot comes back by itself |
 
 **With FileVault off:** System Settings > Users & Groups > **Automatically log in as** (*Usuarios y grupos >
 Iniciar sesión automáticamente como*), and choose the user who installed the service. Anyone who can touch the Mac
 can then get into that session, so this is for a Mac in a place you trust.
 
 **With FileVault on:** after every power cut or restart, also one for a macOS update, type the password at the Mac.
-Nothing of Tirith runs until then and the phone gets no answer. Since macOS 26, with Remote Login on, SSH from your
+Nothing of OpenBot runs until then and the phone gets no answer. Since macOS 26, with Remote Login on, SSH from your
 own network can unlock the disk (`man apple_ssh_and_filevault`), but that opens no session: you still log in at the
 Mac or by Screen Sharing on your own network. Do not open either of them to the internet for this.
 
@@ -120,7 +120,7 @@ agents orders. If a phone is lost, `tirith room forget <phone key id>` cuts it o
 
 ## Try it before you leave
 
-1. When no lane is working, restart the Mac and do not open Tirith. With FileVault, log in.
+1. When no lane is working, restart the Mac and do not open OpenBot. With FileVault, log in.
 2. `tirith service status` says alive, and `pmset -g assertions | grep caffeinate` prints a line.
 3. Turn the phone's Wi-Fi off and send `/models` in a project's chat: the Mac answers without calling a model.
 

@@ -1,4 +1,4 @@
-# Tirith demo: script (2:32, limit 3:00)
+# OpenBot demo: script (2:32, limit 3:00)
 
 For the hackathon judges. Video: `out/tirith-demo.mp4` (1920x1080, H.264/AAC), loop for the README: `out/tirith-demo.gif`.
 Everything on screen is the real page (`web/index.html`) on the demo story in `story.mjs`; the recorder drives it
@@ -20,22 +20,22 @@ carries an on-screen caption, so the video reads with the sound off. Words used:
 ## Narration
 
 **1. Problem**
-> I run several coding agents at once. All day I ask: what is everyone doing, is something stuck, is something waiting for me? So I built Tirith, a manager that runs the plan.
+> I run several coding agents at once. All day I ask: what is everyone doing, is something stuck, is something waiting for me? So I built OpenBot, a manager that runs the plan.
 
 **2. One request**
 > I write one request in the chat: add a dark mode, and make the scan faster. The manager reads the plan, adds the items, writes a brief for each, and starts the agents. I watch it work, live, like in a terminal.
 
 **3. The plan**
-> The plan now has two new steps, each with a progress bar and the agent working on it. No plan item, no agent: Tirith refuses to start one without it.
+> The plan now has two new steps, each with a progress bar and the agent working on it. No plan item, no agent: OpenBot refuses to start one without it.
 
 **4. A rule in code**
 > Now a rule. Wren tries to run the tests directly. A hook blocks it before it runs, and tells it the exact command to use. Wren switches to it, and the run shows up in Pipelines. Rules are code that blocks, not text the agent may ignore.
 
 **5. Claim check, auto-merge**
-> When Wren reports done, Tirith checks the claims against the real change: the files, the tests, the recorded test run. They match, so it merges on its own, and the plan ticks itself. Merging is never a question for me.
+> When Wren reports done, OpenBot checks the claims against the real change: the files, the tests, the recorded test run. They match, so it merges on its own, and the plan ticks itself. Merging is never a question for me.
 
 **6. Health dot**
-> The dot in the header watches Tirith itself. New code landed, the collector reloaded: amber, then green again, with nobody touching it.
+> The dot in the header watches OpenBot itself. New code landed, the collector reloaded: amber, then green again, with nobody touching it.
 
 **7. A real decision**
 > And only a real decision reaches me. Ship dark mode in this release, or hold it? One click, and the manager does the rest.
@@ -44,4 +44,4 @@ carries an on-screen caption, so the video reads with the sound off. Words used:
 > Behind it, Muse Spark, from the Meta Model API, summarizes each agent's log in one sentence, spots what needs the owner, and gives every agent a lasting name. Without a key, everything still works.
 
 **Closing**
-> Tirith. Built during the hackathon, and on GitHub. If it saves you a question, star it.
+> OpenBot. Built during the hackathon, and on GitHub. If it saves you a question, star it.
