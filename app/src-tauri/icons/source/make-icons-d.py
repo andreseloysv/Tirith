@@ -1,17 +1,20 @@
-"""Every Tirith icon from option D (icon-d-1024.png, the owner's lumaform hero, deep orange and as bright as the
-bots behind it). The art is rendered by hero3d/ (Blender 5.2, from the repo root):
+"""Every app icon size from one 1024 px square of art: argv[1], else option D (icon-d-1024.png, the owner's
+lumaform hero, rendered by hero3d/ in Blender 5.2, from the repo root:
   Blender -b --factory-startup -P app/src-tauri/icons/source/hero3d/build.py -- --size=1024 --samples=64
     --hero=app/src-tauri/icons/source/hero3d/mesh.glb --herohue=0.463 --heroemit=1.5 --herosat=1.08
-    --out=app/src-tauri/icons/source/icon-d-1024.png
-Then, from the repo root: python3 app/src-tauri/icons/source/make-icons-d.py
+    --out=app/src-tauri/icons/source/icon-d-1024.png).
+Since 2026-11-23 the icon is icon-bot-1024.png, the owner's pick: a bot drawn as the faces are (one flat lime
+body #8fd14f in cel shading, the Calm eyes of their expression sheet in ink) filling most of a dark stage,
+with a soft glow and a light rim. From the repo root:
+  python3 app/src-tauri/icons/source/make-icons-d.py app/src-tauri/icons/source/icon-bot-1024.png
 Tauri PNGs and the .ico are full-bleed rounded squares; icon.png and the .icns follow the
 macOS grid (824 px tile on a 1024 canvas with a soft shadow); the site logos are opaque."""
-import os, shutil, subprocess, tempfile
+import os, shutil, subprocess, sys, tempfile
 from PIL import Image, ImageDraw, ImageFilter
 
 ICONS = 'app/src-tauri/icons'
 SRC = f'{ICONS}/source'
-art = Image.open(f'{SRC}/icon-d-1024.png').convert('RGB')
+art = Image.open(sys.argv[1] if len(sys.argv) > 1 else f'{SRC}/icon-d-1024.png').convert('RGB')
 
 def mask(size, frac=0.2237, k=4):
     m = Image.new('L', (size * k, size * k), 0)
