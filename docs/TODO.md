@@ -895,7 +895,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Mezclar la rama flat-faces (las caras de los bots como el ejemplo del dueño: los 13 cuerpos de su referencia más la estrella del icono, en 3D de un solo color plano, ojos de cápsula pintados, poses y reacciones por estado, una personalidad por color; y Working now como un árbol de caras: jefe arriba y sus ayudantes abajo) sin cambiar nada más (check: `git merge-base --is-ancestor b5085580 HEAD`)
 - [x] Mezclar la rama bot-icon (el icono de la app que eligió el dueño: el bot lima con destello, sin estrellas y grande, en todos los tamaños) sin cambiar nada más (check: `test -f app/src-tauri/icons/source/icon-bot-1024.png`)
 - [x] Mezclar la rama safari-signin (los managers piden iniciar sesión solo en el Safari del dueño, con el enlace de la página; nunca en el navegador propio de OpenBot) sin cambiar nada más (check: `grep -q "always in their Safari" factory/prompts/manager.md`)
-- [ ] Mezclar la rama safari-click (los managers y bots pueden pulsar y escribir en el Safari del dueño sin preguntar, como eligió: tirith safari click y type) sin cambiar nada más (check: `test -f rust/tirith/src/sandbox/safari/act.rs && grep -q "safari click" rust/tirith/assets/usage.txt`)
+- [x] Mezclar la rama safari-click (los managers y bots pueden pulsar y escribir en el Safari del dueño sin preguntar, como eligió: tirith safari click y type) sin cambiar nada más (check: `test -f rust/tirith/src/sandbox/safari/act.rs && grep -q "safari click" rust/tirith/assets/usage.txt`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
