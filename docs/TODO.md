@@ -889,7 +889,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Mezclar la rama openbot-docs (el producto se llama OpenBot en el README, docs y la web pública; el comando y las carpetas siguen siendo tirith) sin cambiar nada más (check: `git merge-base --is-ancestor 10cc4a66 HEAD`)
 - [x] Mezclar la rama openbot-web (la página y la app de escritorio se llaman OpenBot: título, barra lateral, ventana y productName; los identificadores siguen siendo tirith) sin cambiar nada más (check: `git merge-base --is-ancestor 1d90d454 HEAD`)
 - [x] Mezclar la rama openbot-daemon (lo que dicen el daemon y la fábrica usa el nombre OpenBot: avisos, teléfono, CLI, prompts; los identificadores siguen siendo tirith) sin cambiar nada más (check: `git merge-base --is-ancestor 25cd26d5 HEAD`)
-- [ ] Mezclar la rama phone-room-role (la lista de salas del teléfono dice qué rol habla en cada sala, para que el selector de modelos del teléfono cambie el de ese bot o manager) sin cambiar nada más (check: `git merge-base --is-ancestor d0502c50 HEAD`)
+- [x] Mezclar la rama phone-room-role (la lista de salas del teléfono dice qué rol habla en cada sala, para que el selector de modelos del teléfono cambie el de ese bot o manager) sin cambiar nada más (check: `git merge-base --is-ancestor d0502c50 HEAD`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
