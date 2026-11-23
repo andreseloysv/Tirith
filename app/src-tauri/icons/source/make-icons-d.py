@@ -1,0 +1,49 @@
+"""Every Tirith icon from option D (icon-d-640.png, the owner's lumaform hero).
+Run from the repo root: python3 app/src-tauri/icons/source/make-icons-d.py
+Tauri PNGs and the .ico are full-bleed rounded squares; icon.png and the .icns follow the
+macOS grid (824 px tile on a 1024 canvas with a soft shadow); the site logos are opaque."""
+import os, shutil, subprocess, tempfile
+from PIL import Image, ImageDraw, ImageFilter
+
+ICONS = 'app/src-tauri/icons'
+SRC = f'{ICONS}/source'
+art = Image.open(f'{SRC}/icon-d-640.png').convert('RGB').resize((1024, 1024), Image.LANCZOS)
+
+def mask(size, frac=0.2237, k=4):
+    m = Image.new('L', (size * k, size * k), 0)
+    ImageDraw.Draw(m).rounded_rectangle((0, 0, size * k - 1, size * k - 1), radius=int(size * k * frac), fill=255)
+    return m.resize((size, size), Image.LANCZOS)
+
+def tile(size):
+    t = art.resize((size, size), Image.LANCZOS).convert('RGBA')
+    t.putalpha(mask(size))
+    return t
+
+def macos():
+    canvas = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0))
+    sh = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0))
+    sh.paste(Image.new('RGBA', (824, 824), (0, 0, 0, 110)), (100, 112), mask(824))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(14)))
+    canvas.alpha_composite(tile(824), (100, 100))
+    return canvas
+
+mac = macos()
+art.save(f'{SRC}/tirith-glow-1024.png')
+mac.save(f'{SRC}/tirith-glow-macos-1024.png')
+mac.resize((512, 512), Image.LANCZOS).save(f'{ICONS}/icon.png')
+for name, n in {'32x32': 32, '64x64': 64, '128x128': 128, '128x128@2x': 256, 'StoreLogo': 50,
+                **{f'Square{s}x{s}Logo': s for s in (30, 44, 71, 89, 107, 142, 150, 284, 310)}}.items():
+    tile(n).save(f'{ICONS}/{name}.png')
+tile(256).save(f'{ICONS}/icon.ico', sizes=[(s, s) for s in (16, 24, 32, 48, 64, 256)])
+
+with tempfile.TemporaryDirectory() as d:
+    iconset = f'{d}/icon.iconset'
+    os.mkdir(iconset)
+    for s in (16, 32, 128, 256, 512):
+        mac.resize((s, s), Image.LANCZOS).save(f'{iconset}/icon_{s}x{s}.png')
+        mac.resize((s * 2, s * 2), Image.LANCZOS).save(f'{iconset}/icon_{s}x{s}@2x.png')
+    subprocess.run(['iconutil', '-c', 'icns', iconset, '-o', f'{ICONS}/icon.icns'], check=True)
+
+art.save('site/img/tirith-logo.png')
+art.resize((64, 64), Image.LANCZOS).save('site/img/tirith-logo-64.png')
+shutil.copy('site/img/tirith-logo-64.png', 'web/img/tirith-logo-64.png')
