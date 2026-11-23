@@ -1,11 +1,13 @@
-// Settings view (the old v-models.js, v-theme.js and the setup cards): Appearance (System / Light / Dark), the
-// models of the roles with no screen of their own (the rest pick theirs on their screen), the commit guard and
-// the autopilot of each project. Inside a project
+// Settings view (the old v-models.js, v-theme.js and the setup cards): Appearance (System / Light / Dark), Access
+// behind its button (#/settings/access), the factory's health, the models of the roles with no screen of their own
+// (the rest pick theirs on their screen), the commit guard and the autopilot of each project. Inside a project
 // its own two cards (autopilot, commit guard) come first; the rest is the same for every project, and says so.
 import { html, useState } from '../../vendor/preact-htm.js';
 import { useStore, useFetch, api } from '../store.js';
 import { RoleCard, roleList } from './settings/models.js';
 import { useAction } from './settings/ui.js';
+import { AccessCard, AccessPage } from './settings/access.js';
+import { Health } from './settings/health.js';
 
 const THEME_KEY = 'tirith.theme';
 const THEMES = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
@@ -58,12 +60,15 @@ function AutopilotCard({ project }) {
     ${error ? html`<div class="ierr">${error}</div>` : null}</div>`;
 }
 
-export function Settings({ project }) {
-  const [M, reload, err] = useFetch('/api/models', ['models']);
+export function Settings({ project, sub }) {
+  const [M, reload, err] = useFetch(sub === 'access' ? '' : '/api/models', ['models']);
+  if (sub === 'access') return html`<${AccessPage} />`;
   const own = html`<${AutopilotCard} project=${project} /><${GuardCard} project=${project} />`;
   return html`<section class="msettings">
     ${project ? html`${own}<h2 class="rsec">For all projects</h2>` : null}
     <${Appearance} />
+    <${AccessCard} />
+    <${Health} />
     <p class="mut sm mlead">Roles come from the factory; their model and effort from <code>config.toml</code> under <code>[roles]</code>. What you save here overrides it until you go back to config.toml.</p>
     <p class="mut sm mlead">Only the roles with no screen of their own are here. The others choose their model on their own screen: the Project Manager in each project's chat, and each bot on its bot screen.</p>
     ${err && !M ? html`<div class="ierr">Could not read the models: ${err.message}</div>` : null}

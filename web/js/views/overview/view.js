@@ -1,34 +1,48 @@
-// Overview: the old page's .ovg grid. With no project selected the main column shows everything: status (metrics
-// and the CEO's last pass), every plan, what needs you, running pipelines, working agents. Inside a project it
-// shows that project only: its plan, its cards, and its setup, pipelines and agents when there is something to see;
-// the health of the whole and the CEO stay out. The chat on the right is the selected project's conversation.
+// Overview — the Home, redone on 2026-11-23 for anyone, not only a developer («I only want to see things that need
+// to be done or where the bots are working»): a greeting and one sentence, who works now — each boss with the titles
+// of its helpers (working.js), a few lines — and the questions that wait for the owner, whole, with their answers.
+// Inside a project: its name, its questions, its helpers, what is up next in its plan (next.js) and its chat on the
+// right. Nothing that is done shows; the factory's health is in Settings; nothing at all: the agents asleep.
 import { html } from '../../../vendor/preact-htm.js';
-import { useStore, useFetch } from '../../store.js';
-import { ACTIVE } from '../../common.js';
+import { useStore } from '../../store.js';
+import { useUnread } from '../../unread.js';
+import { keyOf } from '../bots.js';
 import { Chat } from '../chat.js';
-import { Plan } from './plan.js';
 import { openCards } from '../need.js';
-import { Status } from './status.js';
-import { Needs, Setup } from './setup.js';
-import { Pipelines } from './pipes.js';
-import { Agents } from './agents.js';
+import { hit } from './bits.js';
+import { useWho } from './who.js';
+import { crew } from './crew.js';
+import { Hello } from './hello.js';
+import { Asks } from './asks.js';
+import { Working } from './working.js';
+import { Next } from './next.js';
+import { Quiet } from './quiet.js';
+import { Setup } from './setup.js';
+
+const newest = (a, b) => String(b.at).localeCompare(String(a.at));
 
 export function Overview({ project }) {
   const s = useStore();
-  const [metrics] = useFetch(project ? '' : '/api/metrics', ['metrics', 'review']);
+  const who = useWho();
+  const bots = useUnread().bots.filter((b) => b.show !== false);
   const q = String(s.q || '').trim().toLowerCase();
-  const lanes = Object.values(s.lanes);
-  const projects = project ? s.projects.filter((p) => p.id === project) : s.projects;
-  const working = lanes.filter((l) => ACTIVE.includes(l.status) && (!project || l.project === project)).length;
   const p = s.projects.find((x) => x.id === project);
-  const needs = openCards(s);
-  return html`<div class="ovg"><div class="ovmain">
-      ${project ? null : html`<${Status} data=${metrics} working=${working} />`}
-      <${Plan} projects=${projects} lanes=${lanes} q=${q} />
-      <${Needs} owner=${needs} project=${project} projects=${s.projects} q=${q} />
-      ${p ? html`<${Setup} project=${p.id} name=${p.name} />` : null}
-      <${Pipelines} project=${project} projects=${s.projects} q=${q} />
-      <${Agents} lanes=${lanes} events=${s.events} projects=${s.projects} project=${project} q=${q} needs=${needs} />
-    </div>
-    <aside class="ovside"><${Chat} key=${project || ''} project=${project || ''} /></aside></div>`;
+  const cards = openCards(s);
+  const asks = cards.filter((o) => (!p || o.project === p.id || (!o.project && o.kind === 'device')) && hit(q, o.question, o.kind, o.project)).sort(newest);
+  const shown = new Set(bots.map(keyOf));
+  const groups = crew(s, { project: p ? p.id : '', q, cards, shown: (k) => shown.has(k) });
+  const helpers = groups.reduce((n, g) => n + g.helpers.length, 0);
+  const lanes = p ? Object.values(s.lanes).filter((l) => l.project === p.id) : [];
+  const calm = !asks.length && !groups.length;
+  const main = html`<div class="home">
+    <${Hello} place=${p ? p.name || p.id : ''} asks=${asks.length} helpers=${helpers} bosses=${groups.length} line=${!(calm && !p && !q)} />
+    ${p ? html`<${Setup} project=${p.id} name=${p.name} />` : null}
+    <${Working} groups=${groups} who=${who} />
+    <${Asks} list=${asks} who=${who} />
+    ${calm && !p && !q ? html`<${Quiet} faces=${bots} />` : null}
+    ${p ? html`<${Next} p=${p} lanes=${lanes} q=${q} />` : null}
+  </div>`;
+  if (!p) return html`<div class="hm-page">${main}</div>`;
+  return html`<div class="ovg hm-proj"><div class="hm-page">${main}</div>
+    <aside class="ovside"><${Chat} key=${p.id} project=${p.id} /></aside></div>`;
 }

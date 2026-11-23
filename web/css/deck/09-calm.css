@@ -1,0 +1,66 @@
+/* The calm look (2026-11-23, the owner: «use this black tone for the menu and the other for the chat»): the
+   sidebar one shade darker than the page (their example's #0e0e0e and #121212, a #1c1c1c line between), fills
+   instead of hairlines, plain sentence-case type in the shell, the faces' hover card and their drag. */
+:root {
+  --sans: -apple-system, "SF Pro Text", Inter, system-ui, "Segoe UI", sans-serif;
+  --bg: #fafaf9; --page: #fafaf9; --side: #f2f2f0; --side-line: #e6e6e3; --nav-bg: #f2f2f0;
+  --raise: #fff; --raise2: #efefed; --tile: #e7e7e4; --well: #f4f4f2; --card-edge: rgba(0,0,0,.09); --card-edge2: rgba(0,0,0,.06);
+  --line: rgba(0,0,0,.08); --line2: rgba(0,0,0,.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121212; --page: #121212; --side: #0e0e0e; --side-line: #1c1c1c; --nav-bg: #0e0e0e; --fg: #f5f5f5; --mut: #9d9d9d; --faint: #6b6b6b;
+    --raise: #1a1a1a; --raise2: #1f1f1f; --tile: #202020; --well: #121212; --card-edge: #353535; --card-edge2: transparent;
+    --line: rgba(255,255,255,.09); --line2: rgba(255,255,255,.2); --soft: rgba(255,255,255,.05);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121212; --page: #121212; --side: #0e0e0e; --side-line: #1c1c1c; --nav-bg: #0e0e0e; --fg: #f5f5f5; --mut: #9d9d9d; --faint: #6b6b6b;
+  --raise: #1a1a1a; --raise2: #1f1f1f; --tile: #202020; --well: #121212; --card-edge: #353535; --card-edge2: transparent;
+  --line: rgba(255,255,255,.09); --line2: rgba(255,255,255,.2); --soft: rgba(255,255,255,.05);
+}
+
+/* the sidebar: its own black, the selected face and menu row on a soft tile */
+#nav { background: var(--side); border-right: 1px solid var(--side-line); }
+.nbot:hover, .nbot.on { background: var(--tile); box-shadow: none; }
+.brand { font: 600 16px/1.2 var(--sans); letter-spacing: -.01em; }
+.grp { font: 500 12.5px/1.6 var(--sans); text-transform: none; letter-spacing: 0; color: var(--mut); }
+.nav { font-size: 14px; border-radius: 12px; color: var(--ink3); }
+.nav:hover, .nav.on, .nav.nsubi.on { background: var(--tile); color: var(--fg); }
+.nav.nsubi { font-size: 13.5px; }
+
+/* the header: where you are, in words, and the search on a fill */
+#top { border-bottom: 0; }
+.crumb { font: 500 15px/1.2 var(--sans); text-transform: none; letter-spacing: 0; color: var(--mut); }
+.crumb .last { color: var(--fg); font-weight: 600; }
+.cmd { background: var(--raise2); border: 1px solid transparent; height: 36px; }
+.cmd:focus-within { border-color: var(--line2); }
+.cmd kbd { border: 0; background: var(--tile); }
+
+/* a face's card while the pointer rests on it: its small face and name, then where it works or its last message */
+.fcard { position: fixed; z-index: 80; width: max-content; min-width: 190px; max-width: 340px; margin: 0; padding: 11px 15px 12px;
+  border-radius: 18px; background: var(--raise2); border: 1px solid var(--card-edge); box-shadow: 0 16px 44px rgba(0,0,0,.45);
+  pointer-events: none; animation: fcard-in .14s ease-out both; }
+@keyframes fcard-in { from { opacity: 0; transform: translateX(-6px); } }
+.fcard-h { display: flex; align-items: center; gap: 8px; font-size: 15px; line-height: 1.3; color: var(--fg); }
+.fcard-h b { font-weight: 600; }
+.fcard-f { flex: none; display: grid; place-items: center; width: 22px; height: 22px; }
+.fcard-t { margin: 4px 0 0; color: var(--mut); font-size: 14px; line-height: 1.4; overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* dragging a face to its place: it lifts and follows the pointer, the others slide to make room */
+.nbots.dragging, .nbot.lift { cursor: grabbing; }
+.nbots.dragging .nbot:not(.lift) { transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
+.nbot.lift { z-index: 3; background: var(--tile); box-shadow: 0 14px 34px rgba(0,0,0,.45); }
+@media (prefers-reduced-motion: reduce) { .fcard { animation: none; } .nbots.dragging .nbot:not(.lift) { transition: none; } }
+
+/* Settings: Access behind its button, and its page with the way back */
+.setopen { display: flex; align-items: center; gap: 16px; }
+.setopen .phead { flex: 1; min-width: 0; margin: 0; }
+.setsub { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.setback { align-self: flex-start; margin: 8px var(--page-pad) 0; padding: 7px 15px 7px 11px; border-radius: 999px; background: var(--raise2); color: var(--fg); font-size: 14px; }
+.setback:hover { background: var(--tile); }
+
+/* every chat's head in plain words: who speaks, then where */
+.mchat .mc-head h2 { font: 600 15px/1.3 var(--sans); text-transform: none; letter-spacing: 0; color: var(--fg); }
+.mchat .mc-head h2 .mc-of { font: 400 15px/1.3 var(--sans); color: var(--mut); margin-left: 6px; }

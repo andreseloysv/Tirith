@@ -2,11 +2,11 @@
 // waiting on its question. The same card shows in "Needs you", in the chat where it was asked and on the lane whose
 // question it carries (a card made with --lane), so the owner can answer it wherever they are looking.
 import { html, useState } from '../../vendor/preact-htm.js';
-import { api, setUi } from '../store.js';
+import { setUi } from '../store.js';
 import { ago, go } from '../common.js';
+import { useAnswer, WORDS } from './answer.js';
 
 export const KIND = { credentials: 'Credentials', payment: 'Payment', account: 'Account', device: 'Device', decision: 'Decision', approval: 'Approval', lane: 'Agent' };
-const WORDS = ['decision', 'lane']; /* answered in words only: no Done button */
 
 /** The open questions: the daemon's cards, and the lanes waiting on a question that no card carries (read live from
     the lanes, so one appears and goes with its lane, not only when the page loads). */
@@ -22,21 +22,9 @@ export function openCards(s) {
     answered or closed card (its label: 'Answered', 'Closed', else 'Done'), drawn without its answer box; `here`: drawn on its own lane, so without the link to it. */
 export function Need({ o, p, full, done, here }) {
   const [draft, setDraft] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const send = async (answer) => {
-    answer = String(answer || '').trim();
-    if (!answer || busy) return;
-    setBusy(true); setErr('');
-    try { await api('POST', `/api/owner/${encodeURIComponent(o.id)}`, { answer }); setDraft(''); } catch (e) { setErr(String(e.message || e)); }
-    setBusy(false);
-  };
+  const { busy, err, send: answer, close } = useAnswer(o); /* close: a card that no longer applies; its chat says so */
+  const send = async (text) => { if (await answer(text)) setDraft(''); };
   const words = WORDS.includes(o.kind) || !!o.lane; /* a lane's question wants words, not Done */
-  const close = async () => { /* a card that no longer applies: closed, and its project's chat says so */
-    setBusy(true); setErr('');
-    try { await api('POST', `/api/owner/${encodeURIComponent(o.id)}/close`, { why: 'no longer needed' }); } catch (e) { setErr(String(e.message || e)); }
-    setBusy(false);
-  };
   const lane = o.lane && !here ? html`<button type="button" class="nlane" onClick=${() => { setUi('openLane', o.lane); go('agents', o.project); }}
     title="Open the agent this question is for">${o.kind === 'lane' ? 'An agent asks the manager' : 'For an agent'}${o.item ? `: ${o.item.slice(0, 90)}${o.item.length > 90 ? '…' : ''}` : ''}</button>` : null;
   return html`<li class=${`ncard${done ? ' done' : ''}`}>

@@ -1,0 +1,38 @@
+/* a question that waits for you: who asks, the question whole, and its answer where it is read */
+.hm-ask { margin-top: 12px; padding: 16px 18px 16px 20px; border-radius: 22px; background: var(--raise); border: 1px solid var(--card-edge2); }
+.hm-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.hm-who .hm-face { width: 30px; height: 30px; }
+.hm-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 14.5px; color: var(--fg); }
+.hm-name b { font-weight: 600; white-space: nowrap; }
+.hm-name span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mut); }
+.hm-name:hover b { text-decoration: underline; text-underline-offset: 3px; }
+.hm-when { margin-left: auto; flex: none; color: var(--faint); font-size: 13px; white-space: nowrap; }
+.hm-x { flex: none; width: 28px; height: 28px; border-radius: 50%; color: var(--mut); font-size: 19px; line-height: 28px; text-align: center; }
+.hm-x:hover { background: var(--soft); color: var(--fg); }
+
+.hm-q { margin: 12px 0 14px; font-size: 16px; line-height: 1.55; color: var(--fg); overflow-wrap: anywhere; }
+.hm-q .md { font: inherit; color: inherit; line-height: inherit; }
+.hm-q .md p, .hm-q .md ul, .hm-q .md ol { margin: 0 0 .65em; }
+.hm-q .md > :last-child { margin-bottom: 0; }
+.hm-q .md code { font-size: .88em; }
+.hm-about { display: block; max-width: 100%; margin: -4px 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mut); font-size: 13.5px; }
+.hm-about:hover { color: var(--fg); }
+
+/* the answer: quick buttons, then words on a dark well with the round send button */
+.hm-reply { display: flex; align-items: flex-end; gap: 8px; }
+.hm-btn { flex: none; height: 40px; padding: 0 18px; border-radius: 999px; background: var(--raise2); color: var(--fg); font-size: 15px; font-weight: 500; text-align: center; }
+.hm-btn:hover { background: var(--tile); }
+.hm-btn.hm-yes { background: var(--fg); color: var(--bg); }
+.hm-btn:disabled { opacity: .5; cursor: default; }
+.hm-box { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 6px; min-height: 40px; padding: 4px 4px 4px 16px; border-radius: 20px; background: var(--well); border: 1px solid transparent; cursor: text; }
+.hm-box:focus-within { border-color: var(--line2); }
+.hm-box textarea { flex: 1; min-width: 0; max-height: 200px; margin: 0; padding: 6px 0; resize: none; overflow-y: auto; outline: 0;
+  border: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; color: var(--fg); font: 15px/1.45 var(--sans); }
+.hm-box textarea::placeholder { color: var(--faint); }
+.hm-send { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--fg); color: var(--bg); }
+.hm-send:disabled { opacity: .22; cursor: default; }
+.hm-err { margin: 8px 0 0; color: var(--red-fg); font-size: 13.5px; }
+/* a fix the owner can make at once (a project's commit guard) */
+.hm-fix .hm-shield { width: 30px; height: 30px; border-radius: 50%; background: var(--raise2); color: var(--warn-fg); }
+.hm-fix .hm-who b { font-size: 15px; font-weight: 600; }
+.hm-why { color: var(--mut); }

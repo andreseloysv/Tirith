@@ -1,4 +1,4 @@
-// Small pieces of the Overview: a memo wrapper, the old page's icons (as SVG strings) and the agent avatar.
+// Small pieces of the Overview: a memo wrapper and the old page's icons (as SVG strings), text helpers.
 import { html, h, Component } from '../../../vendor/preact-htm.js';
 
 /** `C` re-rendered only when one of its props changed (shallow); `skip` props are compared through `${key}Sig`. */
@@ -33,18 +33,6 @@ export const CHEV = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden
 export const PAUSE = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M3.5 2.5v7M8.5 2.5v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
 export const RESUME = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M3.5 2.2l6 3.8-6 3.8z" fill="currentColor"/></svg>';
 export const REFRESH = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 11-1.6-3.7M13.4 2.4v3.1h-3.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
-const PALETTE = ['#2f6fed', '#e0661f', '#2e9f4f', '#c2358f', '#b08400', '#7c4dd6', '#138f8f', '#d63a3a', '#8a5a3c', '#5b6b86'];
-function hash(s) { let x = 0; for (let i = 0; i < s.length; i++) x = (x * 31 + s.charCodeAt(i)) | 0; return Math.abs(x); }
-const GLYPH = 'M12 3a5 5 0 100 10 5 5 0 000-10z M4 21c0-5 3.5-7 8-7s8 2 8 7z';
-
-/** The old round avatar: a gradient of the agent's color with a white glyph. */
-export function Avatar({ id, size = 36 }) {
-  const c = PALETTE[hash(String(id || '')) % PALETTE.length];
-  const g = Math.round(size * 0.56);
-  return html`<span class="avatar" style=${`width:${size}px;height:${size}px;background:linear-gradient(135deg, color-mix(in srgb, ${c} 62%, #fff), ${c})`}>
-    <svg width=${g} height=${g} viewBox="0 0 24 24" aria-hidden="true"><path d=${GLYPH} fill="#fff" /></svg></span>`;
-}
 
 /** Plain text with `code` spans, as the old plan drew item texts. */
 export function Rich({ t }) {
