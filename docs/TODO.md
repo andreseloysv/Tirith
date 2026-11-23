@@ -885,7 +885,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [ ] Mezclar la rama simple-models (selector de modelo: una sola lista de lo que puede ejecutarse, una fila de esfuerzo, se guarda al tocar; y el factory de reserva conserva los agentes de config.toml) sin cambiar nada más (check: `git merge-base --is-ancestor 565dbe2e HEAD`)
 - [x] Mezclar la rama icon-option-d (iconos opción D: app de escritorio, web y sitio) sin cambiar nada más (check: `git merge-base --is-ancestor f82e0570 HEAD`)
 - [x] Mezclar la rama icon-d-orange (iconos: la estrella naranja oscuro y tan luminosa como los bots, y la escena de Blender que la renderiza en icons/source/hero3d) sin cambiar nada más (check: `git merge-base --is-ancestor fe385b50 HEAD`)
-- [ ] Mezclar la rama routine-partial (el aviso de una rutina que hizo parte de su tarea dice «a medias» en vez de «falló» y nunca repite «no pudo») sin cambiar nada más (check: `git merge-base --is-ancestor b875c1e3 HEAD`)
+- [x] Mezclar la rama routine-partial (el aviso de una rutina que hizo parte de su tarea dice «a medias» en vez de «falló» y nunca repite «no pudo») sin cambiar nada más (check: `git merge-base --is-ancestor b875c1e3 HEAD`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
