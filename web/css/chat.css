@@ -46,9 +46,16 @@ a.mc-file { text-decoration: none; }
 .mc-mrow .mc-danger { border-color: var(--red); color: var(--red); background: transparent; }
 .mc-mrow .mc-danger:hover { background: var(--red); color: #fff; }
 
-/* Model controls stay in the conversation on desktop and narrow screens. */
-.mc-models { flex: 0 0 auto; padding: 8px 12px; border-top: 1px solid var(--line); max-height: 65vh; overflow: auto; }
-.mc-models summary { cursor: pointer; font-size: 12px; }
-.mc-models .mc-mnote { margin: 8px 0 10px; }
-.mc-models .mc-mcap { margin-right: 10px; font: 400 10.5px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--mut); }
-.mc-models .mc-selection { margin-top: 10px; }
+/* The model chip in the box and the menu it opens above it. */
+.mc-comp { position: relative; container-type: inline-size; }
+@container (max-width: 520px) { .mc-row .mc-hint { display: none; } .mc-row .mc-send { margin-left: auto; } }
+.mc-pick { display: flex; min-width: 0; }
+.mc-chip { display: inline-flex; min-width: 0; max-width: 100%; border-radius: 10px; overflow: hidden; background: var(--neu2); font-size: 13px; }
+.mc-chip button { min-width: 0; padding: 5px 10px; border: 0; background: none; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.mc-chip .mc-chip-e { flex: none; color: var(--mut); background: var(--neu); }
+.mc-chip.off .mc-chip-e { color: var(--red-fg); }
+@media (hover: hover) { .mc-chip button:hover { background: var(--neu2); } }
+.mc-mmenu { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 30; width: min(420px, 100%); overflow-y: auto; --menu-pad: 10px; padding: var(--menu-pad); border: 1px solid var(--line2); border-radius: 16px; --menu-bg: color-mix(in srgb, var(--fg) 6%, var(--bg)); background: var(--menu-bg); box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+.mc-mmenu[hidden] { display: none; }
+.mc-mmenu-note { margin: 8px 0 0; padding: 8px 8px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--mut); }
+.mc-mmenu-err { margin: 8px 8px 0; }

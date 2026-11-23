@@ -27,7 +27,7 @@ code { background: var(--soft); border-radius: 5px; }
 .isend, .stopgo { font-family: var(--mono) !important; font-size: 10.5px !important; text-transform: uppercase; letter-spacing: .08em; background: var(--fg) !important; color: var(--bg) !important;
   border: 1px solid var(--fg) !important; border-radius: 999px !important; box-shadow: none !important; padding-left: 16px !important; padding-right: 16px !important; }
 .stopb, .rleave { color: var(--red) !important; border-color: var(--red-line) !important; }
-.chip, .pill, .pchip, .ichip, .lchip, .nchip, .mc-chip, .rvchip, .fbchip, .achip, .sbadge, .stbadge, .rbadge, .dpill, .webpill, .pstat, .pchp, .pstate, .ssrc {
+.chip, .pill, .pchip, .ichip, .lchip, .nchip, .rvchip, .fbchip, .achip, .sbadge, .stbadge, .rbadge, .dpill, .webpill, .pstat, .pchp, .pstate, .ssrc {
   font-family: var(--mono) !important; font-size: 10px !important; font-weight: 400 !important; text-transform: uppercase; letter-spacing: .06em;
   background: transparent !important; border: 1px solid var(--line) !important; border-radius: 999px !important; box-shadow: none !important; padding-left: 9px !important; padding-right: 9px !important; }
 .avatar, .pava { background: transparent !important; border: 1px solid var(--line) !important; color: var(--fg) !important; box-shadow: none !important; font-family: var(--mono); font-weight: 400 !important; }

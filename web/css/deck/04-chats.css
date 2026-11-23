@@ -8,7 +8,6 @@
 .mc-hint { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
 .mc-stop { font: 400 10px var(--mono) !important; text-transform: uppercase; letter-spacing: .08em; color: var(--red) !important; border: 1px solid var(--red-line) !important; border-radius: 999px !important; background: none !important; padding: 0 10px; }
 .mc-log > p.quiet { color: var(--mut); font-size: 14px; max-width: 46ch; margin: auto; }
-.mc-models { border-top: 1px solid var(--line); }
 /* routine events and quiet answers */
 .mc-ev { align-self: center; display: flex; align-items: center; gap: 8px; padding: 2px 0; color: var(--mut); font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; }
 .mc-ev svg { flex: none; }
