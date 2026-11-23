@@ -887,6 +887,8 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Mezclar la rama icon-d-orange (iconos: la estrella naranja oscuro y tan luminosa como los bots, y la escena de Blender que la renderiza en icons/source/hero3d) sin cambiar nada más (check: `git merge-base --is-ancestor fe385b50 HEAD`)
 - [x] Mezclar la rama routine-partial (el aviso de una rutina que hizo parte de su tarea dice «a medias» en vez de «falló» y nunca repite «no pudo») sin cambiar nada más (check: `git merge-base --is-ancestor b875c1e3 HEAD`)
 - [ ] Mezclar la rama openbot-docs (el producto se llama OpenBot en el README, docs y la web pública; el comando y las carpetas siguen siendo tirith) sin cambiar nada más (check: `git merge-base --is-ancestor 10cc4a66 HEAD`)
+- [ ] Mezclar la rama openbot-web (la página y la app de escritorio se llaman OpenBot: título, barra lateral, ventana y productName; los identificadores siguen siendo tirith) sin cambiar nada más (check: `git merge-base --is-ancestor 1d90d454 HEAD`)
+- [ ] Mezclar la rama openbot-daemon (lo que dicen el daemon y la fábrica usa el nombre OpenBot: avisos, teléfono, CLI, prompts; los identificadores siguen siendo tirith) sin cambiar nada más (check: `git merge-base --is-ancestor 25cd26d5 HEAD`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
