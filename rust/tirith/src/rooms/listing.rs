@@ -1,4 +1,4 @@
-//! The list of the owner's rooms the phones get (`tirith-rooms [{"r": room, "t": name, "f": face}]`), one chat per project.
+//! The list of the owner's rooms the phones get (`tirith-rooms [{"r": room, "t": name, "o": role, "f": face}]`), one chat per project; `o` is the factory role that speaks in that room, so a phone edits the model of that role.
 use super::Room;
 use crate::{app::Shared, config::get as cfg_get};
 use serde_json::{json, Value};
@@ -16,7 +16,7 @@ pub(super) fn listed_room(
         .map(crate::projects::color_for)
         .or_else(|| get("color"))
         .unwrap_or_else(|| "#3b82f6".into());
-    json!({"r": id, "t": title, "f": {"shape": get("shape").unwrap_or_else(|| "round".into()), "color": color}})
+    json!({"r": id, "t": title, "o": role, "f": {"shape": get("shape").unwrap_or_else(|| "round".into()), "color": color}})
 }
 /// The name a bot's room has on the phones, or "All projects" for what belongs to none.
 fn bot(app: &Shared, project: &str) -> String {
