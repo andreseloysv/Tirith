@@ -51,7 +51,7 @@ export function Lab({ bot }) {
   const list = lab.experiments || [];
   return html`<div class="blib bnum">
     ${list.length ? html`<ul class="brout">${list.map((e) => experiment(e, bot, lab.rule))}</ul>`
-      : html`<p class="bnote">No experiment yet. The Coach tries one change at a time on a routine of ${bot.name}: its real runs alternate the current version and the change, and Tirith keeps the change only when it is no worse and cheaper or faster.</p>`}
+      : html`<p class="bnote">No experiment yet. The Coach tries one change at a time on a routine of ${bot.name}: its real runs alternate the current version and the change, and OpenBot keeps the change only when it is no worse and cheaper or faster.</p>`}
     ${ruleLine(lab.rule)}
   </div>`;
 }

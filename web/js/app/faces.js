@@ -19,7 +19,7 @@ export function Faces({ r }) {
   const unread = useUnread();
   const sel = r.view === 'bots' ? r.project || recall() || (unread.bots[0] || {}).id : '';
   return html`<nav class="nbots" aria-label="Bots">
-    <div class="nlogo" title="Tirith">${BRAND}</div>
+    <div class="nlogo" title="OpenBot">${BRAND}</div>
     ${unread.bots.filter((b) => b.show !== false).map((b) => faceButton(b, sel, b.id === sel ? 0 : unread.by[b.id] || 0, !!s.busy[keyOf(b)]))}
     <button type="button" class="nbot nnew" title="New bot" aria-label="New bot" onClick=${() => setUi('botCard', {})}><${NewFace} size=${46} /></button>
   </nav>`;

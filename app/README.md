@@ -1,4 +1,4 @@
-# Tirith desktop app
+# OpenBot desktop app
 
 A window on the local daemon. On start it checks `127.0.0.1:<port>` (`TIRITH_PORT`, else `[server] port`
 in `~/.tirith/config.toml`, else 7717); when nothing answers it starts `tirith serve` in its own process group

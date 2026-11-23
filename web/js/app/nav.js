@@ -26,7 +26,7 @@ export function Nav({ r, onAdd }) {
     <${Faces} r=${r} />
     <div class="nmenu">
       <div id="navlist">
-        <div class="brand"><span>Tirith</span></div>
+        <div class="brand"><span>OpenBot</span></div>
         <nav>
           ${topViews(r)}
           ${addProject(onAdd)}

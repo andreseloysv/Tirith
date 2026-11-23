@@ -32,7 +32,7 @@ export function thread({ sp, project, hint, items, hidden, scroll, onEarlier, se
   return html`<div class="mc-log" id="mc-log" ref=${scroll.log} onScroll=${scroll.onScroll}>
       ${hidden ? html`<button type="button" class="mc-earlier" onClick=${onEarlier}>Show earlier (${hidden})</button>` : null}
       ${talk.error && !talk.loaded ? html`<div class="ierr mc-note">${/not found|not allowed/i.test(talk.error.message)
-          ? 'The running Tirith daemon is older than this page: quit Tirith, stop the daemon (pkill -f "tirith serve") and open Tirith again.'
+          ? 'The running OpenBot daemon is older than this page: quit OpenBot, stop the daemon (pkill -f "tirith serve") and open OpenBot again.'
           : `Could not read this conversation: ${talk.error.message}`}</div>` : null}
       ${rows}
       ${empty ? emptyHint(sp, hint) : null}

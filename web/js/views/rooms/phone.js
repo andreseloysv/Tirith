@@ -9,7 +9,7 @@ function scan(r, shown, busy, error, make, setBad, forget, title) {
   // the url is part of the src so a new code draws a new picture
   const src = `/api/rooms/${enc(r.id)}/qr.svg?kind=invite&v=${enc(r.invite || '')}`;
   return html`<div class="rscan">
-      ${shown ? html`<img class="qr" src=${src} alt="QR code that connects a phone to Tirith" width="232" height="232" onError=${() => setBad(r.invite)} />`
+      ${shown ? html`<img class="qr" src=${src} alt="QR code that connects a phone to OpenBot" width="232" height="232" onError=${() => setBad(r.invite)} />`
         : html`<div class="qr qrwait">${busy === 'qr' || !error ? 'Making the QR…' : html`<button class="abtn" onClick=${make}>Show the QR</button>`}</div>`}
       <div class="rhow">
         <p class="rlead">Scan this QR with the phone's camera.</p>
@@ -37,7 +37,7 @@ export function PhoneCard({ r, reload, title, agent }) {
   });
   return html`<div class="card scard rphone" data-room=${r.id}>
     <div class="phead"><${AgentFace} a=${agent} /><b>Your phone</b><span class="chip">Encrypted</span><${Status} r=${r} /></div>
-    ${r.error ? html`<div class="ierr rerr">Tirith cannot reach agentsmessenger.com now, so a phone connects when it can again: ${r.error}</div>` : null}
+    ${r.error ? html`<div class="ierr rerr">OpenBot cannot reach agentsmessenger.com now, so a phone connects when it can again: ${r.error}</div>` : null}
     ${scan(r, shown, busy, error, make, setBad, (id) => setAsk(ask === id ? '' : id), title)}
     ${ask ? html`<${Popover} r=${r} ask=${`forget:${ask}`} close=${() => setAsk('')} act=${act} />` : null}
     ${error ? html`<div class="ierr">${error}</div>` : null}
@@ -50,7 +50,7 @@ export function NoRoom({ reload, project, agent }) {
   return html`<div class="card scard rphone">
     <div class="phead"><${AgentFace} a=${agent} /><b>Your phone</b><span class="chip">Encrypted</span></div>
     <p class="rlead">Work from your phone.</p>
-    <p>Tirith opens an encrypted room on agentsmessenger.com and shows a QR here: scan it with the phone's camera and the phone has a chat with the manager of every project, with nothing to install.</p>
+    <p>OpenBot opens an encrypted room on agentsmessenger.com and shows a QR here: scan it with the phone's camera and the phone has a chat with the manager of every project, with nothing to install.</p>
     <div class="sfoot"><button class="isend" disabled=${busy === 'new'} onClick=${() => run('new', () => api('POST', '/api/rooms', { title: '', project: project || '' }))}>${busy === 'new' ? 'Making the room…' : 'Show the QR'}</button></div>
     ${error ? html`<div class="ierr">${error}</div>` : null}
   </div>`;
