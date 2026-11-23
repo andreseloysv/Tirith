@@ -4,9 +4,10 @@
 //   roll      rolled about its middle (clockwise);               puff    rounder front to back, while it turns
 //   ex, ey    the eyes moved on the face (box units);            big     the eyes' size
 //   lids      each eye's opening, [left, right];                 open    a yawn's mouth
+//   joy       a cheer's happy eyes, "/ \" (0..1)
 import { valueAt } from './keys.js';
 
-const ZERO = { x: 0, y: 0, yaw: 0, pitch: 0, roll: 0, ex: 0, ey: 0, open: 0 };
+const ZERO = { x: 0, y: 0, yaw: 0, pitch: 0, roll: 0, ex: 0, ey: 0, open: 0, joy: 0 };
 const ONE = { sy: 1, puff: 1, big: 1, lid: 1, wink: 1 };
 export const REST = Object.freeze({ ...ZERO, sx: 1, sy: 1, puff: 1, big: 1, lids: Object.freeze([1, 1]) });
 
@@ -26,6 +27,7 @@ export function poseOf(act, x, { flip = false, reach = 1 } = {}) {
     ex: p.ex * side,
     ey: p.ey,
     open: p.open,
+    joy: p.joy,
     puff: p.puff,
     big: p.big,
     sy,

@@ -103,8 +103,8 @@ async fn face_avatars_stay_in_their_box() {
         "a room card's avatar is 40px"
     );
     assert!(
-        bots.contains(".bshapes .bot.face { width: 46px; height: 46px; }"),
-        "the shape picker's faces are 46px"
+        bots.contains(".bshapes .bot.face { width: 58px; height: 58px; }"),
+        "the shape picker's faces are 58px"
     );
     assert!(
         bots.contains(".mc-wface .bot.face { width: 56px; height: 56px; }"),

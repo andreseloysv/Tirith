@@ -7,18 +7,10 @@ import { showFace } from './bot3d-face.js';
 
 const FEET = 0.8; /* squash and stretch keep the feet where they are: this far below the middle */
 
-/** The halo goes along with what an act moves and stretches, so a hop leaves no light behind. */
-function glow(b, x = 0, y = 0, sy = 1) {
-  b.halo.position.set(x, y, b.halo.position.z);
-  b.halo.scale.y = b.halo.scale.x * sy;
-}
-
-/** The rest pose: upright, its own size, the halo at rest and the eyes open. */
+/** The rest pose: upright, its own size and the eyes open. */
 function rest(b) {
   b.rig.position.set(0, 0, 0); b.rig.scale.set(1, 1, 1);
   b.body.material.uniforms.ball.value = 0;
-  glow(b);
-  b.halo.material.uniforms.amount.value = 0.82;
   b.acting = b.fast = false;
   showFace(b);
 }
@@ -54,13 +46,13 @@ function aim(b, t, pointer, near, r) {
   } else if (t > b.nextLook) { // on its own: it looks around now and then
     const busy = b.mood === 'work' && !b.lively;
     b.ty = (Math.random() * 2 - 1) * (busy ? 0.45 : 0.32) * lim; b.tp = (Math.random() * 2 - 1) * 0.18 * lim;
-    b.nextLook = t + (busy ? 0.6 + Math.random() : 1.6 + Math.random() * 2.6);
+    b.nextLook = t + (busy ? 0.6 + Math.random() : 1.6 + Math.random() * 2.6) * b.persona.look; /* its colour's curiosity */
   }
 }
 
 /** How open its own blinking leaves the eyes at `t`. */
 function blinkAt(b, t) {
-  if (t > b.nextBlink) { b.blinkAt = t; b.nextBlink = t + 2.2 + Math.random() * 4.5; }
+  if (t > b.nextBlink) { b.blinkAt = t; b.nextBlink = t + (2.2 + Math.random() * 4.5) * b.persona.blink; }
   return b.blinkAt < 0 ? 1 : Math.min(1, Math.abs(t - b.blinkAt - 0.08) / 0.08);
 }
 
@@ -71,16 +63,15 @@ export function livePose(b, t, dt, pointer, near, r) {
   aim(b, t, pointer, near, r);
   const easeAmt = Math.min(1, dt * (near ? 9 : 3.5));
   b.yaw += (b.ty - b.yaw) * easeAmt; b.pitch += (b.tp - b.pitch) * easeAmt;
-  const sp = b.mood === 'work' ? 2.2 : b.mood === 'sleep' ? 0.45 : 1, ph = b.phase + t * sp;
-  b.rig.rotation.set(b.pitch + 0.04 * Math.sin(ph * 0.9) + act.pitch, b.yaw + act.yaw, 0.05 * Math.sin(ph * 0.63) - act.roll);
+  const { tempo, energy: e } = b.persona; /* its colour's temperament: how fast and how much it moves */
+  const sp = (b.mood === 'work' ? 2.2 : b.mood === 'sleep' ? 0.45 : 1) * tempo, ph = b.phase + t * sp;
+  b.rig.rotation.set(b.pitch + 0.04 * e * Math.sin(ph * 0.9) + act.pitch, b.yaw + act.yaw, 0.05 * e * Math.sin(ph * 0.63) - act.roll);
   const unit = PX / b.sh.rmax; /* a box unit in the model's */
   const moved = -act.y * unit - (1 - act.sy) * FEET;
-  b.rig.position.set(act.x * unit, 0.05 * Math.sin(ph * 1.1) + moved, 0);
-  glow(b, act.x * unit, moved, act.sy);
-  const br = 1 + 0.025 * Math.sin(ph * 1.7);
+  b.rig.position.set(act.x * unit, 0.05 * e * Math.sin(ph * 1.1) + moved, 0);
+  const br = 1 + 0.025 * e * Math.sin(ph * 1.7);
   const puff = (act.puff - 1) * b.round; /* as far as its shape is round: a star stays a star */
   b.rig.scale.set((2 - br) * act.sx, br * act.sy, 1 + puff);
   b.body.material.uniforms.ball.value = Math.min(1, puff / 0.6); /* puffed it is a ball, not a cushion */
-  b.halo.material.uniforms.amount.value = 0.82 + 0.2 * Math.sin(ph * (b.mood === 'work' ? 2.4 : 1.2));
-  showFace(b, act, blinkAt(b, t));
+  showFace(b, act, blinkAt(b, t), dt);
 }

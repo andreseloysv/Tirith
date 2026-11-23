@@ -35,7 +35,7 @@ export function actPose(a, now) {
   return o;
 }
 
-/** The float: slow waves that never line up, plus the acts; and the halo's pulse. */
+/** The float: slow waves that never line up, plus the acts. */
 export function floatPose(a, m, c, o, p) {
   const [w1, w2, w3, w4, w5] = a.w, [p1, p2, p3, p4, p5] = a.p;
   const br = 1 + m.breath * Math.sin(c * w5 + p5);
@@ -45,7 +45,7 @@ export function floatPose(a, m, c, o, p) {
   const y = m.bob * (0.62 * Math.sin(c * w1 + p1) + 0.38 * Math.sin(c * w2 + p2)) + o.y + p.y + up * (Math.cos(p.roll) - 1);
   const x = m.sway * Math.sin(c * w3 + p3) + o.x + p.x - up * Math.sin(p.roll);
   const rot = m.tilt * Math.sin(c * w4 + p4) + o.rot + (p.roll * 360) / TAU;
-  return { x, y, rot, sx, sy, halo: (m.halo + 0.06 * Math.sin(c * w2 + p5)).toFixed(3) };
+  return { x, y, rot, sx, sy };
 }
 
 /** The eyes: where they look (with a quick ease, like a glance; an act has them to itself), and their blinks. */

@@ -72,3 +72,15 @@ export const ACTS10 = {
   } },
 };
 export const NAMES = Object.keys(ACTS10);
+
+/** Acts no deck deals: what a face plays when its bot's state changes (schedule.js). `cheer`, when its work is done: its
+    eyes grow and turn "/ \" and it spins round three times as it rises — the article's «settles once the work is done». */
+export const REACTS = {
+  cheer: { d: 2.8, turn: true, keys: {
+    joy: [[0, 0], [0.1, 1, 'out'], [0.86, 1], [1, 0]],
+    big: [[0, 1], [0.1, 1.22, 'back'], [0.86, 1.22], [1, 1]],
+    roll: [[0, 0], [0.14, -0.35, 'out'], [0.72, 3 * TAU + 0.2, 'sine'], [0.86, 3 * TAU, 'sine']],
+    y: [[0, 0], [0.12, 2], [0.32, -8, 'out'], [0.7, -8], [0.86, 0, 'fall']],
+    sy: [[0, 1], [0.12, 0.85], [0.26, 1.08], [0.7, 1], [0.86, 0.92], [1, 1, 'spring']],
+  } },
+};
