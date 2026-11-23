@@ -366,18 +366,18 @@ color = \"\"
     };
     assert_eq!(
         listed_room(&raw, "sealed-bot", "Noticias", "bot-abc123", None),
-        json!({"r": "sealed-bot", "t": "Noticias", "f": {"shape": "drop", "color": "#22d3ee"}}),
+        json!({"r": "sealed-bot", "t": "Noticias", "o": "bot-abc123", "f": {"shape": "drop", "color": "#22d3ee"}}),
         "a bot room carries the bot's face"
     );
     assert_eq!(
         listed_room(&raw, "sealed-proj", "My project", "manager", None),
-        json!({"r": "sealed-proj", "t": "My project", "f": {"shape": "hex", "color": "#8e7cf0"}}),
+        json!({"r": "sealed-proj", "t": "My project", "o": "manager", "f": {"shape": "hex", "color": "#8e7cf0"}}),
         "with no project, the Project Manager's face"
     );
     let (zoo, rela) = (proj("zoo", Some("#2f7d5b")), proj("rela", Some("#d0663b")));
     assert_eq!(
         listed_room(&raw, "sealed-zoo", "Zoo", "manager", Some(&zoo)),
-        json!({"r": "sealed-zoo", "t": "Zoo", "f": {"shape": "hex", "color": "#2f7d5b"}}),
+        json!({"r": "sealed-zoo", "t": "Zoo", "o": "manager", "f": {"shape": "hex", "color": "#2f7d5b"}}),
         "a project room keeps the Project Manager's shape in the project's own colour"
     );
     assert_eq!(
@@ -404,7 +404,7 @@ color = \"\"
     assert_eq!(listed_room(&raw, "sealed-hand", "Handmade", "manager", Some(&proj("handmade", Some(""))))["f"], stable["f"], "a project added by hand with an empty colour gets the same stable colour and does not break the list");
     assert_eq!(
         listed_room(&raw, "sealed-all", "All projects", "manager-general", None),
-        json!({"r": "sealed-all", "t": "All projects", "f": {"shape": "dome", "color": "#3fb6a8"}}),
+        json!({"r": "sealed-all", "t": "All projects", "o": "manager-general", "f": {"shape": "dome", "color": "#3fb6a8"}}),
         "All projects carries the Manager's face"
     );
     assert_eq!(
