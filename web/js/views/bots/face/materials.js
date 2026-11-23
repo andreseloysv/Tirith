@@ -27,10 +27,11 @@ void main(){
   c += mix(edge, vec3(1.0), 0.35) * pow(f, 2.4) * 0.6;                                           // light leaking at the silhouette
   gl_FragColor = vec4(c, 1.0);
 }`;
-/** `white`: how far its lit core goes towards white (a paler or a deeper glow). */
-export function bodyMaterial3(color, white = 0.62) {
+/** The glowing body in its own colour: the lit core goes only a tenth of the way to white — the deep glow of the app
+    icon's star, the same for every shape (the owner, 2026-11-23: «deben ser igual a la estrella»). */
+export function bodyMaterial3(color) {
   const base = hex3(color);
-  const core = base.clone().lerp(new THREE.Color(1, 1, 1), white);
+  const core = base.clone().lerp(new THREE.Color(1, 1, 1), 0.1);
   const low = base.clone().multiplyScalar(0.78).lerp(new THREE.Color(1, 0.55, 0.1), 0.18);
   return new THREE.ShaderMaterial({ vertexShader: ballVS, fragmentShader: bodyFS, uniforms: { ball: { value: 0 }, core: { value: core }, edge: { value: base }, low: { value: low }, L: { value: LIGHT3 }, glow: { value: 1.12 } } });
 }

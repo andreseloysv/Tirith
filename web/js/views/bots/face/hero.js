@@ -32,7 +32,7 @@ export const HERO3D = {
   cx: 255.5, cy: 255.5, rmax: M.rmax, r: M.r, o: M.o,
   /* the lenses are drawn at 0.9 of their size and sunk into the face: a quarter more shows the painted eyes' size */
   eyes: [...M.eyes.slice(0, 3), M.eyes[3] * 1.25, M.eyes[4] * 1.25],
-  white: 0.1, eyeMat: eyeMaterial3([0.22, 0.025, 0.04]), /* the icon's: its deep glow (amber #f2a93b is its orange), maroon eyes */
+  eyeMat: eyeMaterial3([0.22, 0.025, 0.04]), /* the icon's maroon eyes (amber #f2a93b is its orange) */
   mesh: heroGeometry,
   front: (u, w) => face().front(u, w),
   normal: (u, w) => face().normal(u, w),

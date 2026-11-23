@@ -30,7 +30,7 @@ export class Bot3D {
     this.round = THREE.MathUtils.clamp((Math.min(...this.sh.r) - 0.68) / 0.3, 0, 1); // how far it can be a ball (a spin)
     this.acts = new Acts({ lively, key: `${this.name}:${color}` });
     const seg = el.offsetWidth > 90 ? 128 : 64;
-    this.body = new THREE.Mesh(this.sh.mesh ? this.sh.mesh() : bodyGeometry3(this.name, seg), bodyMaterial3(this.color, this.sh.white)); this.rig.add(this.body);
+    this.body = new THREE.Mesh(this.sh.mesh ? this.sh.mesh() : bodyGeometry3(this.name, seg), bodyMaterial3(this.color)); this.rig.add(this.body);
     this.eyes = eyes3(this.sh);
     this.eyes.forEach((eye) => this.rig.add(eye));
     Object.assign(this, mouths3(this.sh));
