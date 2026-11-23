@@ -893,7 +893,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Mezclar la rama hero-face (una cara nueva de bot: la estrella del icono de la app, con su modelo 3D, ojos y boca vivos, en el selector de formas) sin cambiar nada más (check: `git merge-base --is-ancestor e37224a4 HEAD`)
 - [x] Mezclar la rama face-colors (todas las caras brillan en su color tan profundo como la estrella del icono, como pidió el dueño) sin cambiar nada más (check: `git merge-base --is-ancestor d9ca5f7b HEAD`)
 - [x] Mezclar la rama flat-faces (las caras de los bots como el ejemplo del dueño: los 13 cuerpos de su referencia más la estrella del icono, en 3D de un solo color plano, ojos de cápsula pintados, poses y reacciones por estado, una personalidad por color; y Working now como un árbol de caras: jefe arriba y sus ayudantes abajo) sin cambiar nada más (check: `git merge-base --is-ancestor b5085580 HEAD`)
-- [ ] Mezclar la rama bot-icon (el icono de la app que eligió el dueño: el bot lima con destello, sin estrellas y grande, en todos los tamaños) sin cambiar nada más (check: `test -f app/src-tauri/icons/source/icon-bot-1024.png`)
+- [x] Mezclar la rama bot-icon (el icono de la app que eligió el dueño: el bot lima con destello, sin estrellas y grande, en todos los tamaños) sin cambiar nada más (check: `test -f app/src-tauri/icons/source/icon-bot-1024.png`)
 - [ ] Mezclar la rama safari-signin (los managers piden iniciar sesión solo en el Safari del dueño, con el enlace de la página; nunca en el navegador propio de OpenBot) sin cambiar nada más (check: `grep -q "always in their Safari" factory/prompts/manager.md`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
