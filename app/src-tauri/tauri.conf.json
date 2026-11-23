@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Tirith",
+  "productName": "OpenBot",
   "version": "0.2.1",
   "identifier": "app.tirith.desktop",
   "build": {
@@ -22,9 +22,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "Tirith",
+    "publisher": "OpenBot",
     "category": "DeveloperTool",
-    "shortDescription": "Tirith desktop app",
+    "shortDescription": "OpenBot desktop app",
     "longDescription": "A window on the local tirith daemon: plan, agents, rules and the manager chat.",
     "macOS": {
       "minimumSystemVersion": "10.15",

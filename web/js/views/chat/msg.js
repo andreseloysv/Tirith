@@ -39,7 +39,7 @@ function owner({ m, projects, onZoom }, time) {
 /** Who a note is from and its words: {text, from, cls, via}. The owner's own from the phone stand where the phone
     has them: on the right. */
 function noteOf({ m, project, projects }) {
-  let text = m.text, from = 'Tirith', cls = 'mgr note';
+  let text = m.text, from = 'OpenBot', cls = 'mgr note';
   const merged = m.role === 'tirith' && MERGED.exec(text);
   /* a merge reads as one line; in the conversation of no project (rows from before the split) it names its project */
   if (merged) text = `On main${merged[1] === project ? '' : ` of ${projName(projects, merged[1])}`} (\`${merged[2]}\`): ${merged[3].replace(CHECKS, '')}`;

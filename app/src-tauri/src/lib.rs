@@ -88,12 +88,12 @@ pub fn run() {
             ensure_daemon(port);
             let url = page::link(port, &tirith_bin()).parse().expect("valid daemon url");
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
-                .title("Tirith")
+                .title("OpenBot")
                 .inner_size(1440.0, 900.0)
                 .disable_drag_drop_handler()
                 .build()?;
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running the Tirith app");
+        .expect("error while running the OpenBot app");
 }
