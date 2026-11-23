@@ -48,8 +48,14 @@ pub async fn open(
     let (mut links, mut failed) = (vec![], vec![]);
     for c in granted.iter().filter(|c| !c.blocked) {
         match Link::open(app, raw, bot, c).await {
-            Ok(link) => links.push(link),
-            Err(why) => failed.push(format!("{}: {why}", c.id)),
+            Ok(link) => {
+                crate::connector_page::worked(app, bot, &c.id, Some(&link.names()));
+                links.push(link)
+            }
+            Err(why) => {
+                let why = crate::connector_page::failed(app, bot, &c.id, &why).await; // scrubbed of every secret
+                failed.push(format!("{}: {why}", c.id))
+            }
         }
     }
     let _ = (!failed.is_empty()).then(|| {

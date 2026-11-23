@@ -33,7 +33,14 @@ async fn owner_only(req: Request, next: Next) -> Response {
 
 async fn begun(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
     let bot = b["bot"].as_str().unwrap_or_default();
-    let (url, ticket) = start(&app, &id, bot).await.map_err(bad)?;
+    let (url, ticket) = match start(&app, &id, bot).await {
+        Ok(begun) => begun,
+        Err(why) => {
+            return Err(bad(
+                crate::connector_page::failed(&app, bot, &id, &why).await
+            ))
+        } // scrubbed of every secret
+    };
     Ok(Json(json!({"url": url, "ticket": ticket})))
 }
 

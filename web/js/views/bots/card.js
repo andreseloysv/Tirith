@@ -6,6 +6,7 @@ import { ICON, Icon } from '../../common.js';
 import { Face, SHAPES, COLORS } from './face.js';
 import { useCardModel, modelSection } from './card-model.js';
 import { factorySection } from './card-factory.js';
+import { connectorsSection } from './card-connectors.js';
 
 /** Focus the name; Esc closes the card. */
 function useCardKeys(input, onClose) {
@@ -69,6 +70,7 @@ export function BotCard({ bot, onClose, onSaved }) {
         ${pickers(shape, setShape, color, setColor)}
         ${M ? modelSection(M, cm) : null}
         ${M ? factorySection({ bot, session, setSession, access, setAccess, routes, setRoutes, EVENTS }) : null}
+        ${connectorsSection(bot)}
         ${err ? html`<p class="berr">${err}</p>` : null}
       </div>
       ${footer({ bot, ask, setAsk, del, onClose, name, valid, save })}

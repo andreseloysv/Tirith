@@ -38,5 +38,8 @@ mod fakes;
 #[path = "../../checks/connector_oauth.rs"]
 mod oauth_tests;
 #[cfg(test)]
+#[path = "../../checks/connectors_page.rs"]
+mod page_tests;
+#[cfg(test)]
 #[path = "../../checks/gateway.rs"]
 mod tests;

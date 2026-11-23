@@ -1,4 +1,4 @@
-//! The daemon's own lookup of one value, by bot and name, and its own keeping of a connector's sign-in. No route and no command leads here; only the connector gateway (`gateway/`) and the sign-in (`oauth/`) ask, and a value goes in nothing but its connector's own process or auth headers.
+//! The daemon's own lookup of one value, by bot and name, and its own keeping of a connector's sign-in. No route and no command leads to a value; only the connector gateway (`gateway/`) and the sign-in (`oauth/`) ask for one (the Connectors page reads names alone and drops a removed connector's sign-in), and a value goes in nothing but its connector's own process or auth headers.
 use super::store::{alone, Store};
 use super::{index::Held, names};
 use crate::app::Shared;
@@ -11,6 +11,20 @@ pub fn value(app: &Shared, bot: &str, name: &str) -> Result<Option<String>, Stri
 /// The daemon keeps `value` as bot `bot`'s `name`: a sign-in's reserved names, which no route sets. It blocks.
 pub fn keep(app: &Shared, bot: &str, name: &str, value: &str) -> Result<(), String> {
     Store::of(app).set(bot, name, value)
+}
+
+/// The names (never the values) bot `bot` has set. It blocks.
+pub fn held_names(app: &Shared, bot: &str) -> Result<Vec<String>, String> {
+    Store::of(app).list(bot)
+}
+
+/// The daemon drops bot `bot`'s `name` when it has one: a removed connector's sign-in. It blocks.
+pub fn drop_name(app: &Shared, bot: &str, name: &str) -> Result<(), String> {
+    let store = Store::of(app);
+    match store.list(bot)?.iter().any(|n| n == name) {
+        true => store.remove(bot, name),
+        false => Ok(()),
+    }
 }
 
 impl Store<'_> {

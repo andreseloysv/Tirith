@@ -25,3 +25,13 @@ pub(super) fn refresh(id: &str) -> String {
 pub(super) fn grant(id: &str) -> String {
     of(id, "GRANT")
 }
+
+/// The three names connector `id`'s sign-in is kept under.
+pub fn all(id: &str) -> [String; 3] {
+    [access(id), refresh(id), grant(id)]
+}
+
+/// Whether `names` (a bot's) hold a sign-in to connector `id`.
+pub fn signed_in(names: &[String], id: &str) -> bool {
+    names.contains(&access(id))
+}

@@ -2,6 +2,7 @@
 mod api;
 mod card;
 mod cli;
+mod connect;
 mod context;
 mod drafts;
 mod folder;

@@ -60,6 +60,24 @@ async fn lib(
 ) -> R {
     reply(learn(&app, &id, &b, who.is_agent()))
 }
+/// A bot card's Connectors (`connect.rs`), the owner's alone like the Connectors page.
+fn connectors() -> Router<Shared> {
+    let got = |State(app): State<Shared>, Path(id): Path<String>| async move {
+        reply(super::connect::granted(&app, &id))
+    };
+    let set = |State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>| async move {
+        let work = move || super::connect::posted(&app, &id, &b);
+        reply(
+            tokio::task::spawn_blocking(work)
+                .await
+                .map_err(|_| "the grant stopped".to_string())
+                .and_then(|r| r),
+        )
+    };
+    Router::new()
+        .route("/api/bots/{id}/connectors", get(got).post(set))
+        .route_layer(axum::middleware::from_fn(crate::connector_page::owner_only))
+}
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/bots", get(|State(app): State<Shared>| async move { Json(json!(all(&app))) }).post(|State(app): State<Shared>, Json(b): Json<Value>| async move { reply(save(&app, b)) }))
@@ -69,5 +87,6 @@ pub fn routes() -> Router<Shared> {
         .merge(crate::turns::routes())
         .merge(super::hook_api::routes())
         .merge(super::from_template::routes())
+        .merge(connectors())
         .route("/api/bots/{id}/library", get(|State(app): State<Shared>, Path(id): Path<String>| async move { reply(library(&app, &id)) }).post(lib))
 }
