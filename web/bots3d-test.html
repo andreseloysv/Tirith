@@ -51,12 +51,12 @@ h1{font-size:26px;margin:0 0 4px}h2{font-size:15px;text-transform:uppercase;lett
 <div class="row"><div class="phone"><div class="bar">Private chats <span>Add chat</span></div><div id="rooms"></div></div>
 <p class="note" style="max-width:420px">En el móvil, al tocar un bot, ese bot mira hacia el dedo.</p></div>
 
-<h2>Las 12 formas</h2>
+<h2>Las 13 formas</h2>
 <div class="card grid" id="grid"></div>
 </div>
 <script type="module">
 import { attachBot3D } from './js/views/bots/face.js';
-const COLORS = { round: '#4aa8ff', burst: '#ffd23f', blob: '#ffd23f', hex: '#2fd3c4', cloud: '#3ee08f', flower: '#ff5fd2', drop: '#ff8a3d', tri: '#ff5d73', star: '#9b6bff', pill: '#f4f1ff', dome: '#9b6bff', tile: '#4aa8ff' };
+const COLORS = { round: '#4aa8ff', burst: '#ffd23f', blob: '#ffd23f', hex: '#2fd3c4', cloud: '#3ee08f', flower: '#ff5fd2', drop: '#ff8a3d', tri: '#ff5d73', star: '#9b6bff', pill: '#f4f1ff', dome: '#9b6bff', tile: '#4aa8ff', hero: '#f2a93b' };
 const bots = [];
 function bot(name, size, mood = 'idle') { const el = document.createElement('span'); el.className = 'bot'; el.style.width = el.style.height = size + 'px'; queueMicrotask(() => { const b = attachBot3D(el, { shape: name, color: COLORS[name], state: mood }); if (b) bots.push(b); }); return el; }
 const $ = (id) => document.getElementById(id);
