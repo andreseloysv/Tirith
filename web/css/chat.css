@@ -50,7 +50,5 @@ a.mc-file { text-decoration: none; }
 .mc-models { flex: 0 0 auto; padding: 8px 12px; border-top: 1px solid var(--line); max-height: 65vh; overflow: auto; }
 .mc-models summary { cursor: pointer; font-size: 12px; }
 .mc-models .mc-mnote { margin: 8px 0 10px; }
-.mc-models .model-roles { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 12px; }
-.mc-models .model-roles button { flex: 1; padding: 7px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--soft); }
-.mc-models .model-roles button[aria-pressed=true] { border-color: var(--blue); color: var(--blue); }
-.mc-model-actions { display: flex; align-items: center; gap: 8px; padding: 10px 0 2px; position: sticky; bottom: -8px; background: var(--bg); }
+.mc-models .mc-mcap { margin-right: 10px; font: 400 10.5px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--mut); }
+.mc-models .mc-selection { margin-top: 10px; }

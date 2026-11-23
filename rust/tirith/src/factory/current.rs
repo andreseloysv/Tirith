@@ -35,13 +35,22 @@ fn attempt(overlay: &toml::Table) -> Result<Factory, String> {
     )
 }
 
+/// What a bad version leaves running: the last good one, else the embedded factory under config.toml's overlay (so the owner's agents stay), bare only when the overlay itself is refused.
+pub(super) fn fallback(last: Option<Arc<Factory>>, overlay: &toml::Table) -> Arc<Factory> {
+    last.unwrap_or_else(|| {
+        parse(TEXT, embedded_prompts(), overlay)
+            .map(Arc::new)
+            .unwrap_or_else(|_| Arc::new(Factory::default()))
+    })
+}
+
 /// (Re)loads the factory under config.toml's overlay; a bad version keeps the last good one and is remembered in `error()`.
 pub fn load(overlay: &toml::Table) -> Arc<Factory> {
     let f = match attempt(overlay) {
         Ok(f) => Arc::new(f),
         Err(e) => {
             *ERROR.lock().unwrap() = Some(e);
-            return current();
+            return fallback(CURRENT.read().unwrap().clone(), overlay);
         }
     };
     *ERROR.lock().unwrap() = None;

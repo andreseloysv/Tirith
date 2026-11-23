@@ -43,7 +43,7 @@ const BOTS = [
 ];
 const face = (shape, color) => ({ shape, color });
 const MODELS = {
-  choices: { agents: ['muse'], models: ['muse-wonder'], efforts: [], codex: [] },
+  choices: { agents: ['muse'], models: ['muse-wonder'], owners: { 'muse-wonder': 'muse' }, efforts: [], codex: [] },
   events: ['lane.failed', 'metric.red'],
   roles: {
     manager: { name: 'Project Manager', face: face('hex', '#8e7cf0'), agent: 'muse', model: 'muse-wonder' },

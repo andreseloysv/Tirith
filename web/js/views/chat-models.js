@@ -1,42 +1,42 @@
 // The model picker of one chat: it chooses only the model of who speaks in this conversation — a project's chat
 // the Project Manager's (`manager`, for every project, and it says so), a bot's screen that bot's. Roles with no
-// screen of their own keep their picker in Settings. Visual controls belong to the chat composer; Settings keeps
-// its select-based form.
-import { html, useState, useLayoutEffect, useRef } from '../../vendor/preact-htm.js';
+// screen of their own keep their picker in Settings. It offers only what can run, and a pick is saved at once.
+import { html, useState, useEffect, useLayoutEffect, useRef } from '../../vendor/preact-htm.js';
 import { useFetch, api } from '../store.js';
-import { optionsFor } from '../model-controls.js';
+import { offered, effortName, PROVIDERS } from '../model-controls.js';
 import { useAction } from './settings/ui.js';
 
+/** The summary's words: the model and its effort, the agent's own default, or that it cannot run. */
+function words(choices, v) {
+  if (!v.model) return `${PROVIDERS[v.agent] || v.agent || '…'} · its default`;
+  const m = offered(choices).find(x => x.slug === v.model);
+  return [m ? m.name : v.model, m ? effortName(v.effort) : 'not available, choose another'].filter(Boolean).join(' · ');
+}
+
 function Selection({ role, M, reload }) {
-  const [draft, setDraft] = useState(null);
+  const [picked, setPicked] = useState(null);   /* shown while it is saved, until the new state arrives */
   const [busy, error, run] = useAction();
   const ref = useRef(null);
-  const value = draft || M.roles[role] || {};
-  const { valid } = optionsFor(M.choices, value);
+  useEffect(() => setPicked(null), [M]);
   useLayoutEffect(() => {
-    ref.current.onChange = setDraft;
-    ref.current.configure({ choices: M.choices, value, disabled: !!busy });
+    ref.current.onChange = async (v) => {
+      setPicked(v);
+      if (await run('save', () => api('POST', `/api/models/${role}`, v))) reload();
+      else setPicked(null);
+    };
+    ref.current.configure({ choices: M.choices, value: picked || M.roles[role] || {}, disabled: !!busy });
   });
-  const save = async () => {
-    if (!draft || !valid) return;
-    if (await run('save', () => api('POST', `/api/models/${role}`, draft))) { setDraft(null); reload(); }
-  };
   return html`<div class="mc-selection">
     <model-controls ref=${ref}></model-controls>
-    <div class="mc-model-actions">
-      <button type="button" class="isend" disabled=${!draft || !!busy || !valid} onClick=${save}>${busy ? 'Saving…' : 'Save'}</button>
-      ${draft ? html`<button type="button" class="scancel" disabled=${!!busy} onClick=${() => setDraft(null)}>Cancel</button>` : null}
-    </div>
     ${error ? html`<p class="ierr">${error}</p>` : null}
   </div>`;
 }
 
-export function ChatModels({ role, label, note }) {
+export function ChatModels({ role, note }) {
   const [M, reload, error] = useFetch('/api/models', ['models']);
   const current = M?.roles[role];
   if (M && !current) return null;   /* this conversation's speaker is no factory role: nothing to pick */
-  const name = label || current?.name || role;
-  return html`<details class="mc-models"><summary>Model · ${name} · ${current?.model || current?.agent || '…'}</summary>
+  return html`<details class="mc-models"><summary><span class="mc-mcap">Model</span>${M ? words(M.choices, current) : '…'}</summary>
     ${note ? html`<p class="mut sm mc-mnote">${note}</p>` : null}
     ${error ? html`<p class="ierr">${error.message}</p>` : null}
     ${M ? html`<${Selection} key=${role} role=${role} M=${M} reload=${reload} />` : null}

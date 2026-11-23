@@ -454,6 +454,19 @@ fn overlay_wins_key_by_key() {
 }
 
 #[test]
+fn a_bad_first_version_keeps_the_owners_agents() {
+    // A factory file newer than the daemon is refused before any version loaded: the agents of config.toml stay.
+    let o = overlay("[agents.muse]\ncommand = \"muse-test\"\n");
+    let f = super::current::fallback(None, &o);
+    assert_eq!(f.command("muse").as_deref(), Some("muse-test"));
+    assert_eq!(f.command("codex").as_deref(), Some("codex"));
+    // An overlay the factory refuses leaves the bare embedded one, never nothing.
+    let f = super::current::fallback(None, &overlay("[limits]\nbogus = 1\n"));
+    assert_eq!(f.command("muse"), None);
+    assert_eq!(f.command("codex").as_deref(), Some("codex"));
+}
+
+#[test]
 fn invalid_factories_are_refused() {
     let prompts = embedded_prompts();
     let bad = |text: &str| {
