@@ -1,5 +1,5 @@
-// The ONE sidebar: the bots' faces at its far left, and next to them the menu (Overview, Settings and the
-// projects, folded) with the stream's state at its foot.
+// The ONE sidebar: the agents' faces at its far left, and next to them the menu (Overview, Connectors, Settings and
+// the projects, folded). Whether the page is live is said only when it is not, over the view (shell.js).
 import { html } from '../../vendor/preact-htm.js';
 import { useStore } from '../store.js';
 import { ICON, Icon, go } from '../common.js';
@@ -33,7 +33,6 @@ export function Nav({ r, onAdd }) {
           ${s.projects.map((p) => projectRow(p, { r, lanes, mem }))}
         </nav>
       </div>
-      <div id="src" class="src">${s.connected ? html`<i class="ok"></i> live` : html`<i class="bad"></i> reconnecting…`}</div>
     </div>
   </aside>`;
 }

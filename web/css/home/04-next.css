@@ -1,0 +1,17 @@
+/* what is up next in a project's plan: numbered titles, the autopilot's line, the whole plan behind a button */
+.hm-next { margin: 8px 0 0; padding: 4px 18px; list-style: none; counter-reset: hm; border-radius: 22px; background: var(--raise); border: 1px solid var(--card-edge2); }
+.hm-next li { counter-increment: hm; display: flex; align-items: baseline; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); font-size: 15px; line-height: 1.4; color: var(--fg); }
+.hm-next li:first-child { border-top: 0; }
+.hm-next li::before { content: counter(hm); flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--raise2); color: var(--mut); font-size: 12px; line-height: 22px; text-align: center; }
+.hm-none { margin: 6px 0 0; color: var(--mut); font-size: 15px; }
+.hm-more { margin-top: 12px; padding: 8px 15px; border-radius: 999px; background: var(--raise2); color: var(--fg); font-size: 14px; }
+.hm-more:hover { background: var(--tile); }
+.hm-sec .pauto { margin: 0 0 4px; font-size: 14px; }
+.hm-sec .plan { margin-top: 18px; }
+.hm-sec .plan > h2 { display: none; } /* the section says it already */
+/* the autopilot's line and its button, in the Home's words */
+.hm-sec .pauto { display: flex; align-items: center; gap: 8px; color: var(--mut); }
+.hm-sec .pauto b { color: var(--fg); font-weight: 600; }
+.hm-sec .pauto .ibtn { height: 30px; font-family: var(--sans) !important; font-size: 13.5px !important; text-transform: none; letter-spacing: 0;
+  background: var(--raise2) !important; border: 0 !important; color: var(--fg) !important; }
+.hm-sec .pauto .ibtn:hover { background: var(--tile) !important; }
