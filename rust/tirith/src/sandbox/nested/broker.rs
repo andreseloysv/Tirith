@@ -1,4 +1,4 @@
-//! The daemon's side: it starts what a caller under Tirith's own profile asks, under one at least as tight, waits, and gives its exit code. Anyone else gets nothing: it is no way out of another sandbox. A caller that is gone takes it along, and so does a daemon that stops (`watch.rs`).
+//! The daemon's side: it starts what a caller under OpenBot's own profile asks, under one at least as tight, waits, and gives its exit code. Anyone else gets nothing: it is no way out of another sandbox. A caller that is gone takes it along, and so does a daemon that stops (`watch.rs`).
 use super::{around::around, doors::Doors, pair::Pair, place, Request};
 use crate::app::Shared;
 use crate::sandbox::{handover, mac};
@@ -58,7 +58,7 @@ fn answer(app: &Shared, doors: Doors, caller: &UnixStream) -> Result<i32, String
         .map(|fd| unsafe { OwnedFd::from_raw_fd(fd) })
         .collect();
     if !mac::ours(pid) || mac::tighter(pid) {
-        return Err("only what runs under Tirith's own profile asks for a limit in it".into());
+        return Err("only what runs under OpenBot's own profile asks for a limit in it".into());
     }
     let mut line = String::new();
     BufReader::new(caller.take(MOST))

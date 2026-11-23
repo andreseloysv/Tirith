@@ -1,4 +1,4 @@
-//! The daemon's door. It is loopback only, and on Linux, where a server has more users, a connection comes in only from this Tirith's own user, root, or one of `[server] users` in config.toml (who signs in and tunnels to the page).
+//! The daemon's door. It is loopback only, and on Linux, where a server has more users, a connection comes in only from this OpenBot's own user, root, or one of `[server] users` in config.toml (who signs in and tunnels to the page).
 use crate::app::Shared;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -6,7 +6,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 const WHY: &str =
-    "this Tirith serves its own user, root and the [server] users of its config.toml\n";
+    "this OpenBot serves its own user, root and the [server] users of its config.toml\n";
 
 pub struct Door {
     listener: TcpListener,

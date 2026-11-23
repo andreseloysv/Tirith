@@ -43,7 +43,7 @@ pub(super) async fn ask(key: &str, mut cmd: Value, wait: Duration) -> Result<Val
     });
     match got {
         Ok(Ok(answer)) => Ok(answer),
-        _ => Err("the extension did not answer: is the owner's Edge open, with Tirith's extension and this bot's link in it?".into()),
+        _ => Err("the extension did not answer: is the owner's Edge open, with OpenBot's extension and this bot's link in it?".into()),
     }
 }
 /// The command waiting for the extension, if any, waiting up to `wait` for one (each is handed once).

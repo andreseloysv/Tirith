@@ -17,7 +17,7 @@ pub fn owed_pass(app: &Shared, role: &str, now: DateTime<Local>) -> Option<DateT
         .query_row(&sql, [], |r| r.get::<_, String>(0))
         .unwrap_or_default();
     let last_daily = if last_daily.is_empty() {
-        app.kv(BORN).unwrap_or_default() // none yet: none is owed from before this Tirith existed
+        app.kv(BORN).unwrap_or_default() // none yet: none is owed from before this OpenBot existed
     } else {
         last_daily
     };

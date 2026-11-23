@@ -29,7 +29,7 @@ fn muse_chat_turn_is_an_exec_run() {
     assert!(!has("--disable-write"), "{a:?}");
 }
 
-/// An app at a fresh home whose config puts Muse in place, with this `[browser] use` ("" = the section is absent, Tirith's own browser).
+/// An app at a fresh home whose config puts Muse in place, with this `[browser] use` ("" = the section is absent, OpenBot's own browser).
 fn browser_home(tag: &str, use_mine: bool) -> crate::app::Shared {
     let dir = std::env::temp_dir().join(format!("tirith-browser-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -394,7 +394,7 @@ fn browser_mcp_env_reaches_the_sandbox() {
         .argv
     };
     let proxy = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY"];
-    // Inside the sandbox (the default config): every agent's server env names TIRITH_SANDBOXED and the four proxy variables, forwarded by name — Muse and anthropic as a whole-value ${VAR}, Codex in env_vars — so the launcher passes --no-sandbox and Edge leaves through Tirith's proxy.
+    // Inside the sandbox (the default config): every agent's server env names TIRITH_SANDBOXED and the four proxy variables, forwarded by name — Muse and anthropic as a whole-value ${VAR}, Codex in env_vars — so the launcher passes --no-sandbox and Edge leaves through OpenBot's proxy.
     let app = browser_home("sandboxed", false);
     let env = browser_of(&lane(&app, "muse"))["env"].clone();
     assert_eq!(

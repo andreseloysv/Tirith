@@ -8,7 +8,7 @@ pub struct Door {
 }
 
 impl Door {
-    /// This process's: the daemon of its Tirith home, and its run's token (never the owner's: a run's process has none to read).
+    /// This process's: the daemon of its OpenBot home, and its run's token (never the owner's: a run's process has none to read).
     pub fn here() -> Door {
         let port = crate::config::Config::load_at(&crate::config::tirith_home()).port;
         Door {

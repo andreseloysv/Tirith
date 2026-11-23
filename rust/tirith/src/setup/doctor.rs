@@ -68,11 +68,12 @@ pub(super) fn doctor() -> Result<bool, String> {
             &format!("{} {what}", known.name),
             &fix,
         );
-        let hooked = cx
-            .settings(&known)
-            .and_then(|f| std::fs::read_to_string(f).ok())
-            .is_some_and(|t| super::hook_lines::heard(&t));
-        line(hooked, &format!("{}'s hooks call Tirith", known.name), &fix);
+        let hooked = super::hook_lines::hooked(&cx, &known);
+        line(
+            hooked,
+            &format!("{}'s hooks call OpenBot", known.name),
+            &fix,
+        );
     }
     line(any, "an agent is connected", "tirith setup");
     for role in cfg.factory.roles() {

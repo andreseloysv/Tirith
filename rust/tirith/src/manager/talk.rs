@@ -32,7 +32,7 @@ pub(super) struct Talk {
     pub(super) reply_to: BTreeSet<String>,
     pub(super) turn_rooms: BTreeSet<String>,
     pub(super) text: String,
-    /// Reports from Tirith not yet handed over, and whether a hand-over is already on its way.
+    /// Reports from OpenBot not yet handed over, and whether a hand-over is already on its way.
     pub(super) notes: Vec<String>,
     pub(super) due: bool,
     /// Reports cut from `notes` because it was full: said in the next message.

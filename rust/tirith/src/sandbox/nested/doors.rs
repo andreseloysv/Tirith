@@ -18,7 +18,7 @@ impl Doors {
         }
     }
 
-    /// `r`'s environment says that port, so the hook, and anything that asks Tirith, goes there.
+    /// `r`'s environment says that port, so the hook, and anything that asks OpenBot, goes there.
     pub(super) fn told(self, r: &mut Request) {
         const PORT: &str = "TIRITH_PORT";
         r.env.retain(|(name, _)| name != PORT);

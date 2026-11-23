@@ -8,7 +8,7 @@ En la rutina «Revisar el PR nuevo» y cuando el dueño pase el enlace de un PR.
 
 ## Entradas y accesos
 - El enlace del PR: el campo url del evento, o el que dio el dueño. Solo vale https://github.com/<dueño>/<repositorio>/pull/<número>.
-- gh con sesión en este equipo; para un PR público basta el navegador de Tirith.
+- gh con sesión en este equipo; para un PR público basta el navegador de OpenBot.
 
 ## Pasos
 1. Comprueba que el enlace tiene exactamente esa forma y no lleva otros caracteres. Si es el ejemplo de «Probar» (example/repo), responde que la rutina funciona y termina.

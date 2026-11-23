@@ -40,7 +40,7 @@ pub fn start(app: Shared) {
     for r in rows {
         let r: Vec<String> = r.into_iter().map(Option::unwrap_or_default).collect();
         let (factory, role_hash) = app.stamp_for(&r[1]);
-        let why = "(interrupted: Tirith was stopped or restarted during this turn)";
+        let why = "(interrupted: OpenBot was stopped or restarted during this turn)";
         let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, agent, model, effort, answer, factory, role_hash) VALUES (?1,?2,?3,?4,?5,?6,'failed',?7,?8,?9,?10,?11,?12)";
         let ended = now_iso();
         app.insert(

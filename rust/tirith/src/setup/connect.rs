@@ -1,4 +1,4 @@
-//! Connecting one agent, in order: installed, signed in, its hooks at Tirith, then one real turn as the proof.
+//! Connecting one agent, in order: installed, signed in, its hooks at OpenBot, then one real turn as the proof.
 use super::{catalog::Known, context::Context, hooks, host, program, signin, trust};
 
 /// Connected, or what is still to do.
@@ -12,7 +12,7 @@ pub fn connect(cx: &Context, known: &Known, token: bool) -> State {
     let done = steps(cx, known, token);
     match &done {
         Ok(model) => println!(
-            "  ✓ connected: it answered and Tirith's rules heard its tool call{}",
+            "  ✓ connected: it answered and OpenBot's rules heard its tool call{}",
             suffix(model)
         ),
         Err(why) => println!("  ✗ {why}"),
@@ -41,7 +41,7 @@ fn steps(cx: &Context, known: &Known, token: bool) -> Result<String, String> {
     signin::signed_then_checked(cx, known, &path)
 }
 
-/// Its command in config.toml and its hooks at this Tirith.
+/// Its command in config.toml and its hooks at this OpenBot.
 fn wire(cx: &Context, known: &Known, path: &std::path::Path) -> Result<(), String> {
     super::configure::agent(&cx.home, &known.alias, path, &known.settings)?;
     let file = cx.settings(known).ok_or_else(|| {
@@ -54,12 +54,12 @@ fn wire(cx: &Context, known: &Known, path: &std::path::Path) -> Result<(), Strin
         )
     })?;
     if hooks::install(known, &file, &cx.exe, cx.named_home())? {
-        println!("  rules: its hooks call Tirith now ({})", file.display());
+        println!("  rules: its hooks call OpenBot now ({})", file.display());
     }
     if known.hooks == "codex" {
         let count = trust::trust(path)?;
         if count > 0 {
-            println!("  rules: {count} of Tirith's hooks trusted in Codex");
+            println!("  rules: {count} of OpenBot's hooks trusted in Codex");
         }
     }
     Ok(())

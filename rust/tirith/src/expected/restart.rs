@@ -1,4 +1,4 @@
-//! What a start finds open: a run Tirith was stopped in the middle of failed and is not done again (it may have acted); one that had not started is handed again on the day it was due or caught up, and else is lost.
+//! What a start finds open: a run OpenBot was stopped in the middle of failed and is not done again (it may have acted); one that had not started is handed again on the day it was due or caught up, and else is lost.
 use super::calendar::local;
 use super::life::never;
 use super::store::{close, select, Expected, FAILED, OK, RUNNING, WAITING};
@@ -9,7 +9,7 @@ use rusqlite::params;
 
 /// How far back `catch_up` looks (bots/schedule.rs).
 const CAUGHT_UP: i64 = 7;
-const MIDDLE: &str = "Tirith se paró o se reinició a mitad";
+const MIDDLE: &str = "OpenBot se paró o se reinició a mitad";
 
 /// At the daemon's start, after the rooms are open: the phones hear it.
 pub fn start(app: Shared) {
@@ -58,6 +58,6 @@ fn again(app: &Shared, run: &Expected) {
             (&run.trigger, &run.routine),
         );
     if !handed {
-        never(app, run, "Tirith se paró antes de que empezara");
+        never(app, run, "OpenBot se paró antes de que empezara");
     }
 }

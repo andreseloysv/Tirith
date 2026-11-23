@@ -1,4 +1,4 @@
-//! Posting signed events, registering this Tirith's key when the platform does not know it yet.
+//! Posting signed events, registering this OpenBot's key when the platform does not know it yet.
 use super::{http::api, signed::event_id, text::canonical, text::sha_hex, Me};
 use serde_json::{json, Value};
 async fn register(base: &str, me: &Me) -> Result<(), String> {

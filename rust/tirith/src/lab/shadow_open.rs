@@ -1,4 +1,4 @@
-//! The worktrees shadow B runs are in now: the task-local that makes the worktree every folder of the bot for its turn, and the refusal Tirith's `PreToolUse` hook gives an outward action from one of them.
+//! The worktrees shadow B runs are in now: the task-local that makes the worktree every folder of the bot for its turn, and the refusal OpenBot's `PreToolUse` hook gives an outward action from one of them.
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -29,7 +29,7 @@ pub(super) fn close(dir: &Path) {
     OPEN.lock().unwrap().remove(dir);
 }
 
-/// True while a B run is on its way in the worktree `dir` (its experiment's: a path, so two Tirith homes never share one).
+/// True while a B run is on its way in the worktree `dir` (its experiment's: a path, so two OpenBot homes never share one).
 pub(super) fn running(dir: &Path) -> bool {
     OPEN.lock().unwrap().contains_key(dir)
 }
@@ -55,7 +55,7 @@ pub fn refused(cwd: &str, tool: &str, known: &str, input: &serde_json::Value) ->
         || super::outward_browser::acts(tool, input)
         || super::outward_browser::acts(known, input);
     out.then(|| {
-        format!("{tool}: not available in a shadow run — it may read, but nothing it sends, buys, deletes or publishes leaves Tirith; its answer only goes to the experiment")
+        format!("{tool}: not available in a shadow run — it may read, but nothing it sends, buys, deletes or publishes leaves OpenBot; its answer only goes to the experiment")
     })
 }
 

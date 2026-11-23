@@ -1,4 +1,4 @@
-//! What a run of an experiment is to the rest of Tirith while it is on its way.
+//! What a run of an experiment is to the rest of OpenBot while it is on its way.
 use super::seat::{live, seated, SEATS};
 use crate::app::App;
 use std::path::{Path, PathBuf};

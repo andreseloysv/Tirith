@@ -430,7 +430,7 @@ async fn gateway_hides_secrets() {
         .iter()
         .any(|(k, v)| k == "mcp-session-id" && v == "web-session-1")));
 
-    // Nowhere the agent reads or Tirith keeps.
+    // Nowhere the agent reads or OpenBot keeps.
     let bot = w.token(BOT);
     let (_, opened) = http(
         w.port,

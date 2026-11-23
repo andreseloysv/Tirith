@@ -1,4 +1,4 @@
-//! What Tirith needs of the system, installed with its package manager when the owner says so.
+//! What OpenBot needs of the system, installed with its package manager when the owner says so.
 use super::{ask::Ask, find, root, run};
 
 const MANAGERS: [(&str, &[&str]); 5] = [

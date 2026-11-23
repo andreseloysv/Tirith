@@ -1,4 +1,4 @@
-//! A caller's connection, and whether it comes from inside Tirith's sandbox as the kernel tells it (`sandbox/caller.rs`): nothing from in there is the owner, whatever it holds.
+//! A caller's connection, and whether it comes from inside OpenBot's sandbox as the kernel tells it (`sandbox/caller.rs`): nothing from in there is the owner, whatever it holds.
 use super::door::Door;
 use axum::extract::{connect_info::Connected, ConnectInfo, Request};
 use axum::serve::IncomingStream;

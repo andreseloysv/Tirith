@@ -27,7 +27,7 @@ impl App {
         )
     }
 
-    /// The stamp a row made now by `role` carries: (the factory version, a hash of the role's setting with the page's model override for it folded in). A name that is no factory role (the owner, a room, Tirith itself) keeps an empty hash.
+    /// The stamp a row made now by `role` carries: (the factory version, a hash of the role's setting with the page's model override for it folded in). A name that is no factory role (the owner, a room, OpenBot itself) keeps an empty hash.
     pub fn stamp_for(&self, role: &str) -> (String, String) {
         let cfg = self.cfg();
         (

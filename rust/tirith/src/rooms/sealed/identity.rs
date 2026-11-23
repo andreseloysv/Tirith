@@ -1,11 +1,11 @@
-//! This Tirith's identity in the rooms: its ed25519 key in `<home>/am/<name>.json`.
+//! This OpenBot's identity in the rooms: its ed25519 key in `<home>/am/<name>.json`.
 use super::text::{hex, key_id, unhex};
 use ed25519_dalek::{Signer, SigningKey};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha512};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::{io::Write, path::Path};
-/// This Tirith's identity in the rooms. The secret never leaves the `sealed` module (no Debug, no Serialize).
+/// This OpenBot's identity in the rooms. The secret never leaves the `sealed` module (no Debug, no Serialize).
 pub struct Me {
     pub name: String,
     pub public: String,

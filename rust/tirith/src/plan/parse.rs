@@ -12,7 +12,7 @@ static STATUS: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
-/// An item's text without Tirith's old annotations (status notes, `<!-- tirith:… -->`).
+/// An item's text without OpenBot's old annotations (status notes, `<!-- tirith:… -->`).
 pub fn clean(text: &str) -> String {
     let text = text.split("<!--").next().unwrap_or("").trim();
     STATUS.replace(text, "").trim().to_string()

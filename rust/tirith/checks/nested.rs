@@ -1,4 +1,4 @@
-// Codex inside Tirith's sandbox keeps the limit its caller asked for (sandbox/nested/).
+// Codex inside OpenBot's sandbox keeps the limit its caller asked for (sandbox/nested/).
 use super::{asked, limits, mode::Mode, settings};
 use std::path::PathBuf;
 
@@ -172,7 +172,7 @@ fn the_one_profile_only_takes_away() {
     let (text, params) = limits::profile(&r, &around, limits::Part::Codex);
     assert!(
         text.starts_with(super::super::profile::PROFILE),
-        "Tirith's comes first, whole"
+        "OpenBot's comes first, whole"
     );
     assert!(
         !text.contains("nonexistent"),
@@ -181,7 +181,7 @@ fn the_one_profile_only_takes_away() {
     assert!(params.iter().any(|(_, v)| v == odd));
     let added = &text[super::super::profile::PROFILE.len()..];
     for allow in added.lines().filter(|l| l.starts_with("(allow")) {
-        // each gives back only what Tirith's own profile allows: the loopback, syslog's socket, names and files
+        // each gives back only what OpenBot's own profile allows: the loopback, syslog's socket, names and files
         let op = allow
             .trim_start_matches("(allow ")
             .split(' ')
@@ -206,7 +206,7 @@ fn the_one_profile_only_takes_away() {
         };
         assert!(
             narrow,
-            "nothing Tirith's profile denies is allowed: {allow}"
+            "nothing OpenBot's profile denies is allowed: {allow}"
         );
     }
     assert!(

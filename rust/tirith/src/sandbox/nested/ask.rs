@@ -6,11 +6,11 @@ use std::os::unix::net::UnixStream;
 
 pub(super) fn ask(request: &Request) -> Result<i32, String> {
     let path = place::socket(&crate::config::tirith_home()).ok_or("no folder for its socket")?;
-    let mut s =
-        UnixStream::connect(&path).map_err(|e| format!("Tirith's daemon does not answer ({e})"))?;
+    let mut s = UnixStream::connect(&path)
+        .map_err(|e| format!("OpenBot's daemon does not answer ({e})"))?;
     let server = place::peer(&s).ok_or("that socket is not this user's")?;
     if mac::ours(server) {
-        return Err("what holds the socket is not Tirith's daemon (it is confined itself)".into());
+        return Err("what holds the socket is not OpenBot's daemon (it is confined itself)".into());
     }
     handover::send(&s, &[0, 1, 2])?;
     let line = serde_json::to_string(request).map_err(|e| e.to_string())? + "\n";
@@ -21,7 +21,7 @@ pub(super) fn ask(request: &Request) -> Result<i32, String> {
         .map_err(|e| e.to_string())?;
     let answer = answer.trim();
     if answer.is_empty() {
-        return Err("Tirith stopped while it ran".into());
+        return Err("OpenBot stopped while it ran".into());
     }
     answer.parse().map_err(|_| answer.to_string())
 }

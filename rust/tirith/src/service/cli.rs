@@ -10,17 +10,17 @@ pub fn cli(opts: &Opts) -> Result<bool, String> {
     match opts.words.first().map(String::as_str) {
         Some("install") => {
             let (kind, notes) = super::install(&u, &ask, opts.boot)?;
-            println!("Tirith runs as {}.", kind.said());
+            println!("OpenBot runs as {}.", kind.said());
             notes.iter().for_each(|n| println!("  {n}"));
         }
-        Some("start") => println!("Tirith runs: {}.", super::start(&u, &ask)?.said()),
+        Some("start") => println!("OpenBot runs: {}.", super::start(&u, &ask)?.said()),
         Some("stop") => {
             super::stop(&u, &ask)?;
-            println!("Tirith stopped. Lanes already running go on.");
+            println!("OpenBot stopped. Lanes already running go on.");
         }
         Some("restart") => {
             super::stop(&u, &ask)?;
-            println!("Tirith runs again: {}.", super::start(&u, &ask)?.said());
+            println!("OpenBot runs again: {}.", super::start(&u, &ask)?.said());
         }
         Some("uninstall") => {
             super::uninstall(&u, &ask)?;
@@ -46,7 +46,7 @@ fn status(u: &Unit, ask: &Ask) -> bool {
             v["version"].as_str().unwrap_or("")
         ),
         (None, Some(_)) => {
-            println!("daemon:  not this home's: another Tirith answers on this port")
+            println!("daemon:  not this home's: another OpenBot answers on this port")
         }
         (None, None) => println!("daemon:  does not answer"),
     }

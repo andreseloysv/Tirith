@@ -26,7 +26,7 @@ pub(super) fn argv(
     (exe.display().to_string(), all)
 }
 
-/// The launchers of what Tirith starts, answered before the command line is read: this one, then the sandbox's.
+/// The launchers of what OpenBot starts, answered before the command line is read: this one, then the sandbox's.
 pub fn launcher(args: &[String]) -> Option<i32> {
     match args {
         [word, names, dashes, program, rest @ ..] if word == WORD && dashes == "--" => {

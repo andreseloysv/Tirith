@@ -1,4 +1,4 @@
-//! A bot's webhook as Tirith keeps it (kv `webhook:<bot>`: the platform's id, url and from, and the room), and what arrives through it.
+//! A bot's webhook as OpenBot keeps it (kv `webhook:<bot>`: the platform's id, url and from, and the room), and what arrives through it.
 use super::hook_clean::{ident, quoted};
 use super::hook_event::event_of;
 use super::hook_fire::{fire, matching};

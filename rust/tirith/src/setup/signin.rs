@@ -57,7 +57,7 @@ pub(super) fn signed_then_checked(
         }
         if got["answered"] == true {
             return Err(format!(
-                "{name} answered, but Tirith's rules did not hear its tool call: without them it is not connected (tirith doctor says what is missing)"
+                "{name} answered, but OpenBot's rules did not hear its tool call: without them it is not connected (tirith doctor says what is missing)"
             ));
         }
         let said = got["said"]

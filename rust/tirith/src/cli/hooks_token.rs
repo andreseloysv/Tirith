@@ -1,4 +1,4 @@
-//! An HTTP hook of Tirith's as it is installed, and one of an older install brought up to it when the daemon starts: without the token a lane's hook could only refuse.
+//! An HTTP hook of OpenBot's as it is installed, and one of an older install brought up to it when the daemon starts: without the token a lane's hook could only refuse.
 use crate::app::Shared;
 use serde_json::{json, Value};
 

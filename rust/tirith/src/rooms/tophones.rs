@@ -12,7 +12,7 @@ pub fn phone_rooms(app: &Shared, project: &str) -> Vec<String> {
         .map(|r| r.id.clone())
         .collect()
 }
-/// What a project's conversation says (its manager's words, Tirith's reports, a card) goes to the phones of its rooms, without a bot's memory citations.
+/// What a project's conversation says (its manager's words, OpenBot's reports, a card) goes to the phones of its rooms, without a bot's memory citations.
 pub fn to_phones(app: &Shared, project: &str, text: &str) {
     for (room, text, readers) in lines(app, project, text) {
         queue(&room, &text, readers);

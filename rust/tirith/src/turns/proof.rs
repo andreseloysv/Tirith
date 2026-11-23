@@ -25,7 +25,7 @@ static NESTED: LazyLock<Regex> = LazyLock::new(|| {
 pub(super) fn outside(what: &str) -> bool {
     OUTSIDE.is_match(what)
 }
-/// An error that proves itself whoever printed it: macOS's and Linux's refusal of a sandbox, and Tirith's own.
+/// An error that proves itself whoever printed it: macOS's and Linux's refusal of a sandbox, and OpenBot's own.
 static ITSELF: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(sandbox-exec: sandbox_apply|bwrap: |tirith: )").unwrap());
 
