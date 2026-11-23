@@ -20,7 +20,7 @@ function faceButton(f, sel, drag, card) {
       aria-label=${n ? `${f.name}, ${n} new` : f.name} aria-current=${f.id === sel} aria-describedby=${card.at && card.at.id === f.id ? 'face-card' : null}
       onPointerDown=${(e) => { card.now(); drag.down(e); }} onPointerMove=${drag.move} onPointerUp=${drag.up} onPointerCancel=${drag.cancel}
       onClick=${() => { if (!drag.swallowed()) f.open(); }} onKeyDown=${(e) => drag.key(e, f.id)}
-      onPointerEnter=${(e) => { if (!e.buttons) show(e); }} onPointerLeave=${card.hide}
+      onPointerEnter=${(e) => { if (!e.buttons && e.pointerType !== 'touch') show(e); }} onPointerLeave=${card.hide}
       onFocus=${(e) => { if (e.currentTarget.matches(':focus-visible')) show(e); }} onBlur=${card.now}>
     <${Face} shape=${f.shape} color=${f.color} size=${64} state=${f.state} />
     ${n ? html`<em class="nunread">${n > 9 ? '9+' : n}</em>` : null}</button>`;
