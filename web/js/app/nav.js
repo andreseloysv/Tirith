@@ -6,6 +6,7 @@ import { ICON, Icon, go } from '../common.js';
 import { TOP } from './views.js';
 import { useNavMemory } from './memory.js';
 import { Faces } from './faces.js';
+import { NavResizer } from './resize.js';
 import { projectRow } from './projects.js';
 
 function topViews(r) {
@@ -34,5 +35,6 @@ export function Nav({ r, onAdd }) {
         </nav>
       </div>
     </div>
+    <${NavResizer} />
   </aside>`;
 }
