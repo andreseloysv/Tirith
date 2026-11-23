@@ -91,3 +91,5 @@
   :root:not([data-theme="light"]) #blobs i { opacity: .26; }
   :root:not([data-theme="light"]) ::placeholder { color: var(--faint); }
 }
+.ccard { border-top: 1px solid var(--line, rgba(127,127,127,.25)); padding: 12px 0 6px; }
+.ccard h3 { font-size: 14px; font-weight: 500; margin: 0 0 6px; }

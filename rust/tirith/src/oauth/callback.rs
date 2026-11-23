@@ -56,6 +56,13 @@ pub(super) async fn callback(
         ),
         Err(_) => "The sign-in failed: the terminal that started it says why.".into(),
     };
+    let done = match done {
+        Ok(()) => {
+            crate::connector_page::worked(&app, &p.bot, &p.id, None);
+            Ok(())
+        }
+        Err(why) => Err(crate::connector_page::failed(&app, &p.bot, &p.id, &why).await), // what the ticket says, scrubbed
+    };
     let ok = done.is_ok();
     let what = format!("connector {} signed in for bot {}", p.id, p.bot);
     let _ = ok.then(|| app.event("", "", "info", "gateway", &what, ""));

@@ -6,9 +6,10 @@ import { Bots } from '../views/bots.js';
 import { Rooms } from '../views/rooms.js';
 import { Access } from '../views/access.js';
 import { Settings } from '../views/settings.js';
+import { Connectors } from '../views/connectors.js';
 
 /** Views of everything, at the top of the menu (the bots are their faces); views of one project, under it. */
-export const TOP = [['overview', 'Overview', Overview], ['settings', 'Settings', Settings]];
+export const TOP = [['overview', 'Overview', Overview], ['connectors', 'Connectors', Connectors], ['settings', 'Settings', Settings]];
 export const BOTS = ['bots', 'Bots', Bots];
 export const SUB = [['pipelines', 'Pipelines', Pipelines], ['agents', 'Agents', Agents], ['rooms', 'Rooms', Rooms], ['accesos', 'Access', Access]];
 export const VIEWS = [...TOP, BOTS, ...SUB];

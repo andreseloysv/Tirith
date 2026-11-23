@@ -36,7 +36,7 @@ Files:
 - `kept.rs`: The grants a one-bot block took out, kept in the store until its unblock lays them back.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `place.rs`: Making room for a table laid back at its old place.
-- `routes.rs`: The owner's routes: the calls, the block state, Block and Unblock.
+- `routes.rs`: The owner's routes: the calls, the block state, Block and Unblock (the Connectors page's too, `connector_page/`).
 
 ## `app/`
 
@@ -147,11 +147,12 @@ Files:
 
 - `api.rs`: The bots' HTTP API: the list and its cards, a bot deleted (its secrets with it), its routines, a routine run now, its Library.
 - `card.rs`: A bot's card saved: a new bot, or a change to one.
+- `connect.rs`: A bot card's Permissions → Connectors (`GET`/`POST /api/bots/<id>/connectors`, the owner's alone): each connector granted or not, blocked, and its narrowing; a grant given, narrowed or removed through the bot store (`store::with`), which writes `[roles.bot-<id>.connectors.<connector>]` (`grants.rs`), never a list of bots on the connector.
 - `cli.rs`: A bot's own commands, in its conversation.
 - `context.rs`: What a bot is handed at the start of every turn and routine, and the skill links laid before it.
 - `drafts.rs`: Draft skills (a taught task not yet approved): kept in the bot's `drafts/` folder (shared ones in `<home>/bots/drafts`), outside every folder an agent loads by itself; one found among the skills is moved there (by `context`, `versioned` and the Library's read). One activated in the Library is told to its bot with its next message.
 - `folder.rs`: A bot's folder and skills: where its sessions run (the lab's worktree during a B run), where agents may write, and the skills a folder holds.
-- `grants.rs`: A bot's connector grants through a rewrite of config.toml: kept under each bot still there on a card save, gone with a deleted bot's role (`connectors/`).
+- `grants.rs`: A bot's connector grants through a rewrite of config.toml: kept under each bot still there on a card save, gone with a deleted bot's role (`connectors/`); the one a card's Connectors changed (`connect.rs`) laid in, its keys set or taken off in place.
 - `fragment.rs`: The bots as a TOML fragment: the owner's bots' roles, and every written bot's routes and routines.
 - `handed.rs`: What a bot is handed with its next message, from the folder that turn runs in (an experiment's B: the branch's); a skill that changed is read again in a session of its own.
 - `from_template.rs`: A bot made from a template: its card, its routine, its skill and its first words.
@@ -249,6 +250,62 @@ Files:
 - `scratch.rs`: The small files of one exec turn, named for it alone and gone with it.
 - `setup.rs`: What one exec turn is: which agent runs it, in which folder, and how its role's factory shape sets it up.
 - `turn.rs`: One exec turn: set it up, start the agent, read its answer within the turn's time, and clean up.
+
+## `connector_page/`
+
+The Connectors page (`web/js/views/connectors.js`, with `connectors/` beside it; in the menu under Overview) and the
+Permissions → Connectors section of each owner's bot's card (`web/js/views/bots/card-connectors.js`), the owner's
+alone: `/api/connectors/` is refused to every agent in `server/scope.rs`, and these routes and `/api/bots/<id>/connectors`
+refuse any agent's token again by their own layer (`routes.rs`). What is defined, granted and blocked is read only from
+config.toml's tables (`[[connectors]]`, `[roles.bot-<id>.connectors.<connector>]`) and the Access APIs' one-bot blocks
+(`access/`); the page's Block / Unblock is `access/`'s `POST`/`DELETE /api/connectors/blocks` and its Login is
+`oauth/`'s.
+
+`GET /api/connectors/page` gives `connectors` and the owner's `bots` (`id`, `name`). Each connector has `id`, `kind`
+(`local` or `remote`), `host` (a remote one's host and port alone — never its command, its url's path or query, or a
+secret), `blocked` (for all bots), `last` (its newest `connector_calls.at`), `tools` (the names its last open listed)
+and `bots`: each owner's bot granted it or blocked for it alone, with `bot`, `name`, `blocked` (alone), `last`, its
+`status` and `why`, and `tools`, each `{name, mark}` marked by the gateway's own verdict (`connectors::verdict`) for
+that bot's grant: `allowed`, `approval` or `denied` (all denied when it is blocked for the bot). The status (`status.rs`):
+`error` when its last open or sign-in failed; `needs login` when a secret the definition names is not set for the bot
+(names only, read from its store), or for a remote connector that names none, when it is neither signed in
+(`TIRITH_OAUTH_<ID>_ACCESS`) nor ever opened; otherwise `ok`.
+
+What the gateway last saw is kept in kv (`seen.rs`): `connector-tools:<id>` (the tool names of the last open) and
+`connector-state:<bot>:<id>` (`{at, ok}` or `{at, error}`), written when the gateway opens a connector for a bot
+(`gateway/open.rs`) and when a sign-in begins or ends (`oauth/api.rs`, `oauth/callback.rs`). An error's why is scrubbed
+before it is kept or said anywhere (`scrub.rs`): each value the bot holds, a Bearer or Basic credential, a url's query
+and the value of any pair whose key names a secret (token, secret, password, key, auth, cookie, credential, code)
+become `(hidden)`; the gateway's `error` event names the same scrubbed why.
+
+`POST /api/connectors/<id>/remove` (`remove.rs`), after the page asks once ("Remove <id> and every bot's grant of
+it?" — Remove or Keep, like a bot's Delete): the config writer (`projects::rewrite`, toml_edit, every other line and
+comment kept) takes the `[[connectors]]` row and every role's grant of it out (a role's `connectors` table left empty
+goes too); then the one-bot blocks kept of it, what was seen of it and each owner's bot's sign-in to it (its reserved
+names) go; a `connector-remove` event. An unknown id is a 400.
+
+A bot's card grants or removes a connector with a checkbox and narrows a grant with its tools (empty: all the
+connector allows), deny and approval globs, saved at once: `POST /api/bots/<id>/connectors` with `{connector, grant}`,
+`grant` an object (`tools` null or a list, `deny`, `approval`) or null to remove it. It goes through the bot store
+(`bots/connect.rs`, `store::with`, one change at a time): the bot carries the change to the writer, which lays it into
+that bot's `[roles.bot-<id>.connectors.<connector>]` (`bots/grants.rs`) — keys set in place, `tools` taken off when
+null and `deny` or `approval` when empty — never a bots list on the connector. An unknown connector, an empty or
+quoted glob, a system bot or a connector blocked for that bot alone (unblock it first) is refused. `GET` gives each
+connector with `granted`, `blocked` and the grant's `tools`, `deny` and `approval`. Test `connectors_page_state`
+(`rust/tirith/checks/connectors_page.rs`), against the gateway checks' fake MCP servers: the status of each bot, the
+real tools marked, a grant round-trip through the card's API (kept by a card save), narrowing, removal of one grant,
+Remove, a login error and a scrubbed why, agents refused, and no secret value in any answer.
+
+Files:
+
+- `marks.rs`: A connector's real tools marked for one bot by the gateway's own verdict: allowed, approval or denied.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `remove.rs`: Remove: the connector's row and every grant out of config.toml, its kept blocks, sign-ins and seen state with them.
+- `routes.rs`: The owner's routes: the page's state and Remove, and the owner-only layer the card's route uses too.
+- `scrub.rs`: An error's text with no secret in it.
+- `seen.rs`: What the gateway last saw of a connector: its tools, and by bot whether its last open or sign-in worked or why not.
+- `state.rs`: What the page shows: each connector, its bots with their status and last use, and its tools marked for each.
+- `status.rs`: One bot's status with one connector: needs login, ok or error.
 
 ## `connectors/`
 
@@ -974,7 +1031,10 @@ its one redirect; a server that offers no registration cannot be signed in to. T
 PKCE (`pkce.rs`, a 32-byte verifier that never leaves the daemon), a random state, the connector's url as `resource`
 (RFC 8707) and the resource's `scopes_supported`. The CLI opens it in the owner's browser (`open`, `xdg-open`; over
 SSH it prints it) and waits on a ticket (`GET /api/connectors/logins/<ticket>`: waiting, done or failed with why), ten
-minutes at most.
+minutes at most. The Connectors page's Login (`connector_page/`) begins the same sign-in with
+`POST /api/connectors/<id>/login` (`{bot}`), opens the address in a new tab and waits on the same ticket. A failed
+discovery, registration or callback is kept as that bot's `error` with the connector (`connector_page/seen.rs`), and
+the why the reply, the ticket and the page say is scrubbed of every secret first (`connector_page/scrub.rs`).
 
 The code comes only to `GET /oauth/callback` on 127.0.0.1 (`callback.rs`), the one route without a token
 (`server/admit.rs`): a sandboxed caller and an agent's token are refused; its state must be a sign-in under way
@@ -1340,7 +1400,7 @@ Files:
 - `index.rs`: A bot's names and where each value lies, never a value.
 - `input.rs`: A value as it comes on stdin.
 - `key.rs`: The fallback's private files and the daemon's key material in them.
-- `lookup.rs`: The daemon's own lookup of one value, by bot and name, for the connector gateway alone, and its keeping of a connector's sign-in.
+- `lookup.rs`: The daemon's own lookup of one value, by bot and name, for the connector gateway alone, and its keeping of a connector's sign-in; a bot's names (never values) for the Connectors page's status, and a removed connector's sign-in dropped (`connector_page/`).
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `names.rs`: What may be a bot, a name and a value.
 - `os.rs`: The OS's credential store, in-process.

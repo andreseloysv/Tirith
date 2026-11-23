@@ -8,7 +8,7 @@ use std::path::PathBuf;
 pub(super) const MAIL_SECRET: &str = "mail-secret-value-5d1e9a";
 const WEB_SECRET: &str = "web-secret-value-77b0c2";
 const ORG_SECRET: &str = "org-secret-value-3fa418";
-const SECRETS: [&str; 3] = [MAIL_SECRET, WEB_SECRET, ORG_SECRET];
+pub(super) const SECRETS: [&str; 3] = [MAIL_SECRET, WEB_SECRET, ORG_SECRET];
 pub(super) const BOT: &str = "manager@bot-mail";
 
 pub(super) struct World {

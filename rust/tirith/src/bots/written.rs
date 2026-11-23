@@ -27,8 +27,9 @@ fn joined(head: String, frag: String) -> String {
 /// The text of config.toml (`text` as it is) with the bots laid into it by toml_edit, so its other sections and their comments stay as they are: each of the owner's bots a `[roles.bot-<id>]` that extends the manager with its own scope, name, face, session and access, each routine a `[[routes]]` on `schedule` and each of its routes a `[[routes]]` of its own; a bot not in `bots` goes, with its routes. A system bot has no role of its own here: only what the owner changed of it (`dirty`: its name, face, show, session and access, and its routes with them) is laid into its factory role's table (a real table, created with `entry` — an inline one would make a later `[roles.bot-…]` header unparseable) as a layer over the factory, its other keys (a model, say) untouched; an untouched system bot's routes in the file stay as they are.
 pub(super) fn written(text: &str, bots: &[Value]) -> Result<String, String> {
     let mut doc: DocumentMut = text.parse().map_err(|e| format!("config.toml: {e}"))?;
-    let kept = grants::taken(&doc); // the owner's bots' connector grants, laid back after (grants.rs)
-                                    // Every bot role and schedule route goes out of the file (and a changed bot's other routes, written again with it); the bots are written again after the owner's sections, together at the end.
+    let mut kept = grants::taken(&doc); // the owner's bots' connector grants, laid back after (grants.rs)
+    grants::changed(&mut kept, bots); // a card's grant given, narrowed or removed (connect.rs)
+                                      // Every bot role and schedule route goes out of the file (and a changed bot's other routes, written again with it); the bots are written again after the owner's sections, together at the end.
     sweep::drop_bots(&mut doc, bots);
     bots.iter()
         .filter(|b| b["system"] == true && b["dirty"] == true)

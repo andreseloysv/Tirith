@@ -16,7 +16,7 @@ pub use api::{route, routes};
 pub use callback::own_route;
 pub use cli::cli;
 pub use fresh::bearer;
-pub use names::reserved;
+pub use names::{all as sign_in_names, reserved, signed_in};
 
 /// The daemon's own client for OAuth: straight to the server (no agent's proxy), never following a redirect.
 fn http() -> Result<reqwest::Client, String> {

@@ -10,6 +10,7 @@ mod cli;
 mod client;
 mod codex;
 mod config;
+mod connector_page;
 mod connectors;
 mod expected;
 mod factory;
