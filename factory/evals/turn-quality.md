@@ -19,7 +19,6 @@ A ∅ says that a look worked and nothing is new. A ∅ that names what stopped 
 
 It did do its task when:
 
-- it prepared what the task asks and left the step that needs the owner's yes to an approval card, saying that it waits for that yes: that is how such a task is done, so it is neither a refusal nor a could-not;
 - what failed is someone's or something else's, and is the news the task asks for: what it watches being down (the look worked, also when its call to it failed), a red build or failing tests (a check that finds red ends as failed, and what it printed is the source of the answer), a deploy or a backup that failed, a declined payment;
 - it looked and found nothing new, or nothing matched (a search that then prints nothing);
 - a later call got over an error, or it discards an item, or it quotes or tells someone's words;
