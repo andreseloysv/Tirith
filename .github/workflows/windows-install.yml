@@ -74,7 +74,7 @@ jobs:
           foreach ($f in "$env:USERPROFILE\.codex\hooks.json", "$env:USERPROFILE\.copilot\hooks\tirith.json") {
             if (-not (Select-String -Path $f -Pattern 'tirith' -Quiet)) { throw "no OpenBot hook in $f" }
           }
-      - name: Serve with a fake agent
+      - name: Serve, and one lane with the fake agent
         run: |
           $fake = "$env:RUNNER_TEMP\fake.cmd"
           "@node `"$PWD\tools\e2e\fake-agent.mjs`" %*" | Set-Content $fake -Encoding ascii
@@ -105,8 +105,7 @@ jobs:
           Invoke-WebRequest -UseBasicParsing $link -SessionVariable signedIn | Out-Null
           $page = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:7717/" -WebSession $signedIn
           if ($page.Content -notmatch '<title>OpenBot</title>') { throw 'the sign-in link did not open the page' }
-      - name: One lane with the fake agent
-        run: |
+          # one lane, in this same step: GitHub ends what a step started when the step ends
           $repo = Join-Path $env:RUNNER_TEMP 'demo'
           git init -q -b main $repo; Set-Location $repo
           # the plan lives in docs/TODO.md and must exist; its first step is made by the command
