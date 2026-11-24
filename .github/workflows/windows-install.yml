@@ -32,7 +32,8 @@ jobs:
           New-Item -ItemType Directory -Force "$p\AppData\Roaming", "$p\AppData\Local", "$p\logs" | Out-Null
           @("USERPROFILE=$p", "HOME=$p", "TIRITH_HOME=$p\.tirith", "APPDATA=$p\AppData\Roaming",
             "LOCALAPPDATA=$p\AppData\Local", "LOGS=$p\logs") | Add-Content $env:GITHUB_ENV
-          git config --global user.name ci; git config --global user.email ci@localhost
+          # the identity goes in the throwaway profile, where the later steps' HOME looks
+          git config --file "$p\.gitconfig" user.name ci; git config --file "$p\.gitconfig" user.email ci@localhost
       - name: Install OpenBot
         run: |
           & ([scriptblock]::Create((irm "$env:TIRITH_BASE_URL/install.ps1"))) -NoSetup 2>&1 | Tee-Object "$env:LOGS\install.log"
@@ -57,7 +58,16 @@ jobs:
           Get-Command $n, codex, muse, copilot -ErrorAction Continue | Format-Table Name, Source | Out-String | Tee-Object "$env:LOGS\agents.log"
       - name: tirith setup finds them
         run: |
-          tirith setup --yes --agents anthropic,codex,copilot,muse *>&1 | Tee-Object "$env:LOGS\setup.log"
+          # Into a file, not a pipe: the daemon setup starts inherits its parent's handles on Windows and would keep a
+          # pipe open, so the step would never end.
+          $exe = (Get-Command tirith).Source
+          $setup = Start-Process $exe -ArgumentList 'setup', '--yes', '--agents', 'anthropic,codex,copilot,muse' -NoNewWindow -PassThru `
+            -RedirectStandardOutput "$env:LOGS\setup.log" -RedirectStandardError "$env:LOGS\setup.err"
+          $ended = $setup.WaitForExit(600000)
+          Get-Content "$env:LOGS\setup.log", "$env:LOGS\setup.err" -ErrorAction SilentlyContinue
+          # the daemon it started goes: the next step starts one with the fake agent
+          Get-Process tirith -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $ended) { throw 'tirith setup did not end within 10 minutes' }
           $text = Get-Content "$env:LOGS\setup.log" -Raw
           $bad = 'codex', 'copilot', 'muse' | Where-Object { $text -notmatch "(?s)==[^\n]*\n\s*found .*$_" }
           if ($bad) { throw "setup did not find: $bad" }
