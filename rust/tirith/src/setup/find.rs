@@ -67,7 +67,14 @@ pub fn program(name: &str) -> Option<PathBuf> {
         .find_map(|d| named(&d.join(name)))
 }
 
-/// An agent's program: config.toml's command when it runs, else the catalog's name.
+/// An agent's program: config.toml's command when it runs, else the catalog's name. Never a stand-in that only says the agent is missing.
 pub fn agent(known: &Known, configured: Option<&str>) -> Option<PathBuf> {
-    configured.and_then(program).or_else(|| program(&known.bin))
+    let real = |p: &PathBuf| !stand_in(p);
+    let set = configured.and_then(program).filter(real);
+    set.or_else(|| program(&known.bin).filter(real))
+}
+
+/// VS Code's `copilot-shim\copilot.exe`, on PATH for every terminal it opens: it exits 127 with "GitHub Copilot CLI was not found".
+pub(super) fn stand_in(path: &Path) -> bool {
+    path.components().any(|c| c.as_os_str() == "copilot-shim")
 }

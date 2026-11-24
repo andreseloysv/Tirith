@@ -8,6 +8,7 @@ import { RoleCard, roleList } from './settings/models.js';
 import { useAction } from './settings/ui.js';
 import { AccessCard, AccessPage } from './settings/access.js';
 import { Health } from './settings/health.js';
+import { AgentsCard } from './setup/agents.js';
 
 const THEME_KEY = 'tirith.theme';
 const THEMES = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
@@ -66,6 +67,7 @@ export function Settings({ project, sub }) {
   const own = html`<${AutopilotCard} project=${project} /><${GuardCard} project=${project} />`;
   return html`<section class="msettings">
     ${project ? html`${own}<h2 class="rsec">For all projects</h2>` : null}
+    <${AgentsCard} />
     <${Appearance} />
     <${AccessCard} />
     <${Health} />

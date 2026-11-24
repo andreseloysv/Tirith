@@ -29,6 +29,14 @@ impl Context {
         })
     }
 
+    /// For the page's setup of `alias`: no terminal, what programs print goes to the page.
+    pub fn page(alias: &str) -> Result<Context, String> {
+        Ok(Context {
+            ask: Ask::page(alias),
+            ..Context::new(true)?
+        })
+    }
+
     pub fn cfg(&self) -> Config {
         Config::load_at(&self.home)
     }

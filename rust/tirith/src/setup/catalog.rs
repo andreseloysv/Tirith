@@ -21,6 +21,8 @@ pub struct Known {
     /// Its maker's npm package, installed instead on musl (`npm.rs`).
     pub npm_on_musl: String,
     pub signin: Vec<String>,
+    /// The arguments that sign it in with this computer's browser, when they differ (the page's setup).
+    pub signin_here: Vec<String>,
     pub status: Vec<String>,
     pub settings: String,
     pub new_settings: toml::Table,

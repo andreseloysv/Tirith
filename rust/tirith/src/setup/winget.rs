@@ -20,12 +20,14 @@ pub(super) fn provide(ask: &Ask, missing: &[&str]) -> Result<(), String> {
         ));
     };
     let failed = || format!("{names} missing: winget install {}", ids.join(" "));
-    ask.person()
-        .then_some(())
-        .filter(|_| ask.yes_no(&format!("  {names} missing. Install it with winget?"), true))
-        .ok_or_else(failed)?;
+    let page = ask.on_page().is_some(); // the owner's tap on the page was the yes
+    (page
+        || ask.person()
+            && ask.yes_no(&format!("  {names} missing. Install it with winget?"), true))
+    .then_some(())
+    .ok_or_else(failed)?;
     for id in &ids {
-        let args = [
+        let mut args = vec![
             "install",
             "--id",
             id,
@@ -33,13 +35,31 @@ pub(super) fn provide(ask: &Ask, missing: &[&str]) -> Result<(), String> {
             "--accept-source-agreements",
             "--accept-package-agreements",
         ];
+        if page {
+            args.extend(["--silent", "--disable-interactivity"]); // no installer window, only Windows' own yes
+        }
         run::shown(ask, &winget, &args, &[])
             .then_some(())
             .ok_or_else(failed)?;
     }
-    missing
-        .iter()
-        .all(|m| find::program(m).is_some())
-        .then_some(())
-        .ok_or_else(failed)
+    let found: Option<Vec<_>> = missing.iter().map(|m| find::program(m)).collect();
+    found.ok_or_else(failed)?.iter().for_each(|p| on_path(p));
+    Ok(())
+}
+
+/// The folder of a program just installed, on this process's PATH: what it starts (an agent that needs Git's bash) finds it without a restart.
+fn on_path(program: &std::path::Path) {
+    let (Some(dir), path) = (
+        program.parent(),
+        std::env::var_os("PATH").unwrap_or_default(),
+    ) else {
+        return;
+    };
+    if std::env::split_paths(&path).any(|d| d == dir) {
+        return;
+    }
+    let all = std::iter::once(dir.to_path_buf()).chain(std::env::split_paths(&path));
+    if let Ok(joined) = std::env::join_paths(all) {
+        std::env::set_var("PATH", joined); // Windows: the environment is behind std's own lock
+    }
 }

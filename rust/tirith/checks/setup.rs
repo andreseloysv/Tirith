@@ -398,3 +398,14 @@ fn windows_needs_git_alone_and_winget_knows_git_and_node() {
         .collect();
     assert_eq!(ps1, ["codex", "muse"]);
 }
+
+#[test]
+fn vs_code_s_copilot_stand_in_is_never_taken_for_the_agent() {
+    let shim = Path::new(
+        "C:/Users/x/AppData/Local/Programs/Microsoft VS Code/bin/copilot-shim/copilot.exe",
+    );
+    assert!(super::find::stand_in(shim));
+    assert!(!super::find::stand_in(Path::new(
+        "C:/Users/x/AppData/Roaming/npm/copilot.cmd"
+    )));
+}

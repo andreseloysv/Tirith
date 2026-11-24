@@ -18,6 +18,7 @@ import { Working } from './working.js';
 import { Next } from './next.js';
 import { Quiet } from './quiet.js';
 import { Setup } from './setup.js';
+import { Start } from './start.js';
 
 const newest = (a, b) => String(b.at).localeCompare(String(a.at));
 
@@ -36,7 +37,7 @@ export function Overview({ project }) {
   const calm = !asks.length && !groups.length;
   const main = html`<div class="home">
     <${Hello} place=${p ? p.name || p.id : ''} asks=${asks.length} helpers=${helpers} bosses=${groups.length} line=${!(calm && !p && !q)} />
-    ${p ? html`<${Setup} project=${p.id} name=${p.name} />` : null}
+    ${p ? html`<${Setup} project=${p.id} name=${p.name} />` : html`<${Start} />`}
     <${Working} groups=${groups} who=${who} />
     <${Asks} list=${asks} who=${who} />
     ${calm && !p && !q ? html`<${Quiet} faces=${bots} />` : null}

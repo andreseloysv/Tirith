@@ -1,4 +1,4 @@
-//! Asking the owner on the terminal. `curl … | sh` leaves stdin to the pipe, so the terminal is /dev/tty; with --yes, or without one, every question takes its default.
+//! Asking the owner on the terminal. `curl … | sh` leaves stdin to the pipe, so the terminal is /dev/tty; with --yes, or without one, every question takes its default. On the page there is no terminal: the owner's tap was the yes.
 use std::fs::File;
 use std::io::{BufRead, BufReader, IsTerminal, Write};
 use std::process::Stdio;
@@ -7,6 +7,8 @@ pub struct Ask {
     tty: Option<File>,
     /// --yes: every question takes its default.
     yes: bool,
+    /// The agent whose setup the page runs: what programs print goes to it.
+    page: Option<String>,
 }
 
 impl Ask {
@@ -16,7 +18,25 @@ impl Ask {
             file.read(true).write(true).open("/dev/tty").ok()
         };
         let tty = open().filter(|f| f.is_terminal());
-        Ask { tty, yes }
+        Ask {
+            tty,
+            yes,
+            page: None,
+        }
+    }
+
+    /// For the page's setup of `alias`: every question takes its default.
+    pub fn page(alias: &str) -> Ask {
+        Ask {
+            tty: None,
+            yes: true,
+            page: Some(alias.to_string()),
+        }
+    }
+
+    /// The agent whose setup the page runs, when it is the page that asks.
+    pub fn on_page(&self) -> Option<&str> {
+        self.page.as_deref()
     }
 
     /// Whether a person can answer.

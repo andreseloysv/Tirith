@@ -6,8 +6,12 @@ use std::time::{Duration, Instant};
 
 pub type Env = [(String, String)];
 
-/// Runs it on the terminal, with everything it says shown; whether it ended well.
+/// Runs it on the terminal, with everything it says shown (on the page, in that agent's setup); whether it ended well.
 pub fn shown(ask: &Ask, program: &Path, args: &[&str], env: &Env) -> bool {
+    if let Some(alias) = ask.on_page() {
+        let limit = Duration::from_secs(20 * 60); // a slow installer, or a sign-in the owner finishes later
+        return super::web::capture::run(alias, program, args, env, limit);
+    }
     let mut command = Command::new(program);
     command
         .args(args)

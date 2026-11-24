@@ -35,6 +35,7 @@ mod summary;
 mod terminal;
 mod trust;
 mod trusted;
+mod web;
 mod why;
 mod winget;
 

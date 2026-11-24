@@ -3,6 +3,7 @@
 # own over this one (build.rs, TIRITH_AGENTS_FILE).
 #   install_ps1  its installer on Windows (a PowerShell script; Copilot uses npm there)
 #   signin   the arguments that sign it in, on a terminal with no browser
+#   signin_here  the arguments that sign it in with this computer's browser (the page's setup), when they differ
 #   status   the arguments that exit 0 only when it is signed in (none: only a real turn tells)
 #   hooks    the shape of its hooks file: groups, copilot, or codex (groups that must also be trusted)
 #   host_*   the variable all its processes get, and the login's flag, for an enterprise's host
@@ -25,6 +26,7 @@ install = "https://chatgpt.com/codex/install.sh"
 install_ps1 = "https://chatgpt.com/codex/install.ps1"
 installer_env = { CODEX_NON_INTERACTIVE = "1" }
 signin = ["login", "--device-auth"]
+signin_here = ["login"]
 status = ["login", "status"]
 settings = "~/.codex/hooks.json"
 hooks = "codex"
