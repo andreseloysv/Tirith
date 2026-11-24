@@ -17,6 +17,7 @@ ${css.map((c) => `<link rel="stylesheet" href="${root}css/${c}.css">`).join('\n'
 <link rel="stylesheet" href="${root}css/07-marketplace.css">
 <script src="${root}js/page.js"></script>
 <script src="${root}js/market.js" defer></script>
+<script src="${root}js/count.js" defer></script>
 </head>`;
 }
 

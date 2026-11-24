@@ -99,7 +99,12 @@ publishing until it is.
 - **Selling**: the package is stored encrypted for paid bots; a purchase returns a licence signed for the buyer's
   key, and the import route checks it. Payments through Stripe Connect (creator payout, platform fee). Without
   payments the Market only lists free bots.
-- **Analytics**: Plausible or a self-hosted equivalent (no cookies, no banner) on the site; the Market counts
+- **Analytics** (live since 2026-11-24): `tools/stats/`, a 100-line Node service with SQLite on the Mac mini
+  (launchd `com.openbot.stats`, port 8791), served at `https://estudiosv.online/stats/`. GoatCounter was the first
+  choice but has no macOS build and the mini (macOS 10.15) has no Go; Umami needs a Next.js and Prisma build. No
+  cookies, no stored address: a visitor is a hash of a daily secret, so nobody is followed across days. The page
+  (`site/js/count.js`) sends one image request; do-not-track and bots are not counted. The owner reads
+  `/stats/dash` (user any, password in `~/apps/openbot-stats/dashboard.token` on the mini). The Market counts
   installs itself.
 - **Where the data lives**: the Mac mini only (SQLite plus package files, backed up), nothing in the repo.
 
