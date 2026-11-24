@@ -79,21 +79,39 @@ jobs:
           enabled = false
           [merge]
           push = false
+          [messenger]
+          url = "http://127.0.0.1:9"
           "@ | Add-Content "$env:TIRITH_HOME\config.toml"
           Start-Process tirith -ArgumentList serve -RedirectStandardOutput "$env:LOGS\serve.out" -RedirectStandardError "$env:LOGS\serve.err" -WindowStyle Hidden
-          foreach ($i in 1..60) { try { $r = Invoke-WebRequest "http://127.0.0.1:7717/" -UseBasicParsing; break } catch { Start-Sleep 1 } }
-          if (-not $r -or $r.StatusCode -ne 200) { throw 'the page did not answer on 7717' }
+          # up when it answers at all: before a sign-in the page says 403
+          $up = $false
+          foreach ($i in 1..120) {
+            try { Invoke-WebRequest "http://127.0.0.1:7717/" -UseBasicParsing -TimeoutSec 2 -SkipHttpErrorCheck | Out-Null; $up = $true; break }
+            catch { Start-Sleep -Milliseconds 500 }
+          }
+          if (-not $up) { throw 'the daemon did not answer on 7717' }
+          tirith status
+          $link = "$(tirith open link | Select-Object -Last 1)".Trim()
+          Invoke-WebRequest -UseBasicParsing $link -SessionVariable signedIn | Out-Null
+          $page = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:7717/" -WebSession $signedIn
+          if ($page.Content -notmatch '<title>OpenBot</title>') { throw 'the sign-in link did not open the page' }
       - name: One lane with the fake agent
         run: |
           $repo = Join-Path $env:RUNNER_TEMP 'demo'
           git init -q -b main $repo; Set-Location $repo
+          # the plan lives in docs/TODO.md and must exist; its first step is made by the command
+          New-Item -ItemType Directory docs | Out-Null
+          "# Plan`n" | Set-Content docs/TODO.md
           'hello' | Set-Content a.txt; git add .; git commit -q -m first
           $out = tirith project add $repo; $out
-          $id = ($out -split ':')[0]
-          tirith plan add $id e2e 'let the fake agent commit a file'
-          $lane = tirith lane start $id e2e 'let the fake agent commit a file' --agent fake | ConvertFrom-Json
+          $id = ("$($out | Select-Object -First 1)" -split ':')[0]
+          tirith plan step $id 1 'Windows check'
+          tirith plan add $id 1 'let the fake agent commit a file'
+          # it prints "<lane> <status> — <item>"
+          $started = "$(tirith lane start $id 1 'let the fake agent commit a file' --agent fake)"; $started
+          $lane = ($started -split ' ')[0]
           foreach ($i in 1..60) {
-            $log = tirith lane log $lane.id
+            $log = tirith lane log $lane | Out-String
             if ($log -match 'fake-agent: committed') { break }; Start-Sleep 2
           }
           $log | Tee-Object "$env:LOGS\lane.log"
