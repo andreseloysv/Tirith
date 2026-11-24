@@ -14,13 +14,10 @@ fn link_shared(dir: &FsPath, common: &FsPath) {
         .filter(|e| {
             e.file_type().is_ok_and(|t| t.is_symlink()) && !e.path().join("SKILL.md").exists()
         });
-    gone.for_each(|e| drop(std::fs::remove_file(e.path())));
-    skills(common, true).iter().for_each(|(name, _)| {
-        drop(std::os::unix::fs::symlink(
-            common.join(name),
-            dir.join(name),
-        ))
-    });
+    gone.for_each(|e| drop(crate::os::unlink(&e.path())));
+    skills(common, true)
+        .iter()
+        .for_each(|(name, _)| drop(crate::os::link_dir(&common.join(name), &dir.join(name))));
 }
 /// The skills folder of the bots' agent (.<its command>/skills) is linked to the bot's skills.
 fn link_agent(app: &Shared, key: &str, dir: &FsPath) {
@@ -34,10 +31,9 @@ fn link_agent(app: &Shared, key: &str, dir: &FsPath) {
                 .map(|n| dir.join(format!(".{}", n.to_string_lossy())))
         });
     agent.into_iter().for_each(|d| {
-        drop(
-            std::fs::create_dir_all(&d)
-                .and_then(|_| std::os::unix::fs::symlink(format!("../{SKILLS}"), d.join("skills"))),
-        )
+        drop(std::fs::create_dir_all(&d).and_then(|_| {
+            crate::os::link_dir(FsPath::new(&format!("../{SKILLS}")), &d.join("skills"))
+        }))
     });
 }
 /// The skills' names, or "none".

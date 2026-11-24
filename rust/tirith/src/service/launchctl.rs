@@ -17,7 +17,7 @@ pub(super) struct Launchctl<'a> {
 
 impl<'a> Launchctl<'a> {
     pub fn new(u: &Unit, ask: &'a Ask, boot: bool) -> Launchctl<'a> {
-        let uid = unsafe { libc::geteuid() };
+        let uid = crate::os::uid();
         let domains = if boot {
             vec!["system".to_string()]
         } else {

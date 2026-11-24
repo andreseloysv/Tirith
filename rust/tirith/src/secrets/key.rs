@@ -1,7 +1,7 @@
 //! The fallback's private files and the daemon's key material in them: a folder of 0700, each file 0600 and written whole or not at all.
+use crate::os::Mode;
 use rand::RngCore;
 use std::io::{ErrorKind, Write};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
 const FILE: &str = "key";
@@ -15,7 +15,7 @@ pub(super) fn read(dir: &Path) -> Result<Option<[u8; 32]>, String> {
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(failed(e)),
     };
-    (meta.is_file() && meta.permissions().mode() & 0o077 == 0)
+    (meta.is_file() && crate::os::private_mode(&meta))
         .then_some(())
         .ok_or_else(|| format!("{} must be a file of mode 0600", path.display()))?;
     std::fs::read(&path)
@@ -40,15 +40,15 @@ pub(super) fn write(dir: &Path, file: &str, bytes: &[u8]) -> Result<(), String> 
     let failed = |e: std::io::Error| format!("{}: {e}", dir.join(file).display());
     std::fs::DirBuilder::new()
         .recursive(true)
-        .mode(0o700)
+        .with_mode(0o700)
         .create(dir)
         .map_err(failed)?;
-    std::fs::set_permissions(dir, PermissionsExt::from_mode(0o700)).map_err(failed)?;
+    crate::os::set_mode(dir, 0o700).map_err(failed)?;
     let new = dir.join(format!(".{file}.{:016x}", rand::random::<u64>()));
     let done = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .mode(0o600)
+        .with_mode(0o600)
         .open(&new)
         .and_then(|mut out| out.write_all(bytes).and_then(|_| out.sync_all()))
         .and_then(|_| std::fs::rename(&new, dir.join(file)));

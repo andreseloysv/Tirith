@@ -9,7 +9,7 @@ use std::time::Duration;
 fn systemctl(args: &[&str]) -> Result<String, String> {
     let mut command = Command::new("systemctl");
     command.arg("--user").args(args).stdin(Stdio::null());
-    let runtime = format!("/run/user/{}", unsafe { libc::geteuid() });
+    let runtime = format!("/run/user/{}", crate::os::uid());
     if std::env::var_os("XDG_RUNTIME_DIR").is_none() && std::path::Path::new(&runtime).is_dir() {
         command.env("XDG_RUNTIME_DIR", runtime);
     }
@@ -36,7 +36,7 @@ pub(super) fn usable() -> bool {
     if ready() {
         return true;
     }
-    let uid = unsafe { libc::geteuid() }.to_string();
+    let uid = crate::os::uid().to_string();
     let query = ["show-user", uid.as_str(), "--property=Linger", "--value"];
     let lingers = run::output("loginctl", &["enable-linger"]).is_some()
         || run::output("loginctl", &query).as_deref() == Some("yes");
@@ -62,7 +62,7 @@ pub(super) fn install(u: &Unit, ask: &Ask) -> Result<Vec<String>, String> {
 
 /// Linger keeps the user's services up from boot and after logout: none when it is on, else what is left to do.
 fn linger(ask: &Ask) -> Option<String> {
-    let uid = unsafe { libc::geteuid() }.to_string();
+    let uid = crate::os::uid().to_string();
     let query = ["show-user", uid.as_str(), "--property=Linger", "--value"];
     let on = || run::output("loginctl", &query).as_deref() == Some("yes");
     if on() || (run::output("loginctl", &["enable-linger"]).is_some() && on()) {

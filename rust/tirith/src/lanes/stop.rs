@@ -6,10 +6,10 @@ use std::time::Duration;
 /// SIGTERM to the agent's group, SIGKILL five seconds later.
 pub(super) fn kill_agent(pid: Option<u32>) {
     let Some(pid) = pid else { return };
-    kill_group(pid, libc::SIGTERM);
+    kill_group(pid, crate::app::TERM);
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(5)).await;
-        kill_group(pid, libc::SIGKILL);
+        kill_group(pid, crate::app::KILL);
     });
 }
 pub fn stop(app: &Shared, id: &str) -> Result<Lane, String> {

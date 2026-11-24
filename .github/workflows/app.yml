@@ -56,10 +56,10 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$pass" "$keychain"
           security list-keychains -d user -s "$keychain" login.keychain-db
           rm "$RUNNER_TEMP/cert.p12"
-      # Writes app/src-tauri/binaries/tirith-<target triple> (universal on macOS) for bundle.externalBin.
-      # The daemon is Unix-only: the Windows bundle has none (tauri.windows.conf.json).
+      # Writes app/src-tauri/binaries/tirith-<target triple> (universal on macOS, .exe on Windows) for
+      # bundle.externalBin. On Windows here, not as beforeBuildCommand: Tauri runs that through cmd, which has no sh.
       - name: Daemon sidecar
-        if: runner.os != 'Windows'
+        shell: bash
         run: sh app/sidecar.sh
       - name: Build
         working-directory: app

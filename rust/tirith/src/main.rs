@@ -24,6 +24,7 @@ mod metrics;
 mod models;
 mod numbers;
 mod oauth;
+mod os;
 mod plan;
 mod power;
 mod projects;

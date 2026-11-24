@@ -22,7 +22,7 @@ pub use git::git;
 pub use keys::{kept, write as write_key, Keys, OWNER, PAGE};
 pub use lane::Lane;
 pub use path::exe;
-pub use process::{alive, kill_group};
+pub use process::{alive, kill_group, KILL, TERM};
 pub use reply::{bad, R};
 pub use state::{App, Shared};
 pub use text::{redact_secrets, tail};

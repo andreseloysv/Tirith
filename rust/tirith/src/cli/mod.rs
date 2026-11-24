@@ -5,6 +5,7 @@ mod dispatch;
 mod hook;
 mod hooks;
 mod hooks_token;
+mod login_path;
 mod open;
 mod plan;
 mod serve;
@@ -27,6 +28,7 @@ pub fn main() {
     if let Some("--version" | "-V" | "version") = args.first().map(String::as_str) {
         return println!("tirith {}", crate::bundle::VERSION);
     }
+    #[cfg(unix)]
     if args.first().map(String::as_str) != Some("serve") {
         // A CLI command piped into `head` ends quietly instead of panicking on the closed pipe.
         unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };

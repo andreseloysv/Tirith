@@ -22,7 +22,7 @@ pub(super) fn provide(ask: &Ask, missing: &[&str]) -> Result<(), String> {
     else {
         return Err(format!("{names} missing: install them"));
     };
-    let as_root = unsafe { libc::geteuid() } == 0;
+    let as_root = crate::os::is_root();
     let shown = format!(
         "{}{manager} {} {names}",
         if as_root { "" } else { "sudo " },

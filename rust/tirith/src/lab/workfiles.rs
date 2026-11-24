@@ -32,7 +32,7 @@ pub(super) fn share(main: &Path, tree: &Path) {
     for (name, path) in entries(main) {
         let at = tree.join(name);
         if fs::symlink_metadata(&at).is_err() {
-            let _ = std::os::unix::fs::symlink(path, at);
+            let _ = crate::os::link_any(&path, &at);
         }
     }
 }

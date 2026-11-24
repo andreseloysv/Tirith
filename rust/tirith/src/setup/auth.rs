@@ -1,7 +1,7 @@
 //! What signs one agent in without a login (a token) or says where it lives (an enterprise's host): kept in `<home>/auth/<alias>.env` (0600) and handed to that agent's processes alone.
 use crate::app::Shared;
+use crate::os::Mode;
 use std::io::Write;
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 fn file(home: &Path, alias: &str) -> PathBuf {
@@ -32,16 +32,16 @@ pub fn keep(home: &Path, alias: &str, var: &str, value: &str) -> Result<(), Stri
     let failed = |e: std::io::Error| format!("{}: {e}", path.display());
     let dir = path.parent().ok_or("no folder for the token")?;
     std::fs::create_dir_all(dir).map_err(failed)?;
-    std::fs::set_permissions(dir, PermissionsExt::from_mode(0o700)).map_err(failed)?;
+    crate::os::set_mode(dir, 0o700).map_err(failed)?;
     let mut open = std::fs::OpenOptions::new();
     let mut out = open
         .write(true)
         .create(true)
         .truncate(true)
-        .mode(0o600)
+        .with_mode(0o600)
         .open(&path)
         .map_err(failed)?;
-    out.set_permissions(PermissionsExt::from_mode(0o600))
+    crate::os::set_file_mode(&out, 0o600)
         .and_then(|_| out.write_all(text.as_bytes()))
         .map_err(failed)
 }

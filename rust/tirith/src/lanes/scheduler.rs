@@ -34,9 +34,7 @@ fn reload_config(app: &Shared, said_error: &mut Option<String>) {
 }
 /// The one-minute load average per core.
 fn load() -> f64 {
-    let mut avg = [0f64; 3];
-    unsafe { libc::getloadavg(avg.as_mut_ptr(), 3) }; // leaves zeros when it fails
-    avg[0] / std::thread::available_parallelism().map_or(1, |c| c.get()) as f64
+    crate::os::load()
 }
 /// Disk diet when space is low, then on its own ticks the low-disk card, the sweep, stale questions and the bots.
 async fn housekeeping(app: &Shared, lanes: &[Lane], f: &Factory, tick: &mut u64) {

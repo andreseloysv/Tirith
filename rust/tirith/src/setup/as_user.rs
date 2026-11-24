@@ -1,5 +1,4 @@
 //! root on a server whose OpenBot runs as the user `tirith` (install.sh made it): root's `tirith …` is that user's, not a second OpenBot of root's.
-use std::os::unix::process::CommandExt;
 use std::path::Path;
 
 /// install.sh's service user.
@@ -39,7 +38,7 @@ pub fn in_anothers_terminal() {
 
 /// Goes on as that user when root calls and that user has the OpenBot of this machine; it returns only when it does not.
 pub fn as_service_user(args: &[String]) {
-    let root = cfg!(target_os = "linux") && unsafe { libc::geteuid() } == 0;
+    let root = cfg!(target_os = "linux") && crate::os::is_root();
     if !root || roots_own(args) || std::env::var_os("TIRITH_HOME").is_some() {
         return;
     }
@@ -55,7 +54,8 @@ pub fn as_service_user(args: &[String]) {
         return;
     };
     let via = std::env::var("SUDO_USER").unwrap_or_else(|_| "root".into());
-    let why = std::process::Command::new("runuser")
+    let mut runuser = std::process::Command::new("runuser");
+    runuser
         .args(["-u", USER, "--", "env"])
         .arg(format!("HOME={home}"))
         .arg(format!("USER={USER}"))
@@ -64,8 +64,19 @@ pub fn as_service_user(args: &[String]) {
         .arg(format!("{VIA}={via}"))
         .arg(exe)
         .args(args)
-        .current_dir(&home)
-        .exec();
+        .current_dir(&home);
+    let why = exec(&mut runuser);
     eprintln!("cannot go on as the user {USER}, whose OpenBot this is: {why}");
     std::process::exit(1);
+}
+
+/// Becomes `command`, as Unix's exec does: it returns only when that fails.
+#[cfg(unix)]
+fn exec(command: &mut std::process::Command) -> std::io::Error {
+    std::os::unix::process::CommandExt::exec(command)
+}
+
+#[cfg(not(unix))]
+fn exec(_command: &mut std::process::Command) -> std::io::Error {
+    std::io::Error::other("only Linux has a service user")
 }

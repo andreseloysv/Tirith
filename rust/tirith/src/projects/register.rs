@@ -4,8 +4,9 @@ use super::config_file::{read, WRITING};
 use super::project::unique_id;
 use crate::app::Shared;
 use crate::config::Project;
+use crate::os::Mode;
+use std::io::Write;
 use std::path::Path;
-use std::{io::Write, os::unix::fs::OpenOptionsExt};
 
 /// The project whose folder is `dir`, if there is one.
 pub(super) fn of_folder<'a>(projects: &'a [Project], dir: &Path) -> Option<&'a Project> {
@@ -34,7 +35,7 @@ fn append(file: &Path, p: &Project) -> Result<(), String> {
     std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .mode(0o600)
+        .with_mode(0o600)
         .open(file)
         .and_then(|mut f| f.write_all(more.as_bytes()))
         .map_err(|e| format!("{}: {e}", file.display()))

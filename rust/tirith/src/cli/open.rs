@@ -1,6 +1,5 @@
 //! `tirith open`: the page, opened as the owner.
 use serde_json::json;
-use std::process::{Command, Stdio};
 
 /// A link that works once, from the daemon.
 fn link() -> Result<String, String> {
@@ -36,16 +35,5 @@ fn shown(url: &str) -> bool {
     let html = format!(
         "<!doctype html><meta http-equiv=\"refresh\" content=\"0;url={url}\"><title>OpenBot</title>"
     );
-    let program = if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    crate::app::write_key(&file, &html).is_ok()
-        && Command::new(program)
-            .arg(&file)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success())
+    crate::app::write_key(&file, &html).is_ok() && crate::os::open(file.as_os_str())
 }

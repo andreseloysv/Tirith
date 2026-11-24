@@ -1,7 +1,6 @@
 //! With no service manager (a container, or only for now): the daemon in a session of its own, so it outlives the terminal.
 use super::unit::Unit;
 use crate::setup::daemon;
-use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 
 pub(super) fn start(u: &Unit) -> Result<(), String> {
@@ -18,12 +17,7 @@ pub(super) fn start(u: &Unit) -> Result<(), String> {
         .stdin(Stdio::null())
         .stdout(log)
         .stderr(err);
-    unsafe {
-        command.pre_exec(|| {
-            libc::setsid(); // (only async-signal-safe calls belong here)
-            Ok(())
-        });
-    }
+    crate::os::detach(&mut command);
     command
         .spawn()
         .map(|_| ())
@@ -42,9 +36,6 @@ pub(super) fn stop(u: &Unit) -> Result<(), String> {
         .as_i64()
         .filter(|p| *p > 1)
         .ok_or("the daemon gave no pid")?;
-    let sent = unsafe { libc::kill(pid as i32, libc::SIGTERM) };
-    (sent == 0)
-        .then_some(())
-        .ok_or_else(|| format!("cannot stop pid {pid}: {}", std::io::Error::last_os_error()))?;
+    crate::os::terminate(pid as u32).map_err(|e| format!("cannot stop pid {pid}: {e}"))?;
     daemon::down()
 }

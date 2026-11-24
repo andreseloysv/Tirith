@@ -36,7 +36,7 @@ pub async fn run_turn(
     let mut text = String::new();
     let read = read_turn(&mut lines, &mut stdin, read_only, (&mut text, &mut rec));
     let finished = tokio::time::timeout(Duration::from_secs(600), read).await;
-    kill_group(pid, libc::SIGKILL);
+    kill_group(pid, crate::app::KILL);
     let _ = child.wait().await;
     let text = text.trim().to_string();
     let result = finished

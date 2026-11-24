@@ -1,7 +1,6 @@
 //! What every step of the guide works with: this home, this binary, the owner's terminal.
 use super::{ask::Ask, catalog::Known};
 use crate::config::{expand, home_dir, tirith_home, Config};
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 pub struct Context {
@@ -16,12 +15,11 @@ impl Context {
         let home = std::path::absolute(&home).unwrap_or(home);
         std::fs::create_dir_all(&home).map_err(|e| format!("{}: {e}", home.display()))?;
         // Tokens, chats and keys live here: on a server other users are never let in.
-        std::fs::set_permissions(&home, PermissionsExt::from_mode(0o700))
-            .map_err(|e| format!("{}: {e}", home.display()))?;
+        crate::os::set_mode(&home, 0o700).map_err(|e| format!("{}: {e}", home.display()))?;
         if std::env::var_os(super::as_user::VIA).is_some() {
             // install.sh's account: the agents' own files and transcripts are in its home
             let account = home_dir();
-            std::fs::set_permissions(&account, PermissionsExt::from_mode(0o700))
+            crate::os::set_mode(&account, 0o700)
                 .map_err(|e| format!("{}: {e}", account.display()))?;
         }
         Ok(Context {

@@ -1,7 +1,6 @@
 //! `tirith connector login <id> --bot <bot>`: the owner's, in their own terminal. The daemon gives the sign-in's address, the owner's browser opens it, and this waits until the daemon's callback took the code (ten minutes at most). No token ever comes back here.
 use crate::client::{call_json, Flag};
 use serde_json::json;
-use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 const USE: &str = "usage: tirith connector login <id> --bot <bot> (the owner signs a bot in to a remote connector)";
@@ -54,16 +53,5 @@ fn login(id: &str, bot: &str) -> Result<(), String> {
 }
 
 fn opened(url: &str) -> bool {
-    let program = if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    std::env::var_os("SSH_CONNECTION").is_none()
-        && Command::new(program)
-            .arg(url)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success())
+    std::env::var_os("SSH_CONNECTION").is_none() && crate::os::open(url.as_ref())
 }
