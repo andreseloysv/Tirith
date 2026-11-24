@@ -213,7 +213,7 @@
     <div class="plan">
       <span class="kind">Your computer</span>
       <span class="price">Mac or Linux</span>
-      <span class="per">Windows through WSL 2</span>
+      <span class="per">Windows too, as a test build</span>
       <a class="btn" href="https://github.com/andreseloysv/Tirith/blob/main/docs/ALWAYS-ON.md">Keep it always on</a>
       <ul>
         <li>Starts by itself as a service</li>
@@ -245,7 +245,7 @@
           <tr><th scope="row">Where bots work</th><td class="us">On your Mac or Linux server</td><td>On a cloud computer; on your desktop only if you allow it</td><td>On Meta's cloud computer</td><td>On OpenAI's cloud computer; on your laptop only if you allow it</td><td>On Anthropic's cloud computer</td></tr>
           <tr><th scope="row">Choose the model</th><td class="us">Yes: agent, model and effort per role</td><td>No: it picks the model for each task</td><td>Muse Spark</td><td>GPT-6 Astra; OpenAI may mix models</td><td>One Anthropic model</td></tr>
           <tr><th scope="row">Cost</th><td class="us">Free; you pay for the agents you use</td><td>Included in X Premium, Super and Ultra, SuperGrok and Cursor plans</td><td>A free tier and paid plans</td><td>First dot included in ChatGPT Pro and Business Premium</td><td>Included in Anthropic's Pro, Max and Ultra plans</td></tr>
-          <tr><th scope="row">Where you get it</th><td class="us">macOS and Linux; Windows through WSL 2</td><td>macOS, Windows, Linux, iOS, Android, X and Slack</td><td>iOS, Android, the web and WhatsApp, in a few countries</td><td>ChatGPT apps, Slack and Teams; Pro not in the EEA, UK or Switzerland</td><td>iOS, Android and the web; US only, with a waitlist</td></tr>
+          <tr><th scope="row">Where you get it</th><td class="us">macOS, Linux and Windows (a test build)</td><td>macOS, Windows, Linux, iOS, Android, X and Slack</td><td>iOS, Android, the web and WhatsApp, in a few countries</td><td>ChatGPT apps, Slack and Teams; Pro not in the EEA, UK or Switzerland</td><td>iOS, Android and the web; US only, with a waitlist</td></tr>
           <tr><th scope="row">Before it sends or buys</th><td class="us">Every tool call passes OpenBot's rules; bots are told to ask you</td><td>Sensitive actions stop for your approval</td><td>A separate agent, Sentinel, approves what goes out</td><td>Your rules: allow, ask or block</td><td>Asks before messages and payments</td></tr>
           <tr><th scope="row">Open source</th><td class="us">Yes, MIT</td><td>No</td><td>No</td><td>No</td><td>No</td></tr>
         </tbody>
@@ -261,7 +261,8 @@
       <p class="lede">One line in a terminal. The installer checks the release's signature and each file's checksum before it puts anything on your computer.</p>
       <div class="rows">
         <a class="row" href="https://github.com/andreseloysv/Tirith/releases/download/v0.2.1/Tirith_0.2.1_aarch64.dmg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5V16H4zM2 18h20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Desktop app for macOS</b><small>0.2.1 for Apple silicon (.dmg). This version still shows the old name, Tirith.</small></span><svg class="dl" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-        <a class="row" href="https://github.com/andreseloysv/Tirith/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM7.5 9.5 10 12l-2.5 2.5M12.5 15H16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>All releases</b><small>Signed builds for macOS and Linux, x86_64 and arm64</small></span></a>
+        <a class="row" href="https://github.com/andreseloysv/Tirith/releases/download/v0.2.2-rc.1/OpenBot-0.2.2-rc.1-x64-setup.exe"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 9h16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Desktop app for Windows</b><small>0.2.2-rc.1, a test build for Windows 10 and 11 (x64). Not code-signed yet: Windows asks, choose More info, then Run anyway.</small></span><svg class="dl" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <a class="row" href="https://github.com/andreseloysv/Tirith/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM7.5 9.5 10 12l-2.5 2.5M12.5 15H16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>All releases</b><small>Signed builds for macOS and Linux (x86_64 and arm64) and Windows (x64)</small></span></a>
         <a class="row" href="https://github.com/andreseloysv/Tirith"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M15 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Source code</b><small>MIT license, on GitHub</small></span></a>
       </div>
     </div>
@@ -300,17 +301,14 @@
       </div>
       <div role="tabpanel" id="guide-windows" aria-labelledby="tab-windows" hidden>
         <ol class="steps">
-          <li><h3>Install WSL with Ubuntu</h3><p>Open PowerShell as administrator and run:</p>
-            <div class="cmd"><code>wsl --install -d Ubuntu</code><button type="button">Copy</button></div>
-            <p>Restart when asked, then open Ubuntu from the Start menu and choose a user name and password.</p></li>
-          <li><h3>Run the installer in Ubuntu</h3>
-            <div class="cmd"><code>curl -fsSL https://github.com/andreseloysv/Tirith/releases/latest/download/install.sh | sh</code><button type="button">Copy</button></div>
-            <p>It installs <code>tirith</code> in <code>~/.local/bin</code> and starts the guide.</p></li>
-          <li><h3>Connect your agents</h3><p>Answer the guide as on Linux. Each sign-in shows a link and a code to open in your Windows browser.</p></li>
-          <li><h3>Open OpenBot in Windows</h3><p>Go to <code>http://127.0.0.1:7717/</code> in Edge or Chrome: WSL 2 passes it through to Windows. If the page says this browser is not signed in, run this in Ubuntu and open the link it prints:</p>
-            <div class="cmd"><code>~/.local/bin/tirith open link</code><button type="button">Copy</button></div></li>
+          <li><h3>Run the installer</h3><p>Download <a href="https://github.com/andreseloysv/Tirith/releases/download/v0.2.2-rc.1/OpenBot-0.2.2-rc.1-x64-setup.exe">OpenBot for Windows</a> and open it. It installs for your user, without administrator rights. This test build is not code-signed yet, so Windows warns about an unknown publisher: choose <strong>More info</strong>, then <strong>Run anyway</strong>.</p></li>
+          <li><h3>Connect your agents</h3><p>The first time OpenBot starts, it opens its guide in a PowerShell window. Pick the agents you use: the Anthropic CLI, OpenAI Codex, GitHub Copilot or Muse Code. For each, the guide runs its maker's installer, opens its sign-in and checks that it answers. OpenBot needs Git for Windows, and the guide offers to install it with winget.</p></li>
+          <li><h3>Open OpenBot</h3><p>The app shows your bots. The <strong>+</strong> under the faces makes your first one.</p></li>
+          <li><h3>Or use PowerShell</h3><p>For the command line alone, run:</p>
+            <div class="cmd"><code>$env:TIRITH_BASE_URL='https://github.com/andreseloysv/Tirith/releases/download/v0.2.2-rc.1'; irm "$env:TIRITH_BASE_URL/install.ps1" | iex</code><button type="button">Copy</button></div>
+            <p>It checks the release's signature and the file's checksum, puts <code>tirith.exe</code> in <code>~\.local\bin</code> and starts the guide.</p></li>
         </ol>
-        <p class="aside">There is no native Windows version yet: OpenBot runs inside WSL 2, Microsoft's Linux for Windows, and needs it running while your bots work.</p>
+        <p class="aside">Windows is new: this is a test build, and Windows has no network sandbox, so the agents OpenBot starts there run without one. WSL 2 with the Linux steps works too.</p>
       </div>
     </div>
   </div>
@@ -347,7 +345,7 @@
       <details><summary>Can I use it from my phone?</summary><p>Yes. Scan the QR code on the Rooms page and your phone gets a chat with every bot and project, end-to-end encrypted through agentsmessenger.com, with nothing to install.</p></details>
       <details><summary>Will a bot buy or send things without me?</summary><p>Every bot is told to ask before it sends, buys, deletes or publishes, and a judge model reviews its turns afterwards and flags anything that had no approval. That is an instruction, not a lock, so give each bot only the accounts it needs.</p></details>
       <details><summary>Where does my data go?</summary><p>OpenBot keeps its state on your computer, and its page never listens on the network. What your agents send to their models follows each provider's terms. Everything OpenBot starts reaches the network through its own proxy, which records every destination.</p></details>
-      <details><summary>Does it work on Windows?</summary><p>Through WSL 2, as on Linux; see the Windows steps above. There is no native Windows version yet.</p></details>
+      <details><summary>Does it work on Windows?</summary><p>Yes, as a test build for Windows 10 and 11: the desktop app installs without administrator rights and opens the guide. It needs Git for Windows, and the agents it starts run without OpenBot's network sandbox. WSL 2 with the Linux steps works too.</p></details>
     </div>
   </div>
 </section>

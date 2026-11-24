@@ -20,6 +20,7 @@
 .tabs button[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
 .steps { list-style: none; counter-reset: step; margin: 28px 0 0; padding: 0; display: grid; gap: 26px; }
 .steps > li { counter-increment: step; display: grid; grid-template-columns: 34px 1fr; gap: 4px 14px; }
+.steps > li > * { grid-column: 2; } /* a step with four parts keeps them all beside its number */
 .steps > li::before {
   content: counter(step); grid-row: span 3; width: 30px; height: 30px; border-radius: 50%; background: var(--ink);
   color: #fff; display: grid; place-items: center; font-size: 14px; font-weight: 600;
