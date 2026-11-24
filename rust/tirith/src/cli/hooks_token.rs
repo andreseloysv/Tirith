@@ -1,4 +1,4 @@
-//! An HTTP hook of OpenBot's as it is installed, and one of an older install brought up to it when the daemon starts: without the token a lane's hook could only refuse.
+//! An HTTP hook of NeoBot's as it is installed, and one of an older install brought up to it when the daemon starts: without the token a lane's hook could only refuse.
 use crate::app::Shared;
 use serde_json::{json, Value};
 
@@ -57,7 +57,7 @@ pub(super) fn at_start(app: &Shared) {
         });
     if let Err(e) = done {
         eprintln!(
-            "tirith: {}: its hooks still lack the token ({e}): run tirith hooks install",
+            "neobot: {}: its hooks still lack the token ({e}): run neobot hooks install",
             path.display()
         );
     }

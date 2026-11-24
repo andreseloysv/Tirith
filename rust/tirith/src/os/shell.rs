@@ -1,6 +1,6 @@
 //! The POSIX shell that stages, checks and hooks run in.
 
-/// `sh` on Unix. On Windows the one Git for Windows carries (OpenBot needs Git there anyway): on PATH, else in Git's folder above `git.exe` (`cmd\git.exe` or `mingw64\bin\git.exe` beside `bin\sh.exe`).
+/// `sh` on Unix. On Windows the one Git for Windows carries (NeoBot needs Git there anyway): on PATH, else in Git's folder above `git.exe` (`cmd\git.exe` or `mingw64\bin\git.exe` beside `bin\sh.exe`).
 #[cfg(unix)]
 pub fn sh() -> String {
     "sh".into()

@@ -23,8 +23,8 @@ echo "signed as $id: $bin"
 [ -n "$profile" ] || exit 0
 work=$(mktemp -d "${TMPDIR:-/tmp}/tirith-notary.XXXXXX")
 trap 'rm -rf -- "${work:?}"' EXIT
-/usr/bin/ditto -c -k "$bin" "$work/tirith.zip"
-out=$(xcrun notarytool submit "$work/tirith.zip" --keychain-profile "$profile" --wait --output-format json)
+/usr/bin/ditto -c -k "$bin" "$work/neobot.zip"
+out=$(xcrun notarytool submit "$work/neobot.zip" --keychain-profile "$profile" --wait --output-format json)
 case "$out" in
   *'"status":"Accepted"'* | *'"status": "Accepted"'*) echo "notarized: $bin" ;;
   *) echo "notarization failed: $out" >&2; exit 1 ;;

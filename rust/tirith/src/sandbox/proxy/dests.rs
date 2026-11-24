@@ -1,4 +1,4 @@
-//! The destinations seen, by host, for the page and `tirith net list`.
+//! The destinations seen, by host, for the page and `neobot net list`.
 use crate::{app::Shared, sandbox::blocks::blocked};
 use serde_json::{json, Value};
 use std::collections::{BTreeSet, HashMap};

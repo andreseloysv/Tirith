@@ -1,4 +1,4 @@
-//! `tirith net status`.
+//! `neobot net status`.
 
 pub fn status() -> Result<(), String> {
     crate::client::call_json("GET", "/api/net/status", None).map(|s| {

@@ -38,7 +38,7 @@ fn a_room_no_phone_joined_takes_no_notice_from_the_phones() {
     } else {
         "bot-aviso"
     };
-    let sent = tophones::lines(&app, to, "✗ «Riego» no se hizo: OpenBot estaba parado");
+    let sent = tophones::lines(&app, to, "✗ «Riego» no se hizo: NeoBot estaba parado");
     for id in ["sealed-notice-empty", "sealed-notice-general"] {
         ROOMS.lock().unwrap().remove(id);
     }

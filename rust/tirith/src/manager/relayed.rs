@@ -1,4 +1,4 @@
-//! An agent's answer of a card (`tirith answer`): the manager closes one the owner answered in the chat. An approval, or a payment, is never the agent's to give: it takes the owner's own words (`owner_words.rs`), written in that conversation after the card was asked.
+//! An agent's answer of a card (`neobot answer`): the manager closes one the owner answered in the chat. An approval, or a payment, is never the agent's to give: it takes the owner's own words (`owner_words.rs`), written in that conversation after the card was asked.
 use crate::app::Shared;
 use serde_json::{json, Value};
 

@@ -2,7 +2,7 @@
 
 The owner's plan of 2026-11-21: measure every run of every bot, improve the bots only with proof, give skills a
 fixed shape, ask before acting outside, share what every bot should know, let outside events start routines, and
-let the owner teach a task by doing it once. OpenBot already stamps every lane, event and score with the factory
+let the owner teach a task by doing it once. NeoBot already stamps every lane, event and score with the factory
 version and the role's hash; this extends that to the bots' runs, their memory and their skills.
 
 Each part below is one or more plan items (the last section gives the order). The factory rules hold: behaviour
@@ -71,13 +71,13 @@ table `turns` (`runs` is the pipelines'):
 - **Quality:** `reaction` (+1 or −1: the owner's 👍/👎 on its answer, on the page or as a message that is only 👍
   or 👎 on the phone, which starts no turn), `corrected` (the owner's next message in that conversation was judged
   `correction` or `repeat` by the `owner-mood` eval), `checks_passed`/`checks_total` (its own validation: the skill
-  says how to check its result, and the bot runs `tirith turn checks <passed>/<total> "<names>"`), `score` (the
+  says how to check its result, and the bot runs `neobot turn checks <passed>/<total> "<names>"`), `score` (the
   judge's grade of the answer, eval `turn-quality` on the new event `turn.done`, with the skill's «Cómo validar» as
   its rubric; `sample` in the factory keeps it cheap), `cited` (the memory notes the answer cites, below).
 - **Stamps:** `factory` and `role_hash`, as every other table.
 - **Every scheduled run:** a routine's run, and a turn role's scheduled pass (the CEO's, the Coach's), is written
   down when it is due (table `expected_runs`), before anything starts, and ends as one row here, also when it never
-  started (OpenBot was stopped, the machine slept, no agent could start). One that failed, was lost or could not has
+  started (NeoBot was stopped, the machine slept, no agent could start). One that failed, was lost or could not has
   `status` `failed` and `why`. The owner gets one line of it, written by code, so it needs no agent and no quota: in
   that chat and on the paired phones, once, kept until it is sent.
 - **«∅» and «✗»:** «∅» means "I looked and nothing is new", never "I could not", which is «✗». Code fails what is
@@ -86,11 +86,11 @@ table `turns` (`runs` is the pipelines'):
   gives a score, plain words decide. So a good run's news wait for the judge (its two tries take 20 minutes at
   most; without its word they go out after 26), and a failure is that one line and no news.
 - **A missed time:** `catch_up = "once"` (the default) runs the latest time missed, one run, and says that it is
-  late; with "skip" a time is lost five minutes after it, and is a failed row. A run that a stop of OpenBot cut is
+  late; with "skip" a time is lost five minutes after it, and is a failed row. A run that a stop of NeoBot cut is
   failed and not done again (it may have acted); one that had not started is handed again.
 
 Memory notes are numbered: each note of a `memory.md` is one line `- [m<N>] …`, and an answer that used a note
-cites it as `[m<N>]` (the bot prompt says so; OpenBot numbers unnumbered lines when it hands the memory over).
+cites it as `[m<N>]` (the bot prompt says so; NeoBot numbers unnumbered lines when it hands the memory over).
 
 What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`):
 
@@ -100,7 +100,7 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
 - **Per skill:** how often it is used, how often its validation passes, and the tokens it saves: the mean tokens of
   that routine's runs before the skill's first use against after.
 - **Memory:** what loading it costs per turn (characters / 4, in tokens), how often each note is cited, the notes no
-  run cited in the last 30 (candidates to delete, never deleted by OpenBot), and memory failures: the owner had to
+  run cited in the last 30 (candidates to delete, never deleted by NeoBot), and memory failures: the owner had to
   correct the same thing twice (`repeat`).
 
 ## 2. Skills, approvals and shared memory
@@ -110,8 +110,8 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
   and it marks the sections a skill lacks; the bot prompt tells the bots to write skills with it.
 - **Approvals:** a new card kind `approval` (`[cards] kinds`). Before sending, buying, deleting, publishing or
   touching production — and before anything its skill lists under «Qué requiere aprobación» — a bot opens
-  `tirith ask-owner --kind approval "<exactly what, to whom>"` and ends its turn; the owner's answer starts its next
-  turn, as every card answer does (bots never wait inside a turn). An agent cannot answer it: `tirith answer` takes
+  `neobot ask-owner --kind approval "<exactly what, to whom>"` and ends its turn; the owner's answer starts its next
+  turn, as every card answer does (bots never wait inside a turn). An agent cannot answer it: `neobot answer` takes
   only the owner's own words written after the card, and the daemon knows a caller from inside the sandbox whatever
   it sends. The eval `unapproved` on `turn.done` reads the
   turn's tools and the skill's approval section and labels it `ok` or `unapproved`; the measure `unapproved` (24 h,
@@ -122,7 +122,7 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
 ## 3. The Coach and the lab
 
 - **Versions in git.** Each bot's folder is a git repository that tracks only `memory.md` and its own skills
-  (`.agents/skills`, not the linked shared ones); the shared skills and memory are a repository of their own. OpenBot
+  (`.agents/skills`, not the linked shared ones); the shared skills and memory are a repository of their own. NeoBot
   commits after every turn that changed them and after every Library edit: the history is the versions.
 - **The Coach** is a system bot of the factory (`[roles.coach]`, name Coach, its own face, `session = "turn"`,
   `scope = "own"`, prompt `factory/prompts/coach.md`), routed on a weekly `schedule` (Monday 09:00) and on the new
@@ -130,12 +130,12 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
   5 failed, once per episode. It reads the register and the bot's folder and proposes **one change per experiment**
   with its hypothesis («en gmail-safari, buscar con un filtro en vez de abrir cada correo: −40 % tokens con el mismo
   resultado»; «esta rutina con esfuerzo medio»; «borrar 12 notas que nadie cita»): a branch of the bot's repository
-  with one commit, started with `tirith lab start <bot> <branch> --routine <id> --mode replay|live|shadow
+  with one commit, started with `neobot lab start <bot> <branch> --routine <id> --mode replay|live|shadow
   --hypothesis "<text>"`. It writes only in the bots' folders and the lab's worktrees (the rules hold it there).
 - **The rule is fixed before the test, by the factory, not by the Coach:** `[lab]` in `factory.toml` —
   `inputs = 8`, `not_worse_share = 0.5`, `min_saving = 0.15`, `max_days = 7`. The variant is adopted when, over
   its comparisons, it is not worse (wins and ties at least half, and wins at least as many as it loses), it has no
-  new failure and no 👎, and it saves at least 15 % of cost or of time (in most pairs too: one slow answer, or one tool call too many, moves a mean; of time, which varies by itself, in four of every five). Otherwise it is discarded. OpenBot decides
+  new failure and no 👎, and it saves at least 15 % of cost or of time (in most pairs too: one slow answer, or one tool call too many, moves a mean; of time, which varies by itself, in four of every five). Otherwise it is discarded. NeoBot decides
   mechanically and merges the branch (adopted) or deletes it (discarded).
 - **Three ways to test,** best first:
   1. **Replay.** Every bot turn keeps what it read — the tool results as its agent saw them (the anthropic agent's
@@ -143,16 +143,16 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
      runs of each routine, in `<tirith home>/captures/<turn>.jsonl`. A replay runs the routine on the same last
      `inputs` captures twice, the bot repository's main (A) and the branch (B), each in a throwaway worktree, with
      the network closed to all but the model of the bot's agent (`model_hosts`) and every tool call that reads the
-     outside world answered from the capture by OpenBot's hooks (a call the capture lacks is refused: «not available
+     outside world answered from the capture by NeoBot's hooks (a call the capture lacks is refused: «not available
      in a replay»). It needs at least 5 such captures, and two failed runs are no tie. Nothing of it reaches the owner.
   2. **Live.** The bot's real runs of that routine alternate A and B (B in the branch's worktree), for when inputs
      cannot be replayed; each run starts a session of its own and is handed the memory and skills of its side; its answers reach the owner as always. An adopted skill is used from the next run: a changed skill is read again, in a new session.
   3. **Shadow.** B runs beside each real run of A, in its worktree, with live reads and every outward action
-     refused (no cards, no `tirith say`, no phones, no `safari open`). It costs double while it lasts.
+     refused (no cards, no `neobot say`, no phones, no `safari open`). It costs double while it lasts.
   Both sides always start alike: a replay warms the cache with an uncounted turn and alternates which side
   goes first; live and shadow runs resume no session.
 - **Comparison:** the judge reads the input and the two answers in random order (eval `ab-compare`) and says `a`,
-  `b` or `tie`; OpenBot maps it back. Two answers of the same text are a tie, without the judge. Tokens, cost and
+  `b` or `tie`; NeoBot maps it back. Two answers of the same text are a tie, without the judge. Tokens, cost and
   time come from the `turns` rows of both.
 - **What the owner gets:** one line in the bot's chat, on the phones only for an adoption: «Adopté gmail-safari v3:
   −38 % tokens, misma calidad (8/8)» (events `lab.adopted`, phone true, and `lab.discarded`, phone false). The
@@ -161,9 +161,9 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
 ## 4. Routines on outside events
 
 - **The webhook:** each bot gets a secret URL `https://agentsmessenger.com/hook/<secret>` (the platform is already
-  on the internet with HTTPS). The platform seals what arrives for the bot's room (OpenBot's key) at once and keeps
+  on the internet with HTTPS). The platform seals what arrives for the bot's room (NeoBot's key) at once and keeps
   only the sealed copy, which it cannot open when it seals once (a key made for that call and thrown away; a platform
-  from before that ignores the request and seals with its webhook agent's key, which it holds); OpenBot's room watcher turns it into the event `webhook` of that bot, with `source`, `kind`,
+  from before that ignores the request and seals with its webhook agent's key, which it holds); NeoBot's room watcher turns it into the event `webhook` of that bot, with `source`, `kind`,
   `title`, `url`, `text` and its data (GitHub's `X-GitHub-Event` and `action` give `github:pull_request.opened`).
   The URL is the only secret: whoever has it can send any of these, which is one more reason they are only data.
 - **The routine:** a routine may say `on = "webhook"` and `when = "github:pull_request.opened"`; its task may use
@@ -176,7 +176,7 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
 
 ## 5. Teach it a task
 
-- **Recording:** a small OpenBot extension for the owner's Edge (`tools/teach/`, Manifest V3), with the owner's own
+- **Recording:** a small NeoBot extension for the owner's Edge (`tools/teach/`, Manifest V3), with the owner's own
   sessions. It records pages (URL, title), clicks (the element's text, role and a short selector) and typing (the
   field's label and value), masks only passwords, one-time codes and cards (`type=password`, `autocomplete`
   `one-time-code` and `cc-*`, fields named like card, cvv, otp, pin), and stops after 10 minutes at most. It sends

@@ -1,4 +1,4 @@
-//! The scheduler's tick: OpenBot says it is alive, what was missed is written down, what takes too long is ended, a run no judge will read is looked at by code, and only then do news that waited for that judge go out (after a stop both are due at once, and a failure is one notice).
+//! The scheduler's tick: NeoBot says it is alive, what was missed is written down, what takes too long is ended, a run no judge will read is looked at by code, and only then do news that waited for that judge go out (after a stop both are due at once, and a failure is one notice).
 use crate::app::Shared;
 use chrono::{DateTime, Local};
 

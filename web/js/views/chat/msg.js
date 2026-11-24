@@ -1,5 +1,5 @@
 // One stored message that is not part of a manager turn: a routine's line, a card the manager sent, the owner's
-// words (typed here or on their phone), or a note (Tirith's, another agent's, the CEO's or an agent's `tirith say`).
+// words (typed here or on their phone), or a note (Tirith's, another agent's, the CEO's or an agent's `neobot say`).
 import { html } from '../../../vendor/preact-htm.js';
 import { clockTime } from '../../common.js';
 import { Need } from '../need.js';
@@ -39,7 +39,7 @@ function owner({ m, projects, onZoom }, time) {
 /** Who a note is from and its words: {text, from, cls, via}. The owner's own from the phone stand where the phone
     has them: on the right. */
 function noteOf({ m, project, projects }) {
-  let text = m.text, from = 'OpenBot', cls = 'mgr note';
+  let text = m.text, from = 'NeoBot', cls = 'mgr note';
   const merged = m.role === 'tirith' && MERGED.exec(text);
   /* a merge reads as one line; in the conversation of no project (rows from before the split) it names its project */
   if (merged) text = `On main${merged[1] === project ? '' : ` of ${projName(projects, merged[1])}`} (\`${merged[2]}\`): ${merged[3].replace(CHECKS, '')}`;
@@ -48,7 +48,7 @@ function noteOf({ m, project, projects }) {
     if (r && PHONE.test(r[1])) return { text: r[3], from: '', cls: 'me', via: 'Your phone · ' };
     if (r) { from = r[1]; text = r[3]; } else from = 'Room';
     cls = 'mgr note room';
-  } else if (m.role !== 'tirith') { from = ['ceo', 'reviewer', 'improver'].includes(m.role) ? 'CEO' : m.role; cls = 'mgr ceo'; } /* a turn role's rows (the CEO's passes, under whatever name the role had) and an agent's `tirith say`, under its role or lane */
+  } else if (m.role !== 'tirith') { from = ['ceo', 'reviewer', 'improver'].includes(m.role) ? 'CEO' : m.role; cls = 'mgr ceo'; } /* a turn role's rows (the CEO's passes, under whatever name the role had) and an agent's `neobot say`, under its role or lane */
   return { text, from, cls, via: '' };
 }
 

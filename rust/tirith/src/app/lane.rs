@@ -17,7 +17,7 @@ pub struct Lane {
     pub branch: String,
     pub pid: Option<u32>,
     pub attempts: u32,
-    /// The agent's last message (Stop hook) or OpenBot's note.
+    /// The agent's last message (Stop hook) or NeoBot's note.
     pub note: String,
     /// The agent session id seen in its hooks (a resume continues it).
     pub session: String,

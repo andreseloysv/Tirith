@@ -1,6 +1,6 @@
 //! The command line of one exec turn, for each agent that runs one (Muse and Codex).
 
-/// The argv of one Muse turn. It runs unattended inside OpenBot's own sandbox, so its approvals and inner sandbox are off (`--yolo`, the parallel of the Codex bypass below); a read-only role's file-writing tools are off too.
+/// The argv of one Muse turn. It runs unattended inside NeoBot's own sandbox, so its approvals and inner sandbox are off (`--yolo`, the parallel of the Codex bypass below); a read-only role's file-writing tools are off too.
 pub(super) fn muse_argv(
     command: &str,
     read_only: bool,

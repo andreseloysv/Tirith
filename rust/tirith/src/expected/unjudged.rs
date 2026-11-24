@@ -1,4 +1,4 @@
-//! A good run that no judge will read any more (OpenBot stopped while it was judged, or only a share is judged) is no success by that: code's plain words decide, as when a judge gave no verdict.
+//! A good run that no judge will read any more (NeoBot stopped while it was judged, or only a share is judged) is no success by that: code's plain words decide, as when a judge gave no verdict.
 use super::admitted::admitted;
 use super::calendar::utc;
 use super::store::OK;

@@ -2,7 +2,7 @@
 use crate::app::Shared;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
-/// A lane that asked with `tirith ask` is blocked until answered: it is an open question too.
+/// A lane that asked with `neobot ask` is blocked until answered: it is an open question too.
 pub(super) fn waiting_cards(lanes: &[crate::app::Lane]) -> Vec<Value> {
     lanes
         .iter()

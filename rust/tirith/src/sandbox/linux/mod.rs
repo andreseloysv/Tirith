@@ -53,7 +53,7 @@ pub(super) fn launcher(words: &[String]) -> i32 {
     match (at.and_then(|i| asked(&words[..i])), at) {
         (Some((ports, hidden)), Some(i)) => run::run(&ports, &hidden, &words[i + 1..]),
         _ => {
-            eprintln!("usage: tirith net run [port...] [--hide <file>...] -- <program> [args...]");
+            eprintln!("usage: neobot net run [port...] [--hide <file>...] -- <program> [args...]");
             2
         }
     }

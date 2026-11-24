@@ -1,4 +1,4 @@
-//! The text of OpenBot's systemd user unit.
+//! The text of NeoBot's systemd user unit.
 use super::unit::Unit;
 use std::path::Path;
 
@@ -27,9 +27,9 @@ pub(super) fn text(u: &Unit, log: &Path) -> Result<String, String> {
         format!("Environment=\"TIRITH_PORT={p}\"\n")
     });
     Ok(format!(
-        "# Written by `tirith service install`.
+        "# Written by `neobot service install`.
 [Unit]
-Description=OpenBot
+Description=NeoBot
 After=network-online.target
 StartLimitIntervalSec=0
 

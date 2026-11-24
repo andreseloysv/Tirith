@@ -1,4 +1,4 @@
-//! The daemon's /api/models routes and the `tirith models` command that calls them.
+//! The daemon's /api/models routes and the `neobot models` command that calls them.
 use super::{roles::RoleSetting, save::line, save::save, state};
 use crate::app::{bad, Shared};
 use crate::client::{call, Flag};
@@ -12,7 +12,7 @@ pub fn routes() -> Router<Shared> {
             .delete(|State(app): State<Shared>, UrlPath(r): UrlPath<String>| async move { save(&app, &r, None).map(|s| Json(json!(s))).map_err(bad) }),
     )
 }
-/// `tirith models`, `tirith models set <role> [--agent A] [--model M] [--effort E] [--fallback "a:m,b"]`, `tirith models reset <role>`; `None` when `pos` is not one of this module's commands.
+/// `neobot models`, `neobot models set <role> [--agent A] [--model M] [--effort E] [--fallback "a:m,b"]`, `neobot models reset <role>`; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     Some(match pos {
         ["models"] => call("GET", "/api/models", None)

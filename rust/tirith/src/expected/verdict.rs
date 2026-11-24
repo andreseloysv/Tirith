@@ -15,7 +15,7 @@ pub fn verdict(app: &Shared, t: &Turn, ok: bool, answer: &str) -> Option<String>
     (!t.routine.is_empty() && t.role == t.conv).then_some(())?;
     let run = oldest(app, &t.conv, &t.routine, RUNNING)?;
     if !run.why.is_empty() {
-        return Some(run.why); // OpenBot stopped it
+        return Some(run.why); // NeoBot stopped it
     }
     judged(run.kind == "webhook", ok, answer, (t.steps, &t.looks))
 }

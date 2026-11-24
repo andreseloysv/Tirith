@@ -12,7 +12,7 @@ $triple = ((rustc -vV | Select-String '^host: ').Line -replace '^host: ', '')
 cargo build --release --locked -p tirith --target $triple
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 New-Item -ItemType Directory -Force "src-tauri\binaries" | Out-Null
-Copy-Item (Join-Path $root "target\$triple\release\tirith.exe") "src-tauri\binaries\tirith-$triple.exe" -Force
+Copy-Item (Join-Path $root "target\$triple\release\neobot.exe") "src-tauri\binaries\neobot-$triple.exe" -Force
 npm run tauri build -- @args
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 

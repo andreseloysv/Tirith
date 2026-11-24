@@ -8,8 +8,8 @@ pub(super) fn said(service: Option<u32>, answer: Option<&Value>) -> String {
     match (service, answer) {
         (_, None) => "no".into(),
         (Some(pid), Some(v)) if v["pid"] == pid => format!("yes (pid {pid})"),
-        (Some(_), Some(_)) => "no (a tirith the service did not start has the port: the service takes over when that one stops)".into(),
-        (None, Some(_)) => "no (a tirith runs, but not as the service)".into(),
+        (Some(_), Some(_)) => "no (a neobot the service did not start has the port: the service takes over when that one stops)".into(),
+        (None, Some(_)) => "no (a neobot runs, but not as the service)".into(),
     }
 }
 

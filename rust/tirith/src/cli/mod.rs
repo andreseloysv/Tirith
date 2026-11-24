@@ -26,7 +26,7 @@ pub fn main() {
         std::process::exit(code);
     }
     if let Some("--version" | "-V" | "version") = args.first().map(String::as_str) {
-        return println!("tirith {}", crate::bundle::VERSION);
+        return println!("neobot {}", crate::bundle::VERSION);
     }
     #[cfg(unix)]
     if args.first().map(String::as_str) != Some("serve") {

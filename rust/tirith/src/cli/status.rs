@@ -1,4 +1,4 @@
-//! `tirith status`: the lanes working now and the last ones that ended.
+//! `neobot status`: the lanes working now and the last ones that ended.
 use crate::client;
 use serde_json::Value;
 

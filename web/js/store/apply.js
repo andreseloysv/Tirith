@@ -3,7 +3,7 @@ import { S, TALK_ROWS } from './state.js';
 
 const talkOf = (d) => S.talks[d.project || ''];
 
-function lane(d) { if (d.deleted) delete S.lanes[d.id]; else S.lanes[d.id] = d; } // tirith lane delete
+function lane(d) { if (d.deleted) delete S.lanes[d.id]; else S.lanes[d.id] = d; } // neobot lane delete
 function event(d) { S.events.push(d); if (S.events.length > 400) S.events.splice(0, S.events.length - 400); }
 function chat(d) {
   const t = talkOf(d); // a conversation the page never opened is read when it is opened

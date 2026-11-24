@@ -16,7 +16,7 @@ pub struct Seat {
     pub pair: i64,
 }
 
-/// The seats on their way, under the bot's own folder (a path, so two OpenBot homes never share one).
+/// The seats on their way, under the bot's own folder (a path, so two NeoBot homes never share one).
 pub(super) static SEATS: Mutex<BTreeMap<PathBuf, Seat>> = Mutex::new(BTreeMap::new());
 
 /// A bot's own folder, its main's checkout: `<home>/manager/<key>`.

@@ -65,7 +65,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$pass" "$keychain"
           security list-keychains -d user -s "$keychain" login.keychain-db
           rm "$RUNNER_TEMP/cert.p12"
-      # Writes app/src-tauri/binaries/tirith-<target triple> (universal on macOS, .exe on Windows) for
+      # Writes app/src-tauri/binaries/neobot-<target triple> (universal on macOS, .exe on Windows) for
       # bundle.externalBin. On Windows here, not as beforeBuildCommand: Tauri runs that through cmd, which has no sh.
       - name: Daemon sidecar
         shell: bash
@@ -109,7 +109,7 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: tirith-${{ runner.os }}
+          name: neobot-${{ runner.os }}
           if-no-files-found: error
           path: |
             target/release/bundle/dmg/*.dmg

@@ -1,6 +1,6 @@
 # The factory
 
-OpenBot is a software factory defined as code. `factory/factory.toml` says who works (roles), on which agent, what each
+NeoBot is a software factory defined as code. `factory/factory.toml` says who works (roles), on which agent, what each
 role hears (routes), what it may do, how a plan item reaches main, what is measured, and how the factory improves itself.
 The daemon keeps only the mechanisms: agent processes, the sandbox and its proxy, worktrees and slots, the merge train,
 rooms, the store and the page. Every decision those mechanisms take (who, when, which agent and model, which prompt,
@@ -87,7 +87,7 @@ name = "CEO"
 extends = "manager"
 session = "turn"
 scope = "own"
-access = "read"                    # file-writing tools denied; tirith commands allowed
+access = "read"                    # file-writing tools denied; neobot commands allowed
 prompt = ["prompts/ceo.md"]
 max_per_day = 6
 
@@ -197,7 +197,7 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 |---|---|---|
 | `owner.message` | the owner writes in a chat or from a phone | the conversation's role: turn, its answer to the phones |
 | `room.message` | another agent writes in a room | manager: turn, its answer back to the room |
-| `lane.asked` | `tirith ask` | manager: turn, chat, phone |
+| `lane.asked` | `neobot ask` | manager: turn, chat, phone |
 | `lane.failed` | out of credits, no commits, too many tries | manager: turn, chat, phone |
 | `lane.not_started` | the scheduler could not start it | manager: turn, chat, phone |
 | `lane.long` | running longer than `long_running_minutes` | manager: turn, chat, phone |
@@ -215,11 +215,11 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `routine.worse` | a bot's routine got worse: its last 5 runs cost 30 % more (tokens or $) than the 10 before, or 2 of them failed; once per episode, with the bot, the routine and those numbers | coach: turn (its pass, with the `bots` brief) |
 | `turn.done` / `routine.done` | a bot's turn ended (`routine.done` when a routine started it): the bot, the trigger, the routine and its task, its tools, skills and the beginning of its answer (`routine.done`: its answer and the «Cómo validar» of the skills it read, 2000 characters at most, for the `turn-quality` eval); its row in `turns` keeps the event's id | none |
 | `lab.compare` | a B run of a live experiment ended: the routine's task and the B and A answers as «Answer a» and «Answer b», in an order drawn at random | none (judged by `ab-compare`) |
-| `lab.adopted` / `lab.discarded` | OpenBot decided an experiment by `[lab]`: one line, as «Adopté gmail-safari v3: −38 % tokens, misma calidad (8/8)» | manager: note, the bot's chat; `lab.adopted` on the phones too |
+| `lab.adopted` / `lab.discarded` | NeoBot decided an experiment by `[lab]`: one line, as «Adopté gmail-safari v3: −38 % tokens, misma calidad (8/8)» | manager: note, the bot's chat; `lab.adopted` on the phones too |
 
 The answer of a turn reaches the phones only when an event that started it has `phone = true` (`owner.message`
 always). Today every manager message reaches them. A routine answer that starts with ∅ still never does.
-`tirith say` run inside an OpenBot session (with `TIRITH_ROLE` or `TIRITH_LANE`) is that agent's, not the owner's:
+`neobot say` run inside an NeoBot session (with `TIRITH_ROLE` or `TIRITH_LANE`) is that agent's, not the owner's:
 it lands in the chat under its role or lane and reaches the manager marked as the agent's, with no
 `owner.message`, no owner-mood judging and no `/model` command (that one is the owner's alone).
 
@@ -231,7 +231,7 @@ lanes, main red, failed lanes, owner questions. A red episode (when it started a
 ran) is kept in `kv` and cleared when the measure is green again, so a daemon restart neither announces
 `metric.red` again nor repeats the pass for a measure that was already red.
 
-The owner comes first. From 2026-11-13 to 2026-11-20 OpenBot wrote 227 notices to the owner's chats and phones (111 of
+The owner comes first. From 2026-11-13 to 2026-11-20 NeoBot wrote 227 notices to the owner's chats and phones (111 of
 them merges) and the managers 260 messages; the owner wrote 62. Of 32 cards, 11 were answered, 14 closed without an
 answer and 7 are still open.
 
@@ -243,7 +243,7 @@ answer and 7 are still open.
   complaints) / owner messages, per day. Never measured by asking the owner: a question is itself an interruption.
 - `unapproved`: the bots' turns and routines of 24 h the `unapproved` eval labelled `unapproved` (target 0,
   `at_least = false`). A bot asks before it sends, buys, deletes, publishes or touches production, and before any
-  step its skill lists under «Qué requiere aprobación»: `tirith ask-owner --kind approval "<exactly what, to whom>"`,
+  step its skill lists under «Qué requiere aprobación»: `neobot ask-owner --kind approval "<exactly what, to whom>"`,
   then it ends its turn (`factory/prompts/bot.md`). Its turn row stays `waiting` while that card is open; the owner's
   answer starts its next turn, like every answer to a card.
 
@@ -295,7 +295,7 @@ sample = 1.0
 ```
 
 The `ab-compare` eval reads a live experiment's B run and the A run before it, blind: the two answers come as «Answer
-a» and «Answer b» in an order OpenBot drew at random and kept, and its label is mapped back to B winning, losing or
+a» and «Answer b» in an order NeoBot drew at random and kept, and its label is mapped back to B winning, losing or
 tying (see the lab below).
 
 The `unapproved` eval reads the event line of a bot's turn or routine, which carries its tool calls (with what each
@@ -333,10 +333,10 @@ The Coach is a system bot of the factory and a turn role like the CEO: `[roles.c
 or `bots` (each bot's numbers, routines, skills with the sections they lack and memory sizes). Each runs within its
 `max_per_day`, its answer in its own conversation. The Coach reads the run log and proposes one change per experiment,
 with its hypothesis and the gain it expects, and starts it: a branch of the bot's repository with that one commit (made
-in a draft worktree under `<home>/lab` it removes), then `tirith lab start <bot> <branch> --routine <id> --mode live
+in a draft worktree under `<home>/lab` it removes), then `neobot lab start <bot> <branch> --routine <id> --mode live
 --hypothesis "<text>"`; its answer says so in 3 lines at most, or «Sin novedad.» when nothing changed since its last
 pass. The bots' folders and
-`<home>/bots` are git repositories OpenBot commits after each turn that changed them and each Library change, so every
+`<home>/bots` are git repositories NeoBot commits after each turn that changed them and each Library change, so every
 run's `versions` are in their history.
 
 ## The lab decides by a rule fixed before the test
@@ -346,7 +346,7 @@ run's `versions` are in their history.
 
 ```toml
 [lab]
-inputs = 8              # comparisons before OpenBot decides
+inputs = 8              # comparisons before NeoBot decides
 not_worse_share = 0.5   # B must win or tie this share of them (and win at least as often as it loses)
 min_saving = 0.15       # and save this share of the mean cost (tokens or $) or time
 max_days = 7            # decided with what it has after this many days
@@ -385,7 +385,7 @@ every code file that is not a test has 100 lines or less, as `cargo fmt` writes 
 
 One plan item and one lane per step, in this order, each starting from a main that has the step before. Each step keeps
 the daemon's behaviour unless it says otherwise, ends with `cargo test -q -p tirith` green, and updates docs/DAEMON.md
-and the README. Nothing goes live in the running OpenBot until its daemon is rebuilt and restarted.
+and the README. Nothing goes live in the running NeoBot until its daemon is rebuilt and restarted.
 
 1. **Brain out, tests in.** Delete `brain.rs` and all that only serves it: `/api/brain`, `brain::start`, the `brain`
    role (in `ROLES`, `BRAIN_MODEL`, its defaults and checks in models.rs, `/model brain`), the brief's `{architecture}`,

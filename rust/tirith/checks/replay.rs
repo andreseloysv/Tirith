@@ -6,7 +6,7 @@ use std::process::Command;
 const KEY: &str = "bot-mail01";
 const TASK: &str = "Routine «gmail-safari» is due now. Check the inbox and list the new offers";
 
-/// A fake stream-json agent. As the bot, it asks OpenBot's hook (over HTTP, as an agent's hooks do) for two reads of the web, a search, a local read, a write in its folder and a `tirith say`, keeps what the hook answered in `<home>/heard-<conversation>.txt` and what it was handed in `told-<conversation>.txt`, and answers. As anyone else (the judge) it says «tie».
+/// A fake stream-json agent. As the bot, it asks NeoBot's hook (over HTTP, as an agent's hooks do) for two reads of the web, a search, a local read, a write in its folder and a `neobot say`, keeps what the hook answered in `<home>/heard-<conversation>.txt` and what it was handed in `told-<conversation>.txt`, and answers. As anyone else (the judge) it says «tie».
 const AGENT: &str = r#"#!/bin/sh
 read -r line
 if [ "$TIRITH_ROLE" != "KEY" ]; then
@@ -25,7 +25,7 @@ hook WebFetch '{"url":"https://mail.example/inbox?page=2"}'
 hook WebSearch '{"query":"new offers"}'
 hook Bash '{"command":"cat memory.md"}'
 hook Write "{\"file_path\":\"$here/notes.md\",\"content\":\"seen\"}"
-hook Bash '{"command":"tirith say --project KEY hola"}'
+hook Bash '{"command":"neobot say --project KEY hola"}'
 printf '%s\n' "$line" > "$TIRITH_HOME/told-$TIRITH_PROJECT.txt"
 echo '{"type":"assistant","message":{"content":[{"type":"text","text":"3 offers listed"}]}}'
 echo '{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":10,"output_tokens":5}}'
@@ -47,7 +47,7 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-/// A OpenBot home with the bot «Correo» and its routine `r1`, on the fake agent (the judge too) that calls the hook on `port`.
+/// A NeoBot home with the bot «Correo» and its routine `r1`, on the fake agent (the judge too) that calls the hook on `port`.
 fn app_with_a_bot(name: &str, port: u16) -> (crate::app::Shared, PathBuf) {
     app_with_agent(name, port, AGENT)
 }
@@ -280,7 +280,7 @@ async fn replay_answers_from_the_capture() {
             );
             assert!(
                 denied(5) && why(5).contains("not available in a replay"),
-                "{conv}: tirith say"
+                "{conv}: neobot say"
             );
             let told = std::fs::read_to_string(home.join(format!("told-{conv}.txt"))).unwrap();
             assert!(

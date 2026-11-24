@@ -1,4 +1,4 @@
-//! A bot as a package: its card, routines, own skills and the connectors it is granted, signed by this OpenBot's key.
+//! A bot as a package: its card, routines, own skills and the connectors it is granted, signed by this NeoBot's key.
 use crate::app::Shared;
 use crate::server::s;
 use serde_json::{json, Value};
@@ -36,7 +36,7 @@ pub(in crate::bots) fn export(app: &Shared, id: &str, about: &Value) -> Result<V
         .filter(|g| g["granted"] == true)
         .map(|g| json!({"connector": g["id"], "tools": g["tools"], "deny": g["deny"], "approval": g["approval"]}))
         .collect();
-    let permissions = json!({"browser": browser(&skills), "files": "its own folder", "network": "not limited by OpenBot"});
+    let permissions = json!({"browser": browser(&skills), "files": "its own folder", "network": "not limited by NeoBot"});
     let p = json!({
         "format": super::FORMAT, "v": super::VERSION,
         "bot": {"name": bot["name"], "description": s(about, "description"), "instructions": s(about, "instructions"), "face": {"shape": bot["shape"], "color": bot["color"]}},

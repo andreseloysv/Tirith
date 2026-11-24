@@ -1,7 +1,7 @@
-//! Who may call the teach API: the page (same origin) and OpenBot's extension with the bot's token. CORS answers only the extension's origin.
+//! Who may call the teach API: the page (same origin) and NeoBot's extension with the bot's token. CORS answers only the extension's origin.
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-/// The origin of OpenBot's extension: fixed by the `key` in tools/teach/manifest.json, so an unpacked install has this id.
+/// The origin of NeoBot's extension: fixed by the `key` in tools/teach/manifest.json, so an unpacked install has this id.
 pub const ORIGIN: &str = "chrome-extension://bogleilobfephnbnjibgoofoeipkhfef";
 fn origin(h: &HeaderMap) -> Option<&str> {
     h.get("origin").and_then(|v| v.to_str().ok())

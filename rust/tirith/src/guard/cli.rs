@@ -1,8 +1,8 @@
-//! `tirith guard …` commands.
+//! `neobot guard …` commands.
 use crate::client::call;
 use serde_json::Value;
 
-/// `tirith guard …` commands.
+/// `neobot guard …` commands.
 pub fn cli(pos: &[&str], _flag: crate::client::Flag) -> Option<Result<(), String>> {
     Some(match pos {
         ["guard", "check"] => check(),
@@ -17,7 +17,7 @@ fn all() -> Result<Vec<Value>, String> {
         .map_err(|e| e.to_string())
 }
 
-/// `tirith guard check`: each project's state; fails when one needs attention.
+/// `neobot guard check`: each project's state; fails when one needs attention.
 fn check() -> Result<(), String> {
     all().and_then(|ps| {
         ps.iter().for_each(|p| {
@@ -34,7 +34,7 @@ fn check() -> Result<(), String> {
     })
 }
 
-/// `tirith guard install [project]`: that project, or every project whose guard is not ok.
+/// `neobot guard install [project]`: that project, or every project whose guard is not ok.
 fn install(project: Option<&str>) -> Result<(), String> {
     let ids: Vec<String> = project.map_or_else(
         || {

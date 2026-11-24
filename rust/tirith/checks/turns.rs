@@ -396,15 +396,15 @@ done
 
 #[tokio::test]
 async fn turn_checks_from_the_cli() {
-    // What `tirith turn checks` sends.
+    // What `neobot turn checks` sends.
     assert_eq!(
         super::request("3/4", " portal, filtros ", "bot-x").unwrap(),
         json!({"conv": "bot-x", "passed": 3, "total": 4, "names": "portal, filtros"})
     );
     assert!(super::request("5/4", "", "bot-x").is_err());
     assert!(super::request("tres", "", "bot-x").is_err());
-    assert!(include_str!("../assets/usage.txt").contains("tirith turn checks <passed>/<total>"));
-    assert!(include_str!("../../../factory/prompts/bot.md").contains("tirith turn checks"));
+    assert!(include_str!("../assets/usage.txt").contains("neobot turn checks <passed>/<total>"));
+    assert!(include_str!("../../../factory/prompts/bot.md").contains("neobot turn checks"));
 
     let home = home("turn-checks");
     std::fs::write(home.join("config.toml"), "[network]\nsandbox = false\n").unwrap();

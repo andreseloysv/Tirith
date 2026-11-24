@@ -18,7 +18,7 @@ pub(super) struct Peer {
     pub(super) since: String,
     pub(super) last_seen: String,
     pub(super) accepted: bool,
-    /// A phone the owner had OpenBot forget: nothing it writes is read, until it is paired again.
+    /// A phone the owner had NeoBot forget: nothing it writes is read, until it is paired again.
     pub(super) blocked: bool,
 }
 #[derive(Serialize, Deserialize, Clone, Default)]

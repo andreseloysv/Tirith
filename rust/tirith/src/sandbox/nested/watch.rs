@@ -1,11 +1,11 @@
-//! A watch on what the broker started, outliving the daemon: when OpenBot stops in the middle, also by force, that Codex and all below it are ended, never left running with nobody to answer to. The watcher is OpenBot's own program with none of the caller's environment: it runs outside every sandbox.
+//! A watch on what the broker started, outliving the daemon: when NeoBot stops in the middle, also by force, that Codex and all below it are ended, never left running with nobody to answer to. The watcher is NeoBot's own program with none of the caller's environment: it runs outside every sandbox.
 use super::ending::end_all;
 use libc::pid_t;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
-/// The word OpenBot's program is the watcher by.
+/// The word NeoBot's program is the watcher by.
 const WORD: &str = "nested-codex-watch";
 const LOOK: Duration = Duration::from_millis(250);
 
@@ -14,7 +14,7 @@ pub(super) struct Watch(Child);
 impl Watch {
     /// Over process `pid`, for as long as this value lives.
     pub(super) fn over(pid: u32) -> Result<Watch, String> {
-        let exe = crate::app::exe().ok_or("OpenBot's program is not known")?;
+        let exe = crate::app::exe().ok_or("NeoBot's program is not known")?;
         Command::new(exe)
             .args([
                 WORD.to_string(),
@@ -40,7 +40,7 @@ impl Drop for Watch {
     }
 }
 
-/// `tirith nested-codex-watch <daemon> <pid>`.
+/// `neobot nested-codex-watch <daemon> <pid>`.
 pub(super) fn launcher(args: &[String]) -> Option<i32> {
     let [word, daemon, pid] = args else {
         return None;

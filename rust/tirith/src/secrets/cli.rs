@@ -1,12 +1,12 @@
-//! `tirith secret set|list|remove`. It reads its own argv, where the shared reader would drop a `--value x` unseen: anything but the words it knows is refused, and never repeated.
+//! `neobot secret set|list|remove`. It reads its own argv, where the shared reader would drop a `--value x` unseen: anything but the words it knows is refused, and never repeated.
 use super::{input, names};
 use crate::client::{call, call_json};
 use serde_json::json;
 
 const USE: &str =
-    "tirith secret set <bot> <NAME>      the value comes on stdin, never as an argument
-tirith secret list <bot>            the names, never the values
-tirith secret remove <bot> <NAME>";
+    "neobot secret set <bot> <NAME>      the value comes on stdin, never as an argument
+neobot secret list <bot>            the names, never the values
+neobot secret remove <bot> <NAME>";
 
 #[derive(Debug, PartialEq)]
 pub(super) enum Command<'a> {
@@ -42,7 +42,7 @@ pub fn cli(args: &[String]) -> Option<i32> {
         return Some(0);
     }
     if crate::setup::from_agent() {
-        eprintln!("tirith secret is the owner's: run it in your own terminal, not from an agent");
+        eprintln!("neobot secret is the owner's: run it in your own terminal, not from an agent");
         return Some(1);
     }
     let words: Vec<&str> = rest.iter().map(String::as_str).collect();

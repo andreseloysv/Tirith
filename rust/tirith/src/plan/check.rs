@@ -31,7 +31,7 @@ const OK: [&str; 19] = [
 pub(super) fn check_problem(check: &str) -> Option<String> {
     static CALL: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
-            r"(?:^|[\s;&|(])(cd\s+(?:\./)?collector(?:[/\s;&]|$))|(?:^|[;&|(])\s*(?:(?:!|do|then)\s+)?tirith\s+([A-Za-z-][\w-]*)",
+            r"(?:^|[\s;&|(])(cd\s+(?:\./)?collector(?:[/\s;&]|$))|(?:^|[;&|(])\s*(?:(?:!|do|then)\s+)?(?:tirith|neobot)\s+([A-Za-z-][\w-]*)",
         )
         .unwrap()
     });
@@ -44,7 +44,7 @@ pub(super) fn check_problem(check: &str) -> Option<String> {
     CALL.captures_iter(&bare).find_map(|c| {
         c.get(2).map_or_else(
             || Some("the check does `cd collector`, a removed folder (the daemon is Rust: use cargo test -q <name>)".to_string()),
-            |s| (!OK.contains(&s.as_str())).then(|| format!("the check calls `tirith {}`, which is not a tirith command", s.as_str())),
+            |s| (!OK.contains(&s.as_str())).then(|| format!("the check calls `tirith {}`, which is not a neobot command", s.as_str())),
         )
     })
 }

@@ -129,7 +129,7 @@ async fn webhook_create_signs_the_request() {
             e["sig"].as_str().unwrap(),
             &me.public
         ),
-        "signed by this OpenBot"
+        "signed by this NeoBot"
     );
     let kept: Value = serde_json::from_str(&app.kv(&format!("webhook:{id}")).unwrap()).unwrap();
     assert_eq!(

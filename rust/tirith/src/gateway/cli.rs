@@ -1,4 +1,4 @@
-//! `tirith mcp --bot <id>`: the gateway a bot's run starts as its MCP server, on stdio. Its stdout is the protocol's alone; why it stops goes to stderr.
+//! `neobot mcp --bot <id>`: the gateway a bot's run starts as its MCP server, on stdio. Its stdout is the protocol's alone; why it stops goes to stderr.
 use super::{door::Door, stdio::serve};
 use crate::client::Flag;
 
@@ -14,7 +14,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
             &bot,
         ),
         None => {
-            Err("usage: tirith mcp --bot <id> (a bot run's MCP server, started by OpenBot)".into())
+            Err("usage: neobot mcp --bot <id> (a bot run's MCP server, started by NeoBot)".into())
         }
     })
 }

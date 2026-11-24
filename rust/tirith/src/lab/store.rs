@@ -1,4 +1,4 @@
-//! The experiments' rows: one read, the running ones, and the list the page and `tirith lab list` show.
+//! The experiments' rows: one read, the running ones, and the list the page and `neobot lab list` show.
 use crate::app::App;
 use rusqlite::params;
 use serde_json::{json, Value};

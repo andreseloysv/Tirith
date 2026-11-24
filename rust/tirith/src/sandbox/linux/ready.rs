@@ -1,4 +1,4 @@
-//! Whether this Linux lets OpenBot confine what it starts, asked by trying it, and what to do when it does not.
+//! Whether this Linux lets NeoBot confine what it starts, asked by trying it, and what to do when it does not.
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -39,7 +39,7 @@ fn tried() -> Result<(), String> {
 fn explained(why: &str) -> String {
     let restricted = std::fs::read_to_string(APPARMOR).is_ok_and(|t| t.trim() == "1");
     let fix = if restricted {
-        let exe = crate::app::exe().unwrap_or_else(|| "tirith".into());
+        let exe = crate::app::exe().unwrap_or_else(|| "neobot".into());
         format!("this Linux allows user namespaces only to programs with a profile: run `sudo {} net allow`", exe.display())
     } else {
         "it needs unprivileged user namespaces (kernel.unprivileged_userns_clone = 1; in Docker, a seccomp profile that allows unshare)".into()

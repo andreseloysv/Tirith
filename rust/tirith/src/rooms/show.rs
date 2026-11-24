@@ -1,10 +1,10 @@
-//! What `tirith room …` prints: a link with its QR, the rooms, a room's messages.
+//! What `neobot room …` prints: a link with its QR, the rooms, a room's messages.
 use serde_json::Value;
 pub(super) fn show_link(v: &Value, key: &str, label: &str) {
     v[key].as_str().map_or_else(
         || {
             println!(
-                "{label}: none (the last QR was used: tirith room qr {})",
+                "{label}: none (the last QR was used: neobot room qr {})",
                 v["id"].as_str().unwrap_or("")
             )
         },

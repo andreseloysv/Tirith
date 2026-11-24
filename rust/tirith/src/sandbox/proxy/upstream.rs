@@ -31,7 +31,7 @@ pub async fn upstream(
     let rule = addrs.iter().find_map(|a| blocked(&a.ip().to_string()));
     let door = || {
         own_door(&addrs, own).then(|| {
-            "OpenBot's own port (the sandbox reaches it directly, and is known there)".to_string()
+            "NeoBot's own port (the sandbox reaches it directly, and is known there)".to_string()
         })
     };
     if let Some(rule) = rule.or_else(door) {

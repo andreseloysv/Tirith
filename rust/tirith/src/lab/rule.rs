@@ -1,4 +1,4 @@
-//! The factory's `[lab]` rule applied to an experiment's numbers, and the one line that says what OpenBot decided.
+//! The factory's `[lab]` rule applied to an experiment's numbers, and the one line that says what NeoBot decided.
 use super::saved::{counts, savings, shown};
 use crate::factory::Lab;
 use serde::Serialize;

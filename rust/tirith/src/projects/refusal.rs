@@ -11,7 +11,7 @@ const TEMP: [&str; 6] = [
     "/private/var/folders",
 ];
 
-/// Why `dir` cannot be a project, if it cannot: `tirith` is OpenBot's own folder.
+/// Why `dir` cannot be a project, if it cannot: `tirith` is NeoBot's own folder.
 pub(super) fn why_not(dir: &Path, projects: &[Project], tirith: &Path) -> Option<String> {
     temporary(dir)
         .or_else(|| holds_home(dir))
@@ -44,7 +44,7 @@ fn in_git(dir: &Path) -> Option<String> {
 
 fn in_tirith(dir: &Path, tirith: &Path) -> Option<String> {
     dir.starts_with(tirith.canonicalize().unwrap_or_else(|_| tirith.into()))
-        .then(|| "is OpenBot's own folder (the agents' copies of the projects live there)".into())
+        .then(|| "is NeoBot's own folder (the agents' copies of the projects live there)".into())
 }
 
 /// Another project's folder holds `dir`, or `dir` holds one.

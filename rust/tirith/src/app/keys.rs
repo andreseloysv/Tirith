@@ -1,4 +1,4 @@
-//! What proves who calls, kept 0600 in OpenBot's home where no confined process reads or writes it (`sandbox/confine.rs`): the owner's token, the secret every caller's token derives from, and the file that opens the page once.
+//! What proves who calls, kept 0600 in NeoBot's home where no confined process reads or writes it (`sandbox/confine.rs`): the owner's token, the secret every caller's token derives from, and the file that opens the page once.
 use crate::os::Mode;
 use crate::rooms::sealed::hex;
 use rusqlite::Connection;
@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 /// The owner's token.
 pub const OWNER: &str = "owner.token";
 const SECRET: &str = "net.secret";
-/// What `tirith open` hands the browser: a link that works once.
+/// What `neobot open` hands the browser: a link that works once.
 pub const PAGE: &str = "owner.html";
 
 pub struct Keys {
@@ -49,7 +49,7 @@ fn key(file: &Path) -> (String, bool) {
     }
     let new = hex(&rand::random::<[u8; 32]>());
     if let Err(e) = write(file, &new) {
-        eprintln!("tirith: cannot keep {}: {e}", file.display());
+        eprintln!("neobot: cannot keep {}: {e}", file.display());
     }
     (new, true)
 }

@@ -1,4 +1,4 @@
-//! A bot's memory in numbers: what loading it costs in tokens, how often its last 30 runs cited each numbered note, the bot's own notes none cited once 30 runs have happened since they were written (candidates to delete; OpenBot never deletes them, and a shared note is never proposed from one bot's runs) and the memory misses (owner messages owner-mood labelled `repeat`).
+//! A bot's memory in numbers: what loading it costs in tokens, how often its last 30 runs cited each numbered note, the bot's own notes none cited once 30 runs have happened since they were written (candidates to delete; NeoBot never deletes them, and a shared note is never proposed from one bot's runs) and the memory misses (owner messages owner-mood labelled `repeat`).
 use super::rows::Row;
 use crate::app::Shared;
 use serde_json::{json, Value};

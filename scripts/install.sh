@@ -1,8 +1,8 @@
 #!/bin/sh
-# Installs Tirith on Linux or macOS (x86_64, arm64) and starts its guide, which connects the agents.
+# Installs NeoBot on Linux or macOS (x86_64, arm64) and starts its guide, which connects the agents.
 #   curl -fsSL https://github.com/andreseloysv/Tirith/releases/latest/download/install.sh | sh -s -- --server
-#   sh install.sh [--from <folder with a release>] [--no-setup] [options of `tirith setup`]
-# As root on Linux it makes the user `tirith`: agents never run as root. TIRITH_BASE_URL: another place to download.
+#   sh install.sh [--from <folder with a release>] [--no-setup] [options of `neobot setup`]
+# `tirith`, the old name of the command, is a link to `neobot`. As root on Linux it makes the user `tirith`: agents never run as root. TIRITH_BASE_URL: another place to download.
 set -eu
 KEY='-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEEMqh12EKmR6Eeh0WfAy2RUc8O2XK
@@ -44,17 +44,17 @@ fetch() {
     die "cannot get $1"
 }
 
-# The files come only if SHA256SUMS is signed with Tirith's release key and names their sum.
+# The files come only if SHA256SUMS is signed with NeoBot's release key and names their sum.
 verified() {
-  file="tirith-$(target).tar.gz"
+  file="neobot-$(target).tar.gz"
   for f in "$file" SHA256SUMS SHA256SUMS.sig; do fetch "$f"; done
   printf '%s\n' "$KEY" > "$tmp/key"
   openssl dgst -sha256 -verify "$tmp/key" -signature "$tmp/SHA256SUMS.sig" "$tmp/SHA256SUMS" >/dev/null 2>&1 ||
-    die "SHA256SUMS is not signed with Tirith's release key: nothing was installed"
+    die "SHA256SUMS is not signed with NeoBot's release key: nothing was installed"
   want=$(awk -v f="$file" '$2 == f { print $1 }' "$tmp/SHA256SUMS")
   got=$(openssl dgst -sha256 "$tmp/$file" | sed 's/^.*= *//')
   [ -n "$want" ] && [ "$want" = "$got" ] || die "$file does not match its signed sum: nothing was installed"
-  tar -xzf "$tmp/$file" -C "$tmp" tirith
+  tar -xzf "$tmp/$file" -C "$tmp" neobot
   echo "Signature and sum are right."
 }
 
@@ -63,7 +63,7 @@ service_user() {
     adduser -D -s /bin/sh tirith || die "cannot make the user tirith"
   have loginctl && loginctl enable-linger tirith 2>/dev/null || true # the guide waits for its systemd
   [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)" != 1 ] ||
-    "$bin/tirith" net allow || echo "install: the network sandbox needs: $bin/tirith net allow" >&2
+    "$bin/neobot" net allow || echo "install: the network sandbox needs: $bin/neobot net allow" >&2
 }
 
 main() {
@@ -77,15 +77,15 @@ main() {
     esac
   done
   tools
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/tirith-install.XXXXXX")
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/neobot-install.XXXXXX")
   trap 'rm -rf -- "${tmp:?}"' EXIT
   verified
   asroot=0 bin="$HOME/.local/bin"
   if [ "$(id -u)" = 0 ] && [ "$(uname -s)" = Linux ]; then asroot=1 bin=/usr/local/bin; fi
   mkdir -p "$bin"
-  cp "$tmp/tirith" "$bin/.tirith.new" && chmod 755 "$bin/.tirith.new" && mv -f "$bin/.tirith.new" "$bin/tirith"
-  echo "Installed $("$bin/tirith" --version) in $bin"
-  set -- "$bin/tirith" setup "$@"
+  cp "$tmp/neobot" "$bin/.neobot.new" && chmod 755 "$bin/.neobot.new" && mv -f "$bin/.neobot.new" "$bin/neobot"
+  ln -sf neobot "$bin/tirith"; echo "Installed $("$bin/neobot" --version) in $bin (also as tirith)"
+  set -- "$bin/neobot" setup "$@"
   if [ "$asroot" = 1 ]; then
     service_user
     home=$(awk -F: '$1 == "tirith" { print $6 }' /etc/passwd)

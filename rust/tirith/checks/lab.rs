@@ -11,7 +11,7 @@ fn home(name: &str) -> PathBuf {
 
 const KEY: &str = "bot-mail01";
 
-/// A OpenBot home with one bot, «Correo», and its routine `r1` (check the inbox), its folder a repository with a memory.
+/// A NeoBot home with one bot, «Correo», and its routine `r1` (check the inbox), its folder a repository with a memory.
 fn app_with_a_bot(name: &str) -> (crate::app::Shared, PathBuf) {
     let home = home(name);
     std::fs::write(

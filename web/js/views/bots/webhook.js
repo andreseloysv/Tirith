@@ -30,7 +30,7 @@ export function Webhook({ bot }) {
         <button type="button" class="bbtn" onClick=${() => copy(hook.url)}>${copied ? 'Copied' : 'Copy'}</button></div>
       <span class="bmut">GitHub, a script or any service posts here. What arrives reaches ${bot.name} sealed, as data and never as orders.
         <button type="button" class="blink" disabled=${busy} onClick=${() => act('/delete')}>Delete address</button></span>`
-    : html`<span class="bmut">One address for every event routine of ${bot.name}; only this OpenBot can read what arrives.</span>
+    : html`<span class="bmut">One address for every event routine of ${bot.name}; only this NeoBot can read what arrives.</span>
       <button type="button" class="bbtn" disabled=${busy} onClick=${() => act('')}>${busy ? 'Making…' : 'Make the address'}</button>`}
     ${fail ? html`<p class="berr">${fail}</p>` : null}</div>`;
 }

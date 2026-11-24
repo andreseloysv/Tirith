@@ -248,7 +248,7 @@ repo = {json.dumps(str(repo))}
 ''')
     env = dict(os.environ, TIRITH_HOME=str(HOME), TIRITH_PORT=str(port), CODEX_HOME=str(catalog))
     log = (HOME / "daemon.log").open("w")
-    daemon = subprocess.Popen([ROOT / "target/debug/tirith", "serve"], env=env, stdout=log, stderr=log, start_new_session=True)
+    daemon = subprocess.Popen([ROOT / "target/debug/neobot", "serve"], env=env, stdout=log, stderr=log, start_new_session=True)
     wait(lambda: api("/api/models"))
     assert [m["slug"] for m in api("/api/models")["choices"]["codex"]] == ["gpt-test"]
     chat("/model all codex:gpt-test high")
@@ -368,7 +368,7 @@ repo = {json.dumps(str(repo))}
     before = roles()
     daemon.terminate()
     daemon.wait(10)
-    daemon = subprocess.Popen([ROOT / "target/debug/tirith", "serve"], env=env, stdout=log, stderr=log, start_new_session=True)
+    daemon = subprocess.Popen([ROOT / "target/debug/neobot", "serve"], env=env, stdout=log, stderr=log, start_new_session=True)
     wait(lambda: roles() == before)
     chat("/model workers reset")
     assert roles()["workers"]["source"] == "config"

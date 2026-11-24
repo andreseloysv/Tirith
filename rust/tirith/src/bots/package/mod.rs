@@ -9,7 +9,7 @@ mod sign;
 pub(super) use api::routes;
 
 /// The package format's name and version.
-const FORMAT: &str = "openbot-bot";
+const FORMAT: &str = "neobot-bot";
 const VERSION: u64 = 1;
 /// The fields a package carries, and no others: a package is data, so what it does not name is refused.
 const FIELDS: [&str; 10] = [

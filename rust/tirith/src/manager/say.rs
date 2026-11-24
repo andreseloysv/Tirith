@@ -44,9 +44,9 @@ fn with_cards(app: &Shared, project: &str, text: &str) -> String {
     if open.is_empty() {
         return text.to_string();
     }
-    format!("{text}\n\n[tirith] Cards still open here: {}. If this answers one, close it with tirith answer <card> \"<the answer>\".", open.join(" | "))
+    format!("{text}\n\n[tirith] Cards still open here: {}. If this answers one, close it with neobot answer <card> \"<the answer>\".", open.join(" | "))
 }
-/// What `tirith say` and the page's chat write. `agent` is the role or lane of the OpenBot session it ran in (`TIRITH_ROLE`/`TIRITH_LANE`), empty for the owner: an agent's words go in the chat under its name and to the manager marked as its, never as an owner message (no `owner.message`, no owner-mood eval, no `/model`, which is the owner's alone).
+/// What `neobot say` and the page's chat write. `agent` is the role or lane of the NeoBot session it ran in (`TIRITH_ROLE`/`TIRITH_LANE`), empty for the owner: an agent's words go in the chat under its name and to the manager marked as its, never as an owner message (no `owner.message`, no owner-mood eval, no `/model`, which is the owner's alone).
 pub fn say(app: &Shared, project: &str, text: &str, agent: &str) -> Result<(), String> {
     (project.is_empty() || app.conv(project) == project)
         .then_some(())

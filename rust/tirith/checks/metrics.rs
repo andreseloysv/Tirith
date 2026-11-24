@@ -1,8 +1,8 @@
 #[test]
 fn health_reports_paused_reason() {
-    let t = super::facts::paused_text("tirith", "commit guard: the pre-commit hook is outdated or has other words than config.toml (tirith guard install tirith)");
+    let t = super::facts::paused_text("tirith", "commit guard: the pre-commit hook is outdated or has other words than config.toml (neobot guard install tirith)");
     assert!(t.contains("paused: commit guard"), "{t}");
-    assert!(t.contains("fix: tirith guard install tirith"), "{t}");
+    assert!(t.contains("fix: neobot guard install tirith"), "{t}");
     assert!(
         super::facts::paused_text("p", "3 lanes wait for the merge queue")
             .contains("fix: wait for the merges")
@@ -222,7 +222,7 @@ fn needless_cards_ignores_superseded() {
             .format("%Y-%m-%dT%H:%M:%SZ")
             .to_string()
     };
-    let auto = "closed by OpenBot: its lane no longer waits for an answer";
+    let auto = "closed by NeoBot: its lane no longer waits for an answer";
     let card = |id: &str,
                 ago: u64,
                 kind: &str,
@@ -412,7 +412,7 @@ fn red_episode_survives_restart() {
 fn health_merged_reports_empty_plans() {
     let t = super::facts::empty_plan_note(&["tirith".to_string(), "p2".to_string()]);
     assert!(
-        t.contains("tirith plan empty") && t.contains("fix: tirith plan add tirith <step>"),
+        t.contains("tirith plan empty") && t.contains("fix: neobot plan add tirith <step>"),
         "{t}"
     );
     assert!(t.contains("p2 plan empty"), "{t}");

@@ -8,9 +8,9 @@ fn restart_waits_for_a_running_turn() {
 #[test]
 fn turn_read_only_allows_reads() {
     for cmd in [
-        "tirith status",
-        "tirith plan show tirith",
-        "tirith lane log some-lane",
+        "neobot status",
+        "neobot plan show tirith",
+        "neobot lane log some-lane",
         "tirith timeout get",
         "tirith merge status",
     ] {
@@ -376,7 +376,7 @@ async fn agent_say_is_not_the_owner() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
-/// One raw POST /api/chat against the test daemon, as the `tirith say` CLI sends it (with the session's token).
+/// One raw POST /api/chat against the test daemon, as the `neobot say` CLI sends it (with the session's token).
 async fn post_chat(port: u16, headers: &str, body: &str) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut s = tokio::net::TcpStream::connect(("127.0.0.1", port))
@@ -413,7 +413,7 @@ async fn agent_say_is_not_the_owner_over_http() {
     let srv = tokio::spawn(async move {
         drop(axum::serve(listener, crate::server::router(app2, port)).await)
     });
-    // `tirith say` from a manager session (with its token, as client::call sends it): the daemon reads the agent from the token.
+    // `neobot say` from a manager session (with its token, as client::call sends it): the daemon reads the agent from the token.
     let out = post_chat(
         port,
         &format!(

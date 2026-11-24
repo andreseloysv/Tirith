@@ -1,4 +1,4 @@
-//! The bots' folders as git repositories: each bot's (`<home>/manager/<key>`) follows only its memory.md and its own skills (its `.gitignore` leaves out the links to the shared ones), and `<home>/bots` (the shared memory and skills) is another. OpenBot commits each turn that changed them («turn <id>») and each change from the Library («library»), so the versions a turn keeps (git blob hashes, turns/versions.rs) are in this history.
+//! The bots' folders as git repositories: each bot's (`<home>/manager/<key>`) follows only its memory.md and its own skills (its `.gitignore` leaves out the links to the shared ones), and `<home>/bots` (the shared memory and skills) is another. NeoBot commits each turn that changed them («turn <id>») and each change from the Library («library»), so the versions a turn keeps (git blob hashes, turns/versions.rs) are in this history.
 use crate::app::App;
 use std::path::Path;
 use std::process::Stdio;
@@ -8,18 +8,18 @@ use std::sync::Mutex;
 static COMMITTING: Mutex<()> = Mutex::new(());
 
 /// A bot's folder: its memory and the skill folders in `.agents/skills`; a link there (a shared skill) is no folder to git, so it stays out.
-const OWN: &str = "# OpenBot versions only the memory, the routines' own effort and this bot's own skills; the links to the shared skills\n# (in <home>/bots, a repository of its own) and everything else stay out.\n*\n!/.gitignore\n!/memory.md\n!/routines.toml\n!/.agents/\n/.agents/*\n!/.agents/skills/\n/.agents/skills/*\n!/.agents/skills/*/\n!/.agents/skills/*/**\n";
+const OWN: &str = "# NeoBot versions only the memory, the routines' own effort and this bot's own skills; the links to the shared skills\n# (in <home>/bots, a repository of its own) and everything else stay out.\n*\n!/.gitignore\n!/memory.md\n!/routines.toml\n!/.agents/\n/.agents/*\n!/.agents/skills/\n/.agents/skills/*\n!/.agents/skills/*/\n!/.agents/skills/*/**\n";
 /// The bots' shared folder: the shared memory and skills.
-const SHARED: &str = "# OpenBot versions only the shared memory and the shared skills.\n*\n!/.gitignore\n!/memory.md\n!/skills/\n!/skills/**\n";
+const SHARED: &str = "# NeoBot versions only the shared memory and the shared skills.\n*\n!/.gitignore\n!/memory.md\n!/skills/\n!/skills/**\n";
 
-/// `git -C dir args…` as OpenBot (its own name, no signing): its stdout, if it succeeded.
+/// `git -C dir args…` as NeoBot (its own name, no signing): its stdout, if it succeeded.
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
     let out = crate::sandbox::git()
         .arg("-C")
         .arg(dir)
         .args([
             "-c",
-            "user.name=OpenBot",
+            "user.name=NeoBot",
             "-c",
             "user.email=tirith@localhost",
         ])

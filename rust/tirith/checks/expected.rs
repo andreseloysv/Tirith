@@ -27,7 +27,7 @@ fn at(month: u32, day: u32, hhmm: &str) -> DateTime<Local> {
     calendar::on(NaiveDate::from_ymd_opt(2026, month, day).unwrap(), hhmm).unwrap()
 }
 
-/// The turns of `key`, the first first, and OpenBot's failure lines in its chat.
+/// The turns of `key`, the first first, and NeoBot's failure lines in its chat.
 fn kept(app: &crate::app::Shared, key: &str) -> (Vec<Value>, Vec<String>) {
     let mut rows = crate::turns::rows_of(app, key, 100);
     rows.retain(|r| r["role"] == key);
@@ -240,7 +240,7 @@ fn stopped_is_told_from_asleep_and_a_day_not_its_own_is_no_miss() {
     assert!(
         said.len() == 1
             && said[0].contains("lun 23/11 08:00")
-            && said[0].contains("OpenBot estaba parado"),
+            && said[0].contains("NeoBot estaba parado"),
         "{said:?}"
     );
     let _ = std::fs::remove_dir_all(&home);
@@ -827,7 +827,7 @@ fn a_judge_uses_no_tool_whatever_the_data_it_reads_says() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
-/// OpenBot stopped while a run was judged, or only a share is judged: no word will come, so plain words decide.
+/// NeoBot stopped while a run was judged, or only a share is judged: no word will come, so plain words decide.
 #[test]
 fn a_run_that_no_judge_will_read_is_no_success_by_that() {
     let (app, home, key) = home_of("unjudged", "/usr/bin/true", "1", "08:00");

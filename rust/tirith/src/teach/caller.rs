@@ -8,7 +8,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde_json::json;
 
-/// The bot's conversation, for a call from the page or the bot's `tirith teach`, never from the extension nor another agent.
+/// The bot's conversation, for a call from the page or the bot's `neobot teach`, never from the extension nor another agent.
 pub(super) fn own(
     app: &Shared,
     who: &Who,
