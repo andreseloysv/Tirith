@@ -3,7 +3,7 @@ use super::{list::list, status::status};
 use crate::{client::Flag, sandbox::tunnel::tunnel};
 use serde_json::json;
 
-/// `tirith net …` and `tirith safari …` commands; `None` when `pos` is not one of this module's commands.
+/// `tirith net …`, `tirith safari …` and `tirith browser …` commands; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
     Some(match pos {
         ["net", "status"] => status(),
@@ -27,6 +27,12 @@ pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
             "tirith safari open <url> | read [<url>] | click <target> [<url>] | type <target> <text> [<url>]"
                 .into(),
         ),
+        ["browser"] => safari(json!({"cmd": "browser"})),
+        ["browser", "use", which] => safari(json!({"cmd": "use", "target": which})),
+        ["browser", "login", rest @ ..] => safari(json!({"cmd": "login", "url": rest.join(" ")})),
+        ["browser", ..] => {
+            Err("tirith browser | tirith browser use openbot|safari | tirith browser login <url>".into())
+        }
         _ => return None,
     })
 }
