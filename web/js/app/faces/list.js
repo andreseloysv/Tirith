@@ -25,7 +25,7 @@ function pmFace(role, s) {
 
 function botFace(b, s, unread) {
   const busy = !!s.busy[keyOf(b)];
-  return { id: b.id, key: keyOf(b), name: b.name, shape: b.shape, color: b.color, look: lookOf(b), bot: b, busy,
+  return { id: b.id, key: keyOf(b), name: b.system ? t(b.name) : b.name, shape: b.shape, color: b.color, look: lookOf(b), bot: b, busy,
     state: stateOf(b, busy), unread: unread.by[b.id] || 0, open: () => go('bots', b.id) };
 }
 

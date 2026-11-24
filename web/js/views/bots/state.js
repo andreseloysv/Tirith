@@ -11,5 +11,8 @@ export function remember(id) { try { if (id) localStorage.setItem(SEL_KEY, id); 
 /** What the face shows: working on a turn, on watch (a routine is on, or it hears factory events) or asleep. */
 export const stateOf = (bot, busy) => (busy ? 'work' : (bot.routines || []).some(isOn) || (bot.routes || []).length ? 'watch' : 'sleep');
 /** A bot's factory shape in one line: its session, its access and the events it hears. */
-export const factoryLine = (bot) => t('{session} · {access} · hears {events}', { session: bot.session || 'chat', access: bot.access === 'read' ? t('read-only') : t('can write'),
-  events: (bot.routes || []).map((r) => r.on).join(', ') || t('no events') });
+export const factoryLine = (bot) => {
+  const vars = { session: t(bot.session || 'chat'), access: bot.access === 'read' ? t('read-only') : t('can write') };
+  const on = (bot.routes || []).map((r) => r.on).join(', ');
+  return on ? t('{session} · {access} · hears {events}', { ...vars, events: on }) : t('{session} · {access} · hears no events', vars);
+};

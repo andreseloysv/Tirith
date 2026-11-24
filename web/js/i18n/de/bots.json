@@ -293,5 +293,8 @@
  "{n} steps": "{n} Schritte",
  "{n} tokens": "{n} Tokens",
  "{runs} · {ok} ok · {time} each": "{runs} · {ok} ok · {time} pro Lauf",
- "{session} · {access} · hears {events}": "{session} · {access} · hört auf {events}"
+ "{session} · {access} · hears {events}": "{session} · {access} · hört auf {events}",
+ "{session} · {access} · hears no events": "{session} · {access} · hört keine Ereignisse",
+ "chat": "Chat",
+ "turn": "Einzelauftrag"
 }

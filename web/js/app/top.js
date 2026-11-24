@@ -7,7 +7,7 @@ import { SUB, viewOf, labelOf } from './views.js';
 import { t } from '../i18n.js';
 
 /* ⌘K or Ctrl+K focuses the search; the hint says the one this computer has */
-const KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘K' : 'Ctrl K';
+const KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘K' : t('Ctrl K');
 function useSearchKey() {
   useEffect(() => {
     const key = (e) => {

@@ -6,11 +6,11 @@
  "Judge": "Juez",
  "Connection check": "Comprobación de conexión",
  "Landed (24 h)": "Integradas (24 h)",
- "Median launch to main (min)": "Mediana de lanzamiento a main (min)",
+ "Median launch to main (min)": "Mediana de lanzamiento a la rama principal (min)",
  "First try (%)": "A la primera (%)",
  "Idle with work (min)": "Parado con trabajo (min)",
- "Stuck lanes": "Lanes atascadas",
- "Main red": "Main en rojo",
+ "Stuck lanes": "Carriles atascados",
+ "Main red": "Rama principal en rojo",
  "Failed (24 h)": "Fallidas (24 h)",
  "Questions to owner": "Preguntas para ti",
  "Interruptions per item (24 h)": "Interrupciones por elemento (24 h)",
@@ -38,5 +38,8 @@
  "never started": "no llegó a empezar",
  "said ∅ without looking: it used no tool": "dijo ∅ sin mirar: no usó ninguna herramienta",
  "nobody can do it: its role takes no tasks": "nadie puede hacerlo: su rol no recibe tareas",
- "Nothing new.": "Sin novedades."
+ "Nothing new.": "Sin novedades.",
+ "Worker": "Trabajador",
+ "own": "propio",
+ "project": "proyecto"
 }

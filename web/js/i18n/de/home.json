@@ -67,7 +67,7 @@
  "1 metric off target: {names}": "1 Messwert verfehlt das Ziel: {names}",
  "{n} metrics off target: {names}": "{n} Messwerte verfehlen das Ziel: {names}",
  "Every metric on target": "Alle Messwerte im Ziel",
- "{n} on main in 24 h": "{n} im Hauptzweig in 24 Std.",
+ "{n} on main in 24 h": "{n} im Hauptzweig in 24 h",
  "Metrics": "Messwerte",
  "Working now": "Arbeitet gerade",
  "1 helper": "1 Helfer",

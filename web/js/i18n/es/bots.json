@@ -293,5 +293,8 @@
  "{n} steps": "{n} pasos",
  "{n} tokens": "{n} tokens",
  "{runs} · {ok} ok · {time} each": "{runs} · {ok} bien · {time} cada una",
- "{session} · {access} · hears {events}": "{session} · {access} · escucha {events}"
+ "{session} · {access} · hears {events}": "{session} · {access} · escucha {events}",
+ "{session} · {access} · hears no events": "{session} · {access} · no escucha eventos",
+ "chat": "chat",
+ "turn": "turno"
 }

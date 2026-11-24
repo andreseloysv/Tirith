@@ -33,7 +33,7 @@
  "Light": "Claro",
  "Dark": "Oscuro",
  "Appearance": "Apariencia",
- "System follows the light or dark setting of your computer": "Sistema sigue el ajuste claro u oscuro de tu ordenador",
+ "System follows the light or dark setting of your computer": "El sistema sigue el ajuste claro u oscuro de tu ordenador",
  "Theme": "Tema",
  "Commit guard": "Guardián de commits",
  "Git hooks that refuse a commit with one of your forbidden words (words from config.toml)": "Ganchos de Git que rechazan un commit con alguna de tus palabras prohibidas (palabras de config.toml)",

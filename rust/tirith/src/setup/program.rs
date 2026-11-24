@@ -31,24 +31,13 @@ pub(super) fn ready(cx: &Context, known: &Known) -> Result<PathBuf, String> {
     let question = format!(
         "  {} is not installed. Install it now with its official installer ({})?",
         known.name,
-        if cfg!(windows) {
-            &known.install_ps1
-        } else {
-            &known.install
-        }
+        source(known)
     );
     let again = format!("install it, then run neobot connect {}", known.alias);
     if !cx.ask.yes_no(&question, true) {
         return Err(format!("{} is not installed: {again}", known.name));
     }
-    println!(
-        "  installing from {}",
-        if cfg!(windows) {
-            &known.install_ps1
-        } else {
-            &known.install
-        }
-    );
+    println!("  installing from {}", source(known));
     install::install(&cx.ask, known, &cx.home).map_err(|e| format!("{e}: {again}"))?;
     let path = find::agent(known, None)
         .ok_or_else(|| format!("{} was installed but is not found: {again}", known.bin))?;
@@ -61,4 +50,13 @@ pub(super) fn ready(cx: &Context, known: &Known) -> Result<PathBuf, String> {
 fn starts(path: &std::path::Path) -> bool {
     let limit = std::time::Duration::from_secs(30);
     super::run::quiet(path, &["--version"], &[], limit) != Some(false)
+}
+
+/// Where its installer comes from: the maker's script for this system, or its npm package.
+fn source(known: &Known) -> String {
+    match super::npm::package(known) {
+        Some(package) => format!("npm's {package}"),
+        None if cfg!(windows) => known.install_ps1.clone(),
+        None => known.install.clone(),
+    }
 }
