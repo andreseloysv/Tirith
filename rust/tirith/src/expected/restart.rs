@@ -9,7 +9,7 @@ use rusqlite::params;
 
 /// How far back `catch_up` looks (bots/schedule.rs).
 const CAUGHT_UP: i64 = 7;
-const MIDDLE: &str = "NeoBot se paró o se reinició a mitad";
+const MIDDLE: &str = "NeoBot stopped or restarted midway";
 
 /// At the daemon's start, after the rooms are open: the phones hear it.
 pub fn start(app: Shared) {
@@ -58,6 +58,6 @@ fn again(app: &Shared, run: &Expected) {
             (&run.trigger, &run.routine),
         );
     if !handed {
-        never(app, run, "NeoBot se paró antes de que empezara");
+        never(app, run, "NeoBot stopped before it started");
     }
 }

@@ -1,5 +1,6 @@
 // The files being attached to the next message: picked, pasted or dropped on the chat.
 import { useState, useEffect } from '../../../vendor/preact-htm.js';
+import { t } from '../../i18n.js';
 
 const PIC_MAX = 6, FILE_BYTES = 25 * 1024 * 1024;
 
@@ -7,8 +8,8 @@ const PIC_MAX = 6, FILE_BYTES = 25 * 1024 * 1024;
 function accepted(files) {
   let bad = null;
   const ok = files.filter((f) => {
-    if (!f.size) { bad = `${f.name || 'The file'} is empty (a folder cannot be attached).`; return false; }
-    if (f.size > FILE_BYTES) { bad = `${f.name} is over 25 MB.`; return false; }
+    if (!f.size) { bad = t('{name} is empty (a folder cannot be attached).', { name: f.name || t('The file') }); return false; }
+    if (f.size > FILE_BYTES) { bad = t('{name} is over 25 MB.', { name: f.name }); return false; }
     return true;
   });
   return { ok, bad };
@@ -55,7 +56,7 @@ export function useAttach(setErr) {
     let { ok, bad } = accepted(files);
     setPics((cur) => {
       const room = PIC_MAX - cur.length;
-      if (ok.length > room) bad = `At most ${PIC_MAX} files per message.`;
+      if (ok.length > room) bad = t('At most {n} files per message.', { n: PIC_MAX });
       return cur.concat(ok.slice(0, Math.max(0, room)).map(entryOf));
     });
     setErr(bad);

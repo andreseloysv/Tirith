@@ -5,12 +5,13 @@ use std::path::Path;
 pub(super) fn login(cx: &Context, known: &Known, path: &Path) -> bool {
     println!("  Sign in: open the link it shows on any computer or phone, and follow it.");
     let more = host::login_args(cx, known);
-    let args: Vec<&str> = known
-        .signin
-        .iter()
-        .chain(&more)
-        .map(String::as_str)
-        .collect();
+    let page = cx.ask.on_page().is_some() && !known.signin_here.is_empty();
+    let signin = if page {
+        &known.signin_here
+    } else {
+        &known.signin
+    };
+    let args: Vec<&str> = signin.iter().chain(&more).map(String::as_str).collect();
     run::shown(&cx.ask, path, &args, &auth::env(&cx.home, &known.alias))
 }
 

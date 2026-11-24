@@ -7,7 +7,7 @@ pub(super) fn waiting_cards(lanes: &[crate::app::Lane]) -> Vec<Value> {
     lanes
         .iter()
         .filter(|l| l.status == "waiting")
-        .map(|l| json!({"id": l.id, "at": l.created_at, "kind": "lane", "project": l.project, "status": "open", "factory": l.factory, "role_hash": l.role_hash, "question": format!("lane bloqueada esperando al dueño ({}): {}", l.item, l.question)}))
+        .map(|l| json!({"id": l.id, "at": l.created_at, "kind": "lane", "project": l.project, "status": "open", "factory": l.factory, "role_hash": l.role_hash, "question": format!("lane blocked waiting for the owner ({}): {}", l.item, l.question)}))
         .collect()
 }
 pub fn owner_open(app: &Shared) -> Vec<Value> {

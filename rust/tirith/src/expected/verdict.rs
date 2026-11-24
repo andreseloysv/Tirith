@@ -41,7 +41,7 @@ pub(super) fn judged(
         return Some(failure(said));
     }
     if answer.trim().is_empty() {
-        return Some("su agente terminó sin responder".into());
+        return Some("its agent ended without answering".into());
     }
     if let Some(rest) = after(answer, FAILED) {
         return Some(not_able("", &shown(rest, 160)));
@@ -57,13 +57,13 @@ pub(super) fn judged(
     };
     let claim = line(rest);
     if admits(claim) || could_not(claim) {
-        error().or_else(|| Some(not_able("dijo ∅, pero ", &shown(rest, 160))))
+        error().or_else(|| Some(not_able("said ∅, but ", &shown(rest, 160))))
     } else if let Some(look) = looks.blind() {
-        error().or_else(|| Some(format!("dijo ∅, pero no pudo mirar ({})", shown(look, 80))))
+        error().or_else(|| Some(format!("said ∅, but could not look ({})", shown(look, 80))))
     } else if proof.is_some() {
         error() // ∅ over an error that stands is no silence
     } else if steps == 0 && !handed_data {
-        Some("dijo ∅ sin mirar: no usó ninguna herramienta".into())
+        Some("said ∅ without looking: it used no tool".into())
     } else {
         None
     }

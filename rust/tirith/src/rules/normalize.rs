@@ -11,7 +11,7 @@ pub const EDIT_TOOLS: [&str; 7] = [
     "apply_patch",
 ];
 
-/// Every agent's tool call in the names the rules know, translated in this one place before `check` and the sandbox audit (`tags`, `check_command`): a shell is `Bash` (also `bash` and `monitor`, the text in `command`); an edit is one of the four edit tools above (also `edit_file`/`write_file`, the file in `path`, and `apply_patch`, whose files are its patch's `*** … File:` and `*** Move to:` lines). The call keeps its input, with its files — every one of them, relative ones taken against `cwd` — in `file_path` (the first) and `file_paths` (all). Any other call keeps its name.
+/// Every agent's tool call in the names the rules know, translated in this one place before `check` and the sandbox audit (`tags`, `check_command`): a shell is `Bash` (also `bash`, `monitor` and Windows' `powershell`, the text in `command`); an edit is one of the four edit tools above (also `edit_file`/`write_file`, the file in `path`, and `apply_patch`, whose files are its patch's `*** … File:` and `*** Move to:` lines). The call keeps its input, with its files — every one of them, relative ones taken against `cwd` — in `file_path` (the first) and `file_paths` (all). Any other call keeps its name.
 pub fn normalize(tool: &str, input: &Value, cwd: &str) -> (String, Value) {
     let at = |p: &str| {
         if std::path::Path::new(p.trim()).is_absolute() || cwd.is_empty() {
@@ -37,7 +37,7 @@ pub fn normalize(tool: &str, input: &Value, cwd: &str) -> (String, Value) {
             .collect()
     };
     let name = match tool {
-        "bash" | "monitor" => "Bash",
+        "bash" | "monitor" | "powershell" => "Bash", // powershell: Muse's shell on Windows
         "write_file" => "Write",
         "edit_file" | "apply_patch" => "Edit",
         t => t,

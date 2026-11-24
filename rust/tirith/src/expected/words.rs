@@ -4,7 +4,7 @@ use crate::server::s;
 use chrono::{DateTime, Datelike, Local};
 use serde_json::Value;
 
-const DAYS: [&str; 7] = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+const DAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /// `text` on one line, cut at `most` characters.
 pub(super) fn short(text: &str, most: usize) -> String {
@@ -16,7 +16,7 @@ pub(super) fn short(text: &str, most: usize) -> String {
     format!("{}…", cut.trim_end())
 }
 
-/// «lun 23/11 08:00».
+/// «Mon 23/11 08:00».
 pub(super) fn at(t: DateTime<Local>) -> String {
     let day = DAYS[t.weekday().num_days_from_monday() as usize];
     format!("{day} {}", t.format("%d/%m %H:%M"))
@@ -27,7 +27,7 @@ pub(super) fn when(kept: &str) -> String {
     local(kept).map_or_else(|| kept.to_string(), at)
 }
 
-/// «cada día», «lun a vie», «lun, mié».
+/// «every day», «Mon to Fri», «Mon, Wed».
 fn days_of(days: &[u64]) -> String {
     let mut d: Vec<u64> = days
         .iter()
@@ -38,9 +38,9 @@ fn days_of(days: &[u64]) -> String {
     d.dedup();
     let name = |d: &u64| DAYS[(*d - 1) as usize];
     match d.as_slice() {
-        [1, 2, 3, 4, 5, 6, 7] => "cada día".into(),
+        [1, 2, 3, 4, 5, 6, 7] => "every day".into(),
         [a, .., b] if d.len() > 2 && b - a + 1 == d.len() as u64 => {
-            format!("{} a {}", name(a), name(b))
+            format!("{} to {}", name(a), name(b))
         }
         _ => d.iter().map(name).collect::<Vec<_>>().join(", "),
     }
@@ -51,7 +51,7 @@ fn days_in(r: &Value) -> Vec<u64> {
     days.filter_map(Value::as_u64).collect()
 }
 
-/// « · lun a vie 08:00».
+/// « · Mon to Fri 08:00».
 pub(super) fn days_and_time(r: &Value) -> String {
     format!(" · {} {}", days_of(&days_in(r)), s(r, "at"))
 }
@@ -69,10 +69,10 @@ pub fn first(r: &Value, now: DateTime<Local>) -> String {
     if s(r, "trigger") != "schedule" {
         return String::new();
     }
-    runs(r, now, "primera vez")
+    runs(r, now, "first time")
 }
 
-/// What a failed run's reason reads: `cause` after "no pudo: ", unless it already begins with a could-not (never "no pudo: no pudo …"). `lead` goes first.
+/// What a failed run's reason reads: `cause` after "could not: ", unless it already begins with a could-not (never "could not: could not …"). `lead` goes first.
 pub(super) fn not_able(lead: &str, cause: &str) -> String {
     const STARTS: [&str; 11] = [
         "no pudo",
@@ -93,6 +93,6 @@ pub(super) fn not_able(lead: &str, cause: &str) -> String {
     if STARTS.iter().any(|s| low.starts_with(s)) {
         format!("{lead}{cause}")
     } else {
-        format!("{lead}no pudo: {cause}")
+        format!("{lead}could not: {cause}")
     }
 }

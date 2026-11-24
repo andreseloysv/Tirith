@@ -18,7 +18,7 @@ fn cause(score: f64, why: &str) -> Option<&str> {
     Some(
         Some(said)
             .filter(|s| !s.is_empty())
-            .unwrap_or("su juez no dijo el motivo"),
+            .unwrap_or("its judge gave no reason"),
     )
 }
 

@@ -23,25 +23,23 @@ fn a_change_of_days_or_time_is_said_with_the_next_run() {
     let said = change(json!({"id": "r1", "at": "18:45"}));
     let last = said.last().cloned().unwrap_or_default();
     assert!(
-        last.contains("Regar")
-            && last.contains("lun a vie 18:45")
-            && last.contains("próxima vez: "),
+        last.contains("Regar") && last.contains("Mon to Fri 18:45") && last.contains("next time: "),
         "a new time: {said:?}"
     );
     let said = change(json!({"id": "r1", "days": [6]}));
     let last = said.last().cloned().unwrap_or_default();
     assert!(
-        last.contains("sáb 18:45") && last.contains("próxima vez: sáb "),
+        last.contains("Sat 18:45") && last.contains("next time: Sat "),
         "new days: {said:?}"
     );
     let said = change(json!({"id": "r1", "on": false}));
     assert!(
-        said.len() == 3 && said[2].contains("apagada"),
+        said.len() == 3 && said[2].contains("turned off"),
         "switched off has no next run: {said:?}"
     );
     let said = change(json!({"id": "r1", "on": true}));
     assert!(
-        said.len() == 4 && said[3].contains("próxima vez: sáb "),
+        said.len() == 4 && said[3].contains("next time: Sat "),
         "switched on again: {said:?}"
     );
     let _ = std::fs::remove_dir_all(&home);

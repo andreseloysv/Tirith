@@ -195,7 +195,7 @@ color = "#8c8c8c"
 # metric.red and review.done to the manager are phone = false too: nobody
 # asked for that answer, and when the owner is needed the manager opens
 # a card. plan.empty too: its answers announced merges already kept off
-# the phones (8 in 24 h put Interrupciones por ítem in red); the manager
+# the phones (8 in 24 h put Interruptions per item in red); the manager
 # still wakes, and opens a card when the next goal is missing.
 [[routes]]
 on = "owner.message"
@@ -466,47 +466,47 @@ kinds = ["credentials", "payment", "account", "device", "decision", "approval"]
 yes = ["yes", "y", "ok", "okay", "approve", "approved", "sí", "si", "vale", "dale", "adelante", "apruebo", "aprobado"]
 
 [metrics.merged]
-label = "En main (24 h)"
+label = "Landed (24 h)"
 target = 10
 at_least = true
 
 [metrics.median]
-label = "Mediana lanzar→main (min)"
+label = "Median launch to main (min)"
 target = 120
 at_least = false
 
 [metrics.first_try]
-label = "A la primera (%)"
+label = "First try (%)"
 target = 50
 at_least = true
 
 [metrics.idle]
-label = "Parado con trabajo (min)"
+label = "Idle with work (min)"
 target = 10
 at_least = false
 
 [metrics.stuck]
-label = "Lanes atascadas"
+label = "Stuck lanes"
 target = 0
 at_least = false
 
 [metrics.main_red]
-label = "Main en rojo"
+label = "Main red"
 target = 0
 at_least = false
 
 [metrics.failed]
-label = "Fallidas (24 h)"
+label = "Failed (24 h)"
 
 [metrics.owner]
-label = "Preguntas al dueño"
+label = "Questions to owner"
 
 # What reached the owner without the owner asking, per item merged in 24 h:
 # phone messages of turns no owner message started, notices whose route has
 # phone = true, and cards. It should fall toward 0; like every measure it is
 # routed as metric.red (to the manager of no project, then the CEO) when it turns red.
 [metrics.interruptions]
-label = "Interrupciones por ítem (24 h)"
+label = "Interruptions per item (24 h)"
 target = 1
 at_least = false
 
@@ -514,7 +514,7 @@ at_least = false
 # without an answer, plus those the card-needed eval says the factory
 # could have decided alone: a card nobody needed in the end.
 [metrics.needless_cards]
-label = "Tarjetas innecesarias (%)"
+label = "Needless cards (%)"
 target = 25
 at_least = false
 
@@ -523,7 +523,7 @@ at_least = false
 # from -1 to 1. Judged by a cheap model from what the owner writes anyway;
 # the owner is never asked.
 [metrics.satisfaction]
-label = "Satisfacción del dueño (24 h)"
+label = "Owner satisfaction (24 h)"
 target = 0
 at_least = true
 
@@ -531,6 +531,6 @@ at_least = true
 # something that needs the owner's yes done without an answered approval
 # card. It must stay 0; red, it is routed as metric.red like every measure.
 [metrics.unapproved]
-label = "Sin aprobación (24 h)"
+label = "Unapproved (24 h)"
 target = 0
 at_least = false

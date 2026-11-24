@@ -6,6 +6,7 @@ import { element } from './dom.js';
 import { drawHead } from './head.js';
 import { fillList } from './models.js';
 import { drawEffort } from './effort.js';
+import { t } from '../i18n.js';
 
 const FRESH = () => ({ tab: '', query: null, others: false, view: 'models' });
 
@@ -43,7 +44,7 @@ export class ModelControls extends HTMLElement {
     if (this.ui.view === 'effort' && current?.efforts.length) drawEffort(this, root, this.config, current);
     else {
       drawHead(this, root, agents, this.tab);
-      this.box = element('div', 'list'); this.box.setAttribute('role', 'menu'); this.box.setAttribute('aria-label', 'Models');
+      this.box = element('div', 'list'); this.box.setAttribute('role', 'menu'); this.box.setAttribute('aria-label', t('Models'));
       root.append(this.box);
       this.fillList();
     }

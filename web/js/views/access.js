@@ -8,6 +8,7 @@ import { useFetch, useStore, api } from '../store.js';
 import { clockTime } from '../common.js';
 import { useAction } from './settings/ui.js';
 import { Connectors } from './access-connectors.js';
+import { t } from '../i18n.js';
 
 const MAX_ROWS = 200;
 const IP = /^[0-9.]+$|:/;
@@ -16,17 +17,17 @@ const IP = /^[0-9.]+$|:/;
  *  anything else that reached out is a factory role. */
 const whoText = (who) => {
   const laneLike = (w) => w.startsWith('merge:') || /-[0-9a-f]{4}$/.test(w);
-  const roles = [...new Set(who.filter((w) => !laneLike(w)).map((w) => (w === 'ceo' ? 'CEO' : w.startsWith('bot-') ? `Bot ${w.slice(4)}` : w.charAt(0).toUpperCase() + w.slice(1))))];
+  const roles = [...new Set(who.filter((w) => !laneLike(w)).map((w) => (w === 'ceo' ? t('CEO') : w.startsWith('bot-') ? t('Bot {name}', { name: w.slice(4) }) : t(w.charAt(0).toUpperCase() + w.slice(1)))))];
   const lanes = who.filter(laneLike).length;
-  return [...roles, ...(lanes ? [`${lanes} ${lanes === 1 ? 'lane' : 'lanes'}`] : [])].join(', ');
+  return [...roles, ...(lanes ? [lanes === 1 ? t('1 lane') : t('{n} lanes', { n: lanes })] : [])].join(', ');
 };
 
 function Guard({ st }) {
   if (!st) return null;
   return html`<p class="sm netline">${st.sandbox
-    ? html`<span class="chip xk api">Network guard on</span><span class="mut">Lanes run in a sandbox: they reach the outside only through NeoBot's proxy (127.0.0.1:${st.proxy_port}), which sees each domain and refuses the blocked ones.</span>`
-    : html`<span class="chip xk blk">Network guard off</span><span class="mut">${st.why || ''}</span>`}
-    ${st.proxy && st.proxy !== 'listening' ? html`<span class="chip xk blk" title=${st.proxy}>Proxy: ${st.proxy}</span>` : null}</p>`;
+    ? html`<span class="chip xk api">${t('Network guard on')}</span><span class="mut">${t('Lanes run in a sandbox: they reach the outside only through NeoBot\'s proxy (127.0.0.1:{port}), which sees each domain and refuses the blocked ones.', { port: st.proxy_port })}</span>`
+    : html`<span class="chip xk blk">${t('Network guard off')}</span><span class="mut">${t(st.why || '')}</span>`}
+    ${st.proxy && st.proxy !== 'listening' ? html`<span class="chip xk blk" title=${st.proxy}>${t('Proxy: {status}', { status: st.proxy })}</span>` : null}</p>`;
 }
 
 export function Access({ project }) {
@@ -57,38 +58,38 @@ export function Access({ project }) {
   const shown = rows.slice(0, MAX_ROWS);
 
   const btn = (d) => {
-    if (busy === `b:${d.host}` || (d.rule && busy === `u:${d.rule}`)) return html`<span class="mut sm">${d.rule ? 'Unblocking…' : 'Blocking…'}</span>`;
+    if (busy === `b:${d.host}` || (d.rule && busy === `u:${d.rule}`)) return html`<span class="mut sm">${d.rule ? t('Unblocking…') : t('Blocking…')}</span>`;
     return d.rule
-      ? html`<span class="chip xk blk" title=${`Blocked by ${d.rule}`}>Blocked</span> <button class="link sm" onClick=${() => change(d.rule, false)}>Unblock</button>`
-      : html`<button class="link sm" title=${`No agent may reach ${d.host} or its subdomains`} onClick=${() => change(d.host, true)}>Block</button>`;
+      ? html`<span class="chip xk blk" title=${t('Blocked by {rule}', { rule: d.rule })}>${t('Blocked')}</span> <button class="link sm" onClick=${() => change(d.rule, false)}>${t('Unblock')}</button>`
+      : html`<button class="link sm" title=${t('No agent may reach {host} or its subdomains', { host: d.host })} onClick=${() => change(d.host, true)}>${t('Block')}</button>`;
   };
 
   return html`<div class="listwrap" data-scroll="accesos">
     <section class="pad extsec">
-      <h2>Network${project ? html` <span class="mut">all projects</span>` : null}</h2>
+      <h2>${t('Network')}${project ? html` <span class="mut">${t('all projects')}</span>` : null}</h2>
       <${Guard} st=${st} />
-      <p class="sm netblocks"><b>Blocked:</b>${blocks.length ? blocks.map((b) => html`<span key=${b}><span class="chip xk blk">${b}</span>
-        <button class="link sm" disabled=${busy === `u:${b}`} onClick=${() => change(b, false)}>${busy === `u:${b}` ? 'Unblocking…' : 'Unblock'}</button></span>`)
-        : html`<span class="mut">nothing</span>`}</p>
-      <div class="netadd"><input type="text" class="rtitle" placeholder="domain, IP or range (10.0.0.0/8)" aria-label="Domain, address or range to block"
+      <p class="sm netblocks"><b>${t('Blocked:')}</b>${blocks.length ? blocks.map((b) => html`<span key=${b}><span class="chip xk blk">${b}</span>
+        <button class="link sm" disabled=${busy === `u:${b}`} onClick=${() => change(b, false)}>${busy === `u:${b}` ? t('Unblocking…') : t('Unblock')}</button></span>`)
+        : html`<span class="mut">${t('nothing')}</span>`}</p>
+      <div class="netadd"><input type="text" class="rtitle" placeholder=${t('domain, IP or range (10.0.0.0/8)')} aria-label=${t('Domain, address or range to block')}
           spellcheck="false" autocomplete="off" value=${rule} onInput=${(e) => setRule(e.target.value)}
           onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
-        <button class="sadd" disabled=${!rule.trim() || busy === `b:${rule.trim()}`} onClick=${add}>Block</button>
-        <span class="mut sm">A domain also blocks its subdomains.</span></div>
+        <button class="sadd" disabled=${!rule.trim() || busy === `b:${rule.trim()}`} onClick=${add}>${t('Block')}</button>
+        <span class="mut sm">${t('A domain also blocks its subdomains.')}</span></div>
       ${error ? html`<p class="ierr">${error}</p>` : null}
     </section>
     <section class="pad extsec">
-      <h2>External <span class="mut">${rows.length} ${rows.length === 1 ? 'destination' : 'destinations'}</span></h2>
-      ${errD && !dests ? html`<p class="ierr">Could not read the destinations: ${errD.message}</p>` : null}
+      <h2>${t('External')} <span class="mut">${rows.length === 1 ? t('1 destination') : t('{n} destinations', { n: rows.length })}</span></h2>
+      ${errD && !dests ? html`<p class="ierr">${t('Could not read the destinations: {message}', { message: errD.message })}</p>` : null}
       ${shown.length ? html`<table class="mtab ext"><tbody>${shown.map((d) => html`<tr key=${d.host}>
           <td class="sm num">${clockTime(d.last)}</td>
-          <td><span class=${`chip xk ${d.rule ? 'blk' : IP.test(d.host) ? 'tcp' : 'https'}`}>${IP.test(d.host) ? 'Address' : 'Web'}</span></td>
+          <td><span class=${`chip xk ${d.rule ? 'blk' : IP.test(d.host) ? 'tcp' : 'https'}`}>${IP.test(d.host) ? t('Address') : t('Web')}</span></td>
           <td><b>${d.host}</b></td>
           <td class="sm" title=${(d.lanes || []).join(', ')}>${whoText(d.lanes || [])}</td>
-          <td class="sm mut num">${project ? null : html`${d.count} ${d.count === 1 ? 'connection' : 'connections'}${d.refused ? html` · <span class="nref">${d.refused} refused</span>` : null}`}</td>
+          <td class="sm mut num">${project ? null : html`${d.count === 1 ? t('1 connection') : t('{n} connections', { n: d.count })}${d.refused ? html` · <span class="nref">${t('{n} refused', { n: d.refused })}</span>` : null}`}</td>
           <td class="sm tact">${btn(d)}</td></tr>`)}</tbody></table>
-          ${rows.length > MAX_ROWS ? html`<p class="mut sm">Showing the newest ${MAX_ROWS} of ${rows.length}.</p>` : null}`
-        : dests ? html`<p class="mut sm">${q ? 'No destination matches.' : project ? 'This project\'s agents reached nothing outside the machine yet.' : 'Nothing reached outside the machine yet.'}</p>` : null}
+          ${rows.length > MAX_ROWS ? html`<p class="mut sm">${t('Showing the newest {max} of {n}.', { max: MAX_ROWS, n: rows.length })}</p>` : null}`
+        : dests ? html`<p class="mut sm">${q ? t('No destination matches.') : project ? t('This project\'s agents reached nothing outside the machine yet.') : t('Nothing reached outside the machine yet.')}</p>` : null}
     </section>
     <${Connectors} />
   </div>`;

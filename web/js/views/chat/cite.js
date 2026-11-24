@@ -4,6 +4,7 @@
 import { useMemo } from '../../../vendor/preact-htm.js';
 import { useFetch } from '../../store.js';
 import { esc } from '../../md.js';
+import { t } from '../../i18n.js';
 
 const NOTE = /^\s*[-*]\s+\[([ms]\d+)\]\s*(.*)$/;
 const MARK = /[ \t]*\[([ms])(\d+)\]/g;   /* with the spaces before it: the number sits on the word, as a footnote's */
@@ -30,7 +31,7 @@ export function cited(html, notes) {
   if (!notes) return html;
   return html.replace(MARK, (_, kind, n) => {
     const key = kind + n, words = notes[key];
-    const label = `${kind === 's' ? 'Shared memory' : 'Memory'}, note ${n}: ${words || 'no longer in the memory'}`;
+    const label = t('{memory}, note {n}: {words}', { memory: kind === 's' ? t('Shared memory') : t('Memory'), n, words: words || t('no longer in the memory') });
     return `<sup class="mc-cite${kind === 's' ? ' shared' : ''}" tabindex="0" role="note" aria-label="${esc(label)}" data-note="${esc(words || label)}">${n}</sup>`;
   });
 }

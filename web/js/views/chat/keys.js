@@ -2,12 +2,13 @@
 // back the last message, and pasted files are attached.
 import { useEffect } from '../../../vendor/preact-htm.js';
 import { api } from '../../store.js';
+import { t } from '../../i18n.js';
 import { ownerParts } from './owner.js';
 
 /** Stop the running turn of `project`; Esc anywhere outside a field does it too. */
 export function useStop(project, busy, zoom, setErr) {
   const interrupt = () => {
-    api('POST', '/api/manager/interrupt', { project }).then(() => setErr(null), (e) => setErr(`Could not stop: ${e.message}`));
+    api('POST', '/api/manager/interrupt', { project }).then(() => setErr(null), (e) => setErr(t('Could not stop: {error}', { error: e.message })));
   };
   /* Esc anywhere outside a field stops the running turn, like the CLI */
   useEffect(() => {

@@ -39,16 +39,25 @@ fn role_view(app: &Shared, cfg: &Config, r: &str) -> Value {
     v["face"] = json!({"shape": face("shape"), "color": face("color"), "material": face("material"), "eye": face("eye"), "gradient": face("gradient"), "gstart": face("gstart"), "gend": face("gend"), "glass": face("glass"), "gangle": get::<f64>(&cfg.factory.raw, &["roles", r, "face", "gangle"])});
     v
 }
-/// The models of `[models.choices]`: a list, or a table of lists per agent.
+/// The models of `[models.choices]` (a list, or a table of lists per agent), then the catalog's models of each
+/// configured agent that list names none of: a new install offers its agents' models before anyone lists them.
 fn listed_models(cfg: &Config) -> Vec<String> {
     let listed = get::<toml::Value>(&cfg.raw, &["models", "choices"]).map(|c| {
         c.as_table()
             .map_or(vec![c.clone()], |t| t.values().cloned().collect())
     });
-    listed
+    let mut all: Vec<String> = listed
         .into_iter()
         .flatten()
         .filter_map(|v| v.try_into::<Vec<String>>().ok())
         .flatten()
-        .collect()
+        .collect();
+    for (alias, _) in cfg.factory.commands() {
+        let has = all
+            .iter()
+            .any(|m| agent_of(cfg, m).as_deref() == Some(alias.as_str()));
+        let known = crate::setup::known_agent(&alias).map(|k| k.models);
+        all.extend(known.into_iter().flatten().filter(|_| !has));
+    }
+    all
 }

@@ -8,7 +8,7 @@ pub(super) fn failed_line(run: &Expected, why: &str, partial: bool) -> String {
     format!(
         "✗ «{}» {} ({}): {}",
         short(&run.title, 70),
-        if partial { "a medias" } else { "falló" },
+        if partial { "partly done" } else { "failed" },
         when(&run.due),
         short(why, 220)
     )
@@ -28,14 +28,14 @@ pub(super) fn lost(app: &Shared, runs: &[Expected], why: &str) {
         format!("({})", when(&first.due))
     } else {
         format!(
-            "{} veces ({} a {})",
+            "{} times ({} to {})",
             runs.len(),
             when(&first.due),
             when(&last.due)
         )
     };
     let title = short(&first.title, 70);
-    let line = format!("✗ «{title}» no se hizo {which}: {}", short(why, 220));
+    let line = format!("✗ «{title}» did not run {which}: {}", short(why, 220));
     tell(app, &first.conv, &line);
 }
 

@@ -2,12 +2,13 @@
 // (the old v-pipelines.js glyphs and .pchp chips).
 import { html } from '../../../vendor/preact-htm.js';
 import { ms } from '../../common.js';
+import { t } from '../../i18n.js';
 
 const SVG = {
   passed: 'M3.2 6.4l2.1 2.1 3.6-4.2', failed: 'M3.6 3.6l4.8 4.8M8.4 3.6L3.6 8.4',
   warning: 'M6 2.8v3.6M6 8.6v.1', skipped: 'M2.6 3.4l2.6 2.6-2.6 2.6M6.2 3.4l2.6 2.6-2.6 2.6', canceled: 'M3.4 8.6l5.2-5.2',
 };
-export const LABEL = { passed: 'Passed', failed: 'Failed', running: 'Running', pending: 'Pending', canceled: 'Canceled', timeout: 'Timed out', skipped: 'Skipped' };
+export const label = (s) => ({ passed: t('Passed'), failed: t('Failed'), running: t('Running'), pending: t('Pending'), canceled: t('Canceled'), timeout: t('Timed out'), skipped: t('Skipped') })[s] || s;
 
 /** A stage or pipeline status as the old page's classes know it (timeout draws as failed). */
 export const sClass = (s) => (s === 'timeout' ? 'failed' : s || 'pending');
@@ -39,7 +40,7 @@ export function startMs(p) { return ms(p.started_at) || 0; }
 
 export function StageChip({ st, sel, onClick }) {
   const s = sClass(st.status);
-  return html`<span class=${`pchp s-${s}${sel ? ' sel' : ''}`} role="button" tabindex="0" title=${`${st.stage}: ${LABEL[st.status] || st.status}`}
+  return html`<span class=${`pchp s-${s}${sel ? ' sel' : ''}`} role="button" tabindex="0" title=${`${st.stage}: ${label(st.status)}`}
     onClick=${onClick}>${mark(st.status)}<span>${st.stage}</span></span>`;
 }
 

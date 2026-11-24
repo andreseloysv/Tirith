@@ -174,3 +174,37 @@ fn every_agents_words_for_a_spent_quota_start_the_fallback() {
         assert!(!super::out_of_credits(said), "{said}");
     }
 }
+
+/// A new install lists no models: each configured agent offers its catalog's, and the page knows they are its.
+#[test]
+fn a_new_install_offers_each_connected_agent_s_catalog_models() {
+    let dir = std::env::temp_dir().join(format!("tirith-models-catalog-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let muse = "C:\\Users\\me\\AppData\\Local\\Programs\\muse\\muse.cmd";
+    let toml = format!("[agents.muse]\ncommand = '{muse}'\n");
+    std::fs::write(dir.join("config.toml"), toml).unwrap();
+    let app = crate::app::App::open_at(dir.clone());
+    let st = super::state(&app);
+    let models: Vec<&str> = st["choices"]["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|m| m.as_str())
+        .collect();
+    assert!(models.contains(&"muse-spark-1.3"), "{models:?}");
+    assert_eq!(st["choices"]["owners"]["muse-spark-1.3"], "muse");
+    std::fs::write(
+        dir.join("config.toml"),
+        format!("[agents.muse]\ncommand = '{muse}'\n[models]\nchoices = [\"muse-spark-1.3\"]\n"),
+    )
+    .unwrap();
+    app.reload_config(true);
+    let st = super::state(&app);
+    assert_eq!(
+        st["choices"]["models"],
+        serde_json::json!(["muse-spark-1.3"]),
+        "the owner's list wins"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

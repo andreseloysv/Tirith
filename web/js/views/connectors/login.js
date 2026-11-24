@@ -1,6 +1,7 @@
 // A remote connector's sign-in for one bot from the page: the daemon begins it (POST /api/connectors/<id>/login),
 // the owner's browser opens the server's sign-in in a new tab, and the page waits on its ticket until it ends.
 import { api } from '../../store.js';
+import { t } from '../../i18n.js';
 
 const WAIT_MS = 1500;
 const MOST_MS = 10 * 60 * 1000;
@@ -21,7 +22,7 @@ export async function login(id, bot) {
     await new Promise((r) => setTimeout(r, WAIT_MS));
     const st = await api('GET', `/api/connectors/logins/${encodeURIComponent(begun.ticket)}`);
     if (st.status === 'done') return st;
-    if (st.status === 'failed') throw new Error(`The sign-in failed: ${st.why || 'no reason given'}`);
+    if (st.status === 'failed') throw new Error(t('The sign-in failed: {why}', { why: st.why || t('no reason given') }));
   }
-  throw new Error('The sign-in took over ten minutes: try Login again.');
+  throw new Error(t('The sign-in took over ten minutes: try Login again.'));
 }

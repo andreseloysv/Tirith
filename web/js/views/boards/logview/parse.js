@@ -2,20 +2,21 @@
 // gathered into one output (or error) entry.
 import { stripAnsi } from './text.js';
 import { message, result } from './events.js';
+import { t } from '../../../i18n.js';
 
 /** One JSON line of the stream as its entries. */
 function jsonLine(j, line, tools, out) {
-  const t = j.type;
-  if (t === 'system') {
-    out.push({ kind: 'system', text: j.subtype === 'init' ? `Session started${j.model ? ` · ${j.model}` : ''}` : `System: ${j.subtype || ''}`, detail: j.session_id || '' });
-  } else if (t === 'assistant' || t === 'user') {
+  const type = j.type;
+  if (type === 'system') {
+    out.push({ kind: 'system', text: j.subtype === 'init' ? `${t('Session started')}${j.model ? ` · ${j.model}` : ''}` : t('System: {name}', { name: j.subtype || '' }), detail: j.session_id || '' });
+  } else if (type === 'assistant' || type === 'user') {
     message(j, tools, out);
-  } else if (t === 'result') {
+  } else if (type === 'result') {
     out.push(result(j));
-  } else if (t === 'stream_event' || t === 'rate_limit_event') {
+  } else if (type === 'stream_event' || type === 'rate_limit_event') {
     // noise
   } else {
-    out.push({ kind: 'system', text: t ? `Event: ${t}` : 'Event', detail: line.slice(0, 300) });
+    out.push({ kind: 'system', text: type ? t('Event: {name}', { name: type }) : t('Event'), detail: line.slice(0, 300) });
   }
 }
 

@@ -16,6 +16,7 @@ mod hook_clean;
 mod hook_event;
 mod hook_fire;
 mod hook_sample;
+mod intro;
 mod layer;
 mod library;
 mod list;

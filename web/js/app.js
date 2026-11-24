@@ -5,8 +5,13 @@
 // open is remembered, and so is folding one: the project you are in opens on arrival unless you folded it, and its arrow
 // or its name folds it again while you stay there. The bot's card (new or edit) is drawn here, over any view.
 // Each part lives in its own file under app/; this entry only draws the shell.
+// The language's dictionaries are read first and only then is the rest of the code loaded: a module that translates
+// a table of words when it loads (a module-level t()) then gets the owner's language too.
 import { html, render } from '../vendor/preact-htm.js';
-import { App } from './app/shell.js';
-import './app/reload-key.js';
+import { loadLanguage } from './i18n.js';
 
-render(html`<${App} />`, document.getElementById('app'));
+loadLanguage().finally(async () => {
+  const { App } = await import('./app/shell.js');
+  await import('./app/reload-key.js');
+  render(html`<${App} />`, document.getElementById('app'));
+});

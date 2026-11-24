@@ -8,6 +8,9 @@ import { viewOf } from './views.js';
 import { useRoute } from './route.js';
 import { Nav } from './nav.js';
 import { Top } from './top.js';
+import { useAgents, firstRun } from '../views/setup/agents.js';
+import { Welcome } from '../views/setup/welcome.js';
+import { t } from '../i18n.js';
 
 /* the bot's card (new or edit), drawn here, over any view */
 function botCard(card) {
@@ -35,12 +38,16 @@ export function App() {
   const View = viewOf(r.view)[2];
   const project = r.view === 'settings' ? '' : r.project; /* for the bots view: the bot's id; Settings: `sub` (access) */
   const card = s.botCard;
+  const agents = useAgents();
+  const first = firstRun(agents); /* no agent works yet: the setup alone, and nothing that cannot be used */
+  const bare = agents === undefined || first;
+  const view = first ? html`<${Welcome} />` : html`<${View} project=${project} sub=${r.project} />`;
   return html`<div id="shell">
-    <${Nav} r=${r} onAdd=${() => setAdding(true)} />
+    <${Nav} r=${r} onAdd=${() => setAdding(true)} bare=${bare} />
     <div id="content">
-      <${Top} r=${r} />
-      ${!s.connected && s.loaded ? html`<div id="stale" class="stale" role="status">NeoBot is not updating — reconnecting…</div>` : null}
-      <div id="view" class=${`view v-${r.view}`}>${s.loaded ? html`<${View} project=${project} sub=${r.project} />` : null}</div>
+      ${bare ? null : html`<${Top} r=${r} />`}
+      ${!s.connected && s.loaded ? html`<div id="stale" class="stale" role="status">${t('NeoBot is not updating — reconnecting…')}</div>` : null}
+      <div id="view" class=${`view v-${first ? 'overview' : r.view}`}>${s.loaded && agents !== undefined ? view : null}</div>
     </div>
   </div>${adding ? html`<${AddProject} onClose=${() => setAdding(false)} />` : null}
   ${card ? botCard(card) : null}

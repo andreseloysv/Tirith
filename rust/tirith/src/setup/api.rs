@@ -25,4 +25,5 @@ pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/setup", get(who))
         .route("/api/setup/check/{alias}", post(check))
+        .merge(super::web::routes())
 }

@@ -6,6 +6,7 @@ import { useStore, useFetch } from '../../store.js';
 import { sClass, startMs } from '../boards/pipe.js';
 import { runList } from './runs.js';
 import { Detail } from './detail.js';
+import { t } from '../../i18n.js';
 
 /** The runs shown: of `project` (or all), matching the search, newest first. */
 function useRuns(list, project, q) {
@@ -36,8 +37,8 @@ export function Pipelines({ project }) {
   const q = String(s.q || '').trim().toLowerCase();
   const runs = useRuns(list, project, q);
 
-  if (!list) return html`<div class="pad"><p class="quiet">${error ? `Could not load the pipelines: ${error.message}` : 'Loading…'}</p></div>`;
-  if (!runs.length) return html`<div class="pad"><p class="quiet">${q ? 'No pipelines match' : `No pipelines${project ? ' for this project' : ''} yet: they run when a lane is merged`}</p></div>`;
+  if (!list) return html`<div class="pad"><p class="quiet">${error ? t('Could not load the pipelines: {message}', { message: error.message }) : t('Loading…')}</p></div>`;
+  if (!runs.length) return html`<div class="pad"><p class="quiet">${q ? t('No pipelines match') : project ? t('No pipelines for this project yet: they run when a lane is merged') : t('No pipelines yet: they run when a lane is merged')}</p></div>`;
   const cur = runs.find((p) => p.id === sel) || runs.find((p) => sClass(p.status) === 'running') || runs[0];
   const open = (id) => { setSel(id); setStage(0); };
   return html`<div class="pv">

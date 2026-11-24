@@ -8,6 +8,7 @@ import { lookOf } from '../../views/bots/face/face-map.js';
 import { go } from '../../common.js';
 import { pmProjects, lastProject } from './where.js';
 import { sorted } from './order.js';
+import { t } from '../../i18n.js';
 
 export const PM = 'manager';
 const PM_FACE = { shape: 'hex', color: '#8e7cf0' };
@@ -18,13 +19,13 @@ function pmFace(role, s) {
   const now = pmProjects(s), last = lastProject(s);
   const target = now[0] || (last && last.id) || (s.projects[0] || {}).id || '';
   const face = (role.face && role.face.shape && role.face) || PM_FACE;
-  return { id: PM, pm: true, key: '', name: role.name || 'Project Manager', shape: face.shape, color: face.color || PM_FACE.color, look: lookOf({ ...face, color: face.color || PM_FACE.color }),
+  return { id: PM, pm: true, key: '', name: t(role.name || 'Project Manager'), shape: face.shape, color: face.color || PM_FACE.color, look: lookOf({ ...face, color: face.color || PM_FACE.color }),
     state: now.length ? 'work' : 'watch', unread: 0, open: () => go('overview', target) };
 }
 
 function botFace(b, s, unread) {
   const busy = !!s.busy[keyOf(b)];
-  return { id: b.id, key: keyOf(b), name: b.name, shape: b.shape, color: b.color, look: lookOf(b), bot: b, busy,
+  return { id: b.id, key: keyOf(b), name: b.system ? t(b.name) : b.name, shape: b.shape, color: b.color, look: lookOf(b), bot: b, busy,
     state: stateOf(b, busy), unread: unread.by[b.id] || 0, open: () => go('bots', b.id) };
 }
 

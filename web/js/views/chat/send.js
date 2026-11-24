@@ -2,6 +2,7 @@
 // "Sending…" until the daemon shows it, or as "Not sent" with Retry and Copy text.
 import { useState, useEffect, useRef } from '../../../vendor/preact-htm.js';
 import { api } from '../../store.js';
+import { t } from '../../i18n.js';
 
 let cidN = 0;
 
@@ -31,7 +32,7 @@ export function useSend({ project, talk, chat, lastId, draft, edit, pics, setPic
     stick.current = true;
     setOut((xs) => (xs.includes(o) ? xs.slice() : xs.concat(o)));
     transmit(o, project).then(() => { o.done = true; setOut((xs) => xs.slice()); }, (e) => {
-      o.state = 'failed'; o.err = `Could not send: ${e.message || e}`;
+      o.state = 'failed'; o.err = t('Could not send: {error}', { error: e.message || e });
       setOut((xs) => xs.slice());
       /* the text goes back into an empty box, like the old page */
       if (!ta.current || !ta.current.value.trim()) edit(o.text);
@@ -41,7 +42,7 @@ export function useSend({ project, talk, chat, lastId, draft, edit, pics, setPic
     const text = draft.trim();
     if (!text && !pics.length) return;
     /* a conversation that could not be read (a daemon older than this page) would swallow the message */
-    if (talk.error && !talk.loaded) { setErr('This conversation could not be read, so nothing was sent.'); return; }
+    if (talk.error && !talk.loaded) { setErr(t('This conversation could not be read, so nothing was sent.')); return; }
     lastSent.current = text;
     dispatch({ cid: ++cidN, text, pics: pics.slice() });
     edit(''); setPics([]); setErr(null);

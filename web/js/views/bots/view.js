@@ -6,6 +6,7 @@ import { markSeen } from '../../unread.js';
 import { keyOf, recall, remember } from './state.js';
 import { Panel } from './panel.js';
 import { Intro } from './intro.js';
+import { t } from '../../i18n.js';
 
 /** What the owner has on the screen is read. */
 function useSeen(bot, talk) {
@@ -31,14 +32,14 @@ export function Bots({ project: wanted }) {
 
   if (!bots) {
     return html`<div class="bview bsolo"><p class="bnote">${err ? (/not found/i.test(err.message)
-      ? 'The running NeoBot daemon is older than this page and has no bots yet: rebuild and restart it (the page updates on its own).'
-      : `Could not read the bots: ${err.message}`) : 'Loading…'}</p></div>`;
+      ? t('The running NeoBot daemon is older than this page and has no bots yet: rebuild and restart it (the page updates on its own).')
+      : t('Could not read the bots: {error}', { error: err.message })) : t('Loading…')}</p></div>`;
   }
   if (!bots.length) return html`<div class="bview bsolo"><${Intro} onNew=${() => setUi('botCard', {})} onTemplate=${pickTemplate} onImport=${pickImport} /></div>`;
   return html`<div class="bview">
     <div class="bchat"><${Chat} key=${keyOf(bot)} project=${keyOf(bot)} who=${bot.name}
-      hint=${`Say hello to ${bot.name}. Ask for anything that repeats, as “every weekday at 8, check my inbox for job offers”, and ${bot.name} sets up the routine itself.`} /></div>
-    <aside class="bside"><span class="btopen"><button type="button" class="blink" onClick=${pickTemplate}>Desde plantilla</button> <button type="button" class="blink" onClick=${pickImport}>Import</button> <button type="button" class="blink" onClick=${() => setUi('botPackage', { bot })}>Export</button></span>
+      hint=${t('Say hello to {name}. Ask for anything that repeats, as “every weekday at 8, check my inbox for job offers”, and {name} sets up the routine itself.', { name: bot.name })} /></div>
+    <aside class="bside"><span class="btopen"><button type="button" class="blink" onClick=${pickTemplate}>${t('From template')}</button> <button type="button" class="blink" onClick=${pickImport}>${t('Import')}</button> <button type="button" class="blink" onClick=${() => setUi('botPackage', { bot })}>${t('Export')}</button></span>
       <${Panel} bot=${bot} busy=${!!s.busy[keyOf(bot)]} onEdit=${() => setUi('botCard', bot)} /></aside>
   </div>`;
 }

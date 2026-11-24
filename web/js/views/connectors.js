@@ -10,6 +10,7 @@ import { html, useState } from '../../vendor/preact-htm.js';
 import { useFetch } from '../store.js';
 import { useAction } from './settings/ui.js';
 import { ConnectorCard } from './connectors/card.js';
+import { t } from '../i18n.js';
 
 export function Connectors() {
   const [page, reload, err] = useFetch('/api/connectors/page', ['connectors', 'bots']);
@@ -20,13 +21,13 @@ export function Connectors() {
   const chosen = granted.includes(bot) ? bot : granted[0] || '';
   const act = async (key, fn) => { await run(key, fn); reload(); };
   return html`<section class="pad extsec">
-    <h2>Connectors <span class="mut">${list.length}</span></h2>
-    <p class="mut sm">MCP servers the bots may use, defined in ~/.tirith/config.toml. Grant one to a bot, or narrow it, on that bot's card under Permissions.</p>
-    ${err && !page ? html`<p class="ierr">Could not read the connectors: ${err.message}</p>` : null}
+    <h2>${t('Connectors')} <span class="mut">${list.length}</span></h2>
+    <p class="mut sm">${t('MCP servers the bots may use, defined in ~/.tirith/config.toml. Grant one to a bot, or narrow it, on that bot\'s card under Permissions.')}</p>
+    ${err && !page ? html`<p class="ierr">${t('Could not read the connectors: {message}', { message: err.message })}</p>` : null}
     ${error ? html`<p class="ierr">${error}</p>` : null}
-    ${granted.length ? html`<div class="netadd"><label class="sm">Tools for <select aria-label="Bot" value=${chosen} onChange=${(e) => setBot(e.target.value)}>
+    ${granted.length ? html`<div class="netadd"><label class="sm">${t('Tools for')} <select aria-label=${t('Bot')} value=${chosen} onChange=${(e) => setBot(e.target.value)}>
       ${granted.map((b) => html`<option key=${b} value=${b}>${b}</option>`)}</select></label></div>` : null}
     ${list.map((c) => html`<${ConnectorCard} key=${c.id} c=${c} bot=${chosen} busy=${busy} act=${act} />`)}
-    ${page && !list.length ? html`<p class="mut sm">No connector is defined: add a [[connectors]] row to ~/.tirith/config.toml.</p>` : null}
+    ${page && !list.length ? html`<p class="mut sm">${t('No connector is defined: add a [[connectors]] row to ~/.tirith/config.toml.')}</p>` : null}
   </section>`;
 }

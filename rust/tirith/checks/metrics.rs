@@ -111,7 +111,7 @@ fn owner_measures_count_interruptions_and_needless_cards() {
             interruptions.target,
             interruptions.red
         ),
-        ("Interrupciones por ítem (24 h)", 3.5, Some(1.0), true),
+        ("Interruptions per item (24 h)", 3.5, Some(1.0), true),
         "{}",
         interruptions.facts
     );
@@ -131,7 +131,7 @@ fn owner_measures_count_interruptions_and_needless_cards() {
             needless.target,
             needless.red
         ),
-        ("Tarjetas innecesarias (%)", 66.7, Some(25.0), true),
+        ("Needless cards (%)", 66.7, Some(25.0), true),
         "{}",
         needless.facts
     );
@@ -149,7 +149,7 @@ fn owner_measures_count_interruptions_and_needless_cards() {
             satisfaction.target,
             satisfaction.red
         ),
-        ("Satisfacción del dueño (24 h)", 0.0, Some(0.0), false),
+        ("Owner satisfaction (24 h)", 0.0, Some(0.0), false),
         "{}",
         satisfaction.facts
     );

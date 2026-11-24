@@ -1,15 +1,11 @@
 // Small bits shared by the Rooms, Access and Settings views.
 import { html, useState } from '../../../vendor/preact-htm.js';
-import { ago } from '../../common.js';
+import { t } from '../../i18n.js';
 
-/** "just now", "5 min ago", "2 h ago" (the old rooms view's wording). */
-export function agoText(iso) {
-  const a = ago(iso);
-  return !a ? '' : a === 'now' ? 'just now' : `${a} ago`;
-}
+export { agoText } from '../../common/time.js';
 
 /** Copies `text`; the button says "Copied" for a moment. */
-export function CopyBtn({ text, label = 'Copy', cls = 'alink' }) {
+export function CopyBtn({ text, label, cls = 'alink' }) {
   const [done, setDone] = useState(false);
   const copy = async () => {
     try {
@@ -23,7 +19,7 @@ export function CopyBtn({ text, label = 'Copy', cls = 'alink' }) {
     setDone(true);
     setTimeout(() => setDone(false), 1500);
   };
-  return html`<button type="button" class=${cls} onClick=${copy}>${done ? 'Copied' : label}</button>`;
+  return html`<button type="button" class=${cls} onClick=${copy}>${done ? t('Copied') : label || t('Copy')}</button>`;
 }
 
 /** One call at a time per key: `[busy, error, run(fn)]`; `run` keeps the error message of a failed call. */
