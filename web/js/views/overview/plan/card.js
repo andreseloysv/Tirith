@@ -6,9 +6,10 @@ import { Bar } from './items.js';
 import { Step } from './step.js';
 import { Autopilot } from './autopilot.js';
 import { latestLanes, summarize, currentStep } from './steps.js';
+import { t } from '../../../i18n.js';
 
 function mainRed(red) {
-  return html`<div class="ierr ovred" role="alert"><b>Main is red.</b> Merges wait until it is green again${typeof red === 'string' && red !== 'true' && red !== '1' ? html`: <span>${red}</span>` : '.'}</div>`;
+  return html`<div class="ierr ovred" role="alert"><b>${t('Main is red.')}</b> ${t('Merges wait until it is green again')}${typeof red === 'string' && red !== 'true' && red !== '1' ? html`: <span>${red}</span>` : '.'}</div>`;
 }
 
 /** One project's card; re-rendered only when its plan, search, lanesSig or pSig change (`lanes` itself is a new

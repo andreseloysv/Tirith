@@ -3,19 +3,20 @@
 import { html } from '../../vendor/preact-htm.js';
 import { useStore } from '../store.js';
 import { ICON, Icon, go } from '../common.js';
-import { TOP } from './views.js';
+import { TOP, labelOf } from './views.js';
 import { useNavMemory } from './memory.js';
 import { Faces } from './faces.js';
 import { NavResizer } from './resize.js';
 import { projectRow } from './projects.js';
+import { t } from '../i18n.js';
 
 function topViews(r) {
   return TOP.map(([id, label]) => html`<button class=${`nav${r.view === id && !r.project ? ' on' : ''}`} onClick=${() => go(id, '')}>
-            <${Icon} d=${ICON[id] || ICON.overview} size=${16} w=${1.6} /><span>${label}</span></button>`);
+            <${Icon} d=${ICON[id] || ICON.overview} size=${16} w=${1.6} /><span>${labelOf(label)}</span></button>`);
 }
 
 function addProject(onAdd) {
-  return html`<div class="grp grp-add"><span>Projects</span><button type="button" class="grp-plus" aria-label="Add project" title="Add project"
+  return html`<div class="grp grp-add"><span>${t('Projects')}</span><button type="button" class="grp-plus" aria-label=${t('Add project')} title=${t('Add project')}
             onClick=${onAdd}><${Icon} d="M12 5v14 M5 12h14" size=${14} w=${2} /></button></div>`;
 }
 

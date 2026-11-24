@@ -7,6 +7,7 @@ import { useModal, useDoneFocus, useDryRun } from './effects.js';
 import { actions } from './actions.js';
 import { doneBody } from './done.js';
 import { formBody } from './form.js';
+import { t } from '../../i18n.js';
 
 export function AddProject({ onClose }) {
   const [folder, setFolder] = useState('');
@@ -37,5 +38,5 @@ export function AddProject({ onClose }) {
   const body = done ? doneBody(done, doneBtn, close) : formBody(d, a);
   return html`<div class="ap-ov" role="dialog" aria-modal="true" aria-labelledby="ap-title"
     onClick=${(e) => { if (e.target === e.currentTarget && !busy) close(); }}>
-    <div class="ap-card"><h3 id="ap-title">Add project</h3>${body}</div></div>`;
+    <div class="ap-card"><h3 id="ap-title">${t('Add project')}</h3>${body}</div></div>`;
 }

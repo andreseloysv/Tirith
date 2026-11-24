@@ -1,1 +1,25 @@
-{}
+{
+ "No bot is granted it.": "Ningún bot tiene acceso.",
+ "blocked for this bot": "bloqueado para este bot",
+ "never": "nunca",
+ "Signing in…": "Iniciando sesión…",
+ "Login": "Iniciar sesión",
+ "Removing…": "Quitando…",
+ "Remove": "Quitar",
+ "Remove {id} and every bot's grant of it?": "¿Quitar {id} y el acceso de todos los bots a él?",
+ "Keep": "Conservar",
+ "Its tools show once a bot's run has opened it.": "Sus herramientas aparecen cuando un bot lo haya abierto.",
+ "Tools: {tools} — bot {bot} is not granted it.": "Herramientas: {tools} — el bot {bot} no tiene acceso.",
+ "(none)": "(ninguno)",
+ "Tools for bot {bot}:": "Herramientas para el bot {bot}:",
+ "last used {time}": "usado por última vez {time}",
+ "never used": "nunca usado",
+ "The sign-in failed: {why}": "No se pudo iniciar sesión: {why}",
+ "no reason given": "sin motivo indicado",
+ "The sign-in took over ten minutes: try Login again.": "El inicio de sesión tardó más de diez minutos: vuelve a pulsar Iniciar sesión.",
+ "MCP servers the bots may use, defined in ~/.tirith/config.toml. Grant one to a bot, or narrow it, on that bot's card under Permissions.": "Servidores MCP que pueden usar los bots, definidos en ~/.tirith/config.toml. Da acceso a uno o restríngelo en la ficha del bot, en Permisos.",
+ "Could not read the connectors: {message}": "No se pudieron leer los conectores: {message}",
+ "Tools for": "Herramientas de",
+ "Bot": "Bot",
+ "No connector is defined: add a [[connectors]] row to ~/.tirith/config.toml.": "No hay ningún conector definido: añade una fila [[connectors]] en ~/.tirith/config.toml."
+}

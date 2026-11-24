@@ -4,13 +4,13 @@
 import { html } from '../../../vendor/preact-htm.js';
 import { Face } from '../bots/face.js';
 import { Tree } from './tree.js';
+import { t } from '../../i18n.js';
 
-const many = (n, one, more) => `${n} ${n === 1 ? one : more}`;
 
 /* a boss with no helpers: its face at work, its name and what it does */
 function Alone({ g, w }) {
   return html`<div class="hm-crew">
-    <button type="button" class="hm-boss" onClick=${w.open} title="Open the chat">
+    <button type="button" class="hm-boss" onClick=${w.open} title=${t('Open the chat')}>
       <span class="hm-face"><${Face} shape=${w.face.shape} color=${w.face.color} size=${44} state="work" /></span>
       <span class="hm-bn"><b>${w.name}</b>${w.place ? html`<span>${w.place}</span>` : null}</span>
       <span class="hm-does">${g.doing}…</span></button>
@@ -21,6 +21,6 @@ function Alone({ g, w }) {
 export function Working({ groups, who }) {
   if (!groups.length) return null;
   const n = groups.reduce((a, g) => a + g.helpers.length, 0);
-  return html`<section class="hm-sec" aria-label="Working now"><h2 class="hm-h">Working now${n ? html`<span class="hm-n">${many(n, 'helper', 'helpers')}</span>` : null}</h2>
+  return html`<section class="hm-sec" aria-label=${t('Working now')}><h2 class="hm-h">${t('Working now')}${n ? html`<span class="hm-n">${n === 1 ? t('1 helper') : t('{n} helpers', { n })}</span>` : null}</h2>
     ${groups.map((g) => (g.helpers.length ? html`<${Tree} key=${g.key} g=${g} w=${who(g.key)} />` : html`<${Alone} key=${g.key} g=${g} w=${who(g.key)} />`))}</section>`;
 }

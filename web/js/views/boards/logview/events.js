@@ -2,6 +2,7 @@
 // final result with its usage, and the session's other events.
 import { dur } from '../../../common.js';
 import { TEST_RE, EDIT, READ, stripAnsi, resultText, short, testResult, counts } from './text.js';
+import { t } from '../../../i18n.js';
 
 export function toolUse(c) {
   const name = c.name || 'tool', s = short(c.input);
@@ -21,7 +22,7 @@ export function toolResult(c, tools, out) {
   const r = stripAnsi(resultText(c.content)).replace(/\s+$/, '');
   const src = tools[c.tool_use_id];
   if (src && src.kind === 'test') { src.res = c.is_error ? 'failed' : testResult(r) || 'passed'; src.sum = counts(r); }
-  if (c.is_error) out.push({ kind: 'error', text: r || 'Tool error' });
+  if (c.is_error) out.push({ kind: 'error', text: r || t('Tool error') });
   else if (r && src && (src.kind === 'command' || src.kind === 'test')) out.push({ kind: 'output', text: r });
 }
 
@@ -43,8 +44,8 @@ export function message(j, tools, out) {
 export function result(j) {
   const u = j.usage || {}, bits = [];
   if (j.total_cost_usd != null) bits.push(`$${Number(j.total_cost_usd).toFixed(2)}`);
-  if (u.input_tokens != null) bits.push(`${u.input_tokens} in · ${u.output_tokens || 0} out`);
-  if (j.num_turns) bits.push(`${j.num_turns} turns`);
+  if (u.input_tokens != null) bits.push(t('{i} in · {o} out', { i: u.input_tokens, o: u.output_tokens || 0 }));
+  if (j.num_turns) bits.push(j.num_turns === 1 ? t('1 turn') : t('{n} turns', { n: j.num_turns }));
   if (j.duration_ms) bits.push(dur(j.duration_ms / 1000));
-  return { kind: j.is_error ? 'error' : 'done', text: resultText(j.result) || (j.is_error ? 'Ended with an error' : 'Done'), usage: bits.join(' · ') };
+  return { kind: j.is_error ? 'error' : 'done', text: resultText(j.result) || (j.is_error ? t('Ended with an error') : t('Done')), usage: bits.join(' · ') };
 }
