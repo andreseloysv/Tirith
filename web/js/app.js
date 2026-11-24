@@ -7,6 +7,7 @@
 // Each part lives in its own file under app/; this entry only draws the shell.
 import { html, render } from '../vendor/preact-htm.js';
 import { App } from './app/shell.js';
+import { loadLanguage } from './i18n.js';
 import './app/reload-key.js';
 
-render(html`<${App} />`, document.getElementById('app'));
+loadLanguage().finally(() => render(html`<${App} />`, document.getElementById('app')));

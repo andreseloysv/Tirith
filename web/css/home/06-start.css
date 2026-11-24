@@ -17,3 +17,4 @@
 .su-welcome .hm-ask { margin-top: 28px; }
 .scard .su-list { margin-top: 6px; }
 .su-lang { display: flex; justify-content: flex-end; margin: -16px 0 18px; }
+.su-lang .seg button { font: 500 13px var(--sans); text-transform: none; letter-spacing: 0; }
