@@ -204,7 +204,7 @@ on the page, and goes to every route whose `on` matches it. The default routes r
 | `merge.blocked` | no disk, a broken slot, main cannot move | manager: turn, chat, phone |
 | `merge.landed` | items reached main (its note carries each item's beginning only: up to its first `: `, ` (` or `. `, 120 chars at most) | manager: note, chat, phone |
 | `main.red` / `main.green` | a check fails / passes again on main | manager: turn / note, chat, phone |
-| `plan.empty` | no open item left | manager: turn |
+| `plan.empty` | no open item left | manager: turn, off the phones (a missing next goal becomes a card) |
 | `deploy.done` / `deploy.failed` | a deploy stage ran | manager: note / turn, chat, phone |
 | `metric.red` | a measure turned red | manager-general: turn, chat, phone; after 15 min the CEO, then manager-general |
 | `review.done` | a turn role answered | its route's `then` |

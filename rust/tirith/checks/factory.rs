@@ -76,6 +76,7 @@ fn default_routes_reproduce_today() {
     // Quieter phones (factory step 4): merge.landed, main.green and deploy.done keep chat+note, without phone.
     // Factory step 16: factory.invalid keeps turn+chat to the manager of no project, without phone.
     // Factory step 17: metric.red and review.done to that manager lose the phone too — nobody asked for that answer.
+    // plan.empty still wakes the manager, off the phones: its answers announced merges already kept off them.
     let f = Factory::default();
     let turn = |to: &str, chat: bool| vec![(to.to_string(), "turn".to_string(), chat, true, None)];
     let note = |chat: bool, phone: bool| {
@@ -92,7 +93,16 @@ fn default_routes_reproduce_today() {
         ("merge.landed", note(true, false)),
         ("main.red", turn("manager", true)),
         ("main.green", note(true, false)),
-        ("plan.empty", turn("manager", false)),
+        (
+            "plan.empty",
+            vec![(
+                "manager".to_string(),
+                "turn".to_string(),
+                false,
+                false,
+                None,
+            )],
+        ),
         ("deploy.done", note(true, false)),
         ("deploy.failed", turn("manager", true)),
         (
