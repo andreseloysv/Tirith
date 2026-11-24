@@ -12,7 +12,7 @@ pub fn interrupted(app: Shared) {
         } else {
             let done = super::numbers::tally(&app, e.id);
             let n = done.wins + done.ties + done.losses + done.voids;
-            let line = format!("Descarté {} {}: el demonio se reinició durante la repetición y solo había {n} pares comparados", e.routine, e.branch);
+            let line = format!("Discarded {} {}: the daemon restarted during the replay and only {n} pairs were compared", e.routine, e.branch);
             close(&app, &e, false, &line);
         }
     }

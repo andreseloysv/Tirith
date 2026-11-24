@@ -46,11 +46,15 @@ pub(super) fn over(app: &App, due: &str) -> Option<String> {
     let gap = gaps(app)
         .into_iter()
         .find(|g| s(g, "from").as_str() <= due && due <= s(g, "to").as_str())?;
-    let span = format!("de {} a {}", when(&s(&gap, "from")), when(&s(&gap, "to")));
+    let span = format!(
+        "from {} to {}",
+        when(&s(&gap, "from")),
+        when(&s(&gap, "to"))
+    );
     Some(if gap["stopped"] == true {
-        format!("NeoBot estaba parado ({span})")
+        format!("NeoBot was stopped ({span})")
     } else {
-        format!("la máquina dormía o NeoBot no respondía ({span})")
+        format!("the machine was asleep or NeoBot was not responding ({span})")
     })
 }
 
@@ -61,9 +65,9 @@ pub fn late(app: &App, due: &str, now: DateTime<Local>) -> String {
     };
     let why = over(app, due).map(|w| format!(", {w}")).unwrap_or_default();
     let was = if was.date_naive() == now.date_naive() {
-        format!("a las {}", was.format("%H:%M"))
+        format!("at {}", was.format("%H:%M"))
     } else {
-        format!("el {}", super::words::at(was))
+        format!("on {}", super::words::at(was))
     };
-    format!(" · tarde: tocaba {was}{why}")
+    format!(" · late: due {was}{why}")
 }

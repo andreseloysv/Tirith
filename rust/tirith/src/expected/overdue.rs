@@ -56,21 +56,17 @@ fn pass(app: &Shared, run: &Expected, now: DateTime<Local>) {
     };
     if run.state == WAITING && over && !owed() {
         let why = Some(run.why.as_str()).filter(|w| !w.is_empty());
-        never(
-            app,
-            run,
-            why.unwrap_or("no le llegó el turno en todo el día"),
-        );
+        never(app, run, why.unwrap_or("its turn did not come all day"));
     }
 }
 
 fn stop(app: &Shared, run: &Expected, most: u64) {
     if run.state == WAITING {
         crate::manager::drop_run(&run.conv, &run.routine);
-        let why = format!("no pudo empezar en {most} min: su conversación seguía ocupada o su agente no arrancaba");
+        let why = format!("could not start in {most} min: its conversation stayed busy or its agent did not start");
         return never(app, run, &why);
     }
-    let why = format!("tardó más de {most} min y NeoBot lo paró");
+    let why = format!("took more than {most} min and NeoBot stopped it");
     because(app, run.id, &why); // its turn, ending, is judged by this
     if !crate::manager::stop_run(&run.conv) {
         crate::manager::drop_run(&run.conv, &run.routine); // not even its process: it never starts now

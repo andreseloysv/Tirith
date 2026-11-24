@@ -37,41 +37,41 @@ pub fn decide(lab: &Lab, t: &Tally, a: &Side, b: &Side, name: &str) -> (bool, St
     let (saves, best) = (counted.is_some(), counted.or(all.first().copied()));
     let uneven = !saves && best.is_some_and(|b| b.1 >= lab.min_saving);
     let quality = match (no_worse, t.wins > t.losses) {
-        (true, true) => "mejor calidad",
-        (true, false) => "misma calidad",
-        _ => "peor calidad",
+        (true, true) => "better quality",
+        (true, false) => "same quality",
+        _ => "worse quality",
     };
     let quality = format!("{quality} ({}/{n})", t.wins + t.ties);
-    let saving = best.map_or("sin números de coste".into(), shown);
+    let saving = best.map_or("no cost numbers".into(), shown);
     let least = super::due::minimum(lab);
     let why = if n == 0 {
-        "sin comparaciones".to_string()
+        "no comparisons".to_string()
     } else if n < least {
-        format!("solo {n} comparaciones (mínimo {least})")
+        format!("only {n} comparisons (minimum {least})")
     } else if t.new_failures > 0 {
-        format!("{} fallo(s) nuevo(s)", t.new_failures)
+        format!("{} new failure(s)", t.new_failures)
     } else if t.down > 0 {
         format!("{} 👎", t.down)
     } else if no_worse && uneven {
-        format!("ahorra solo en algún par ({saving})")
+        format!("saves only in some pair ({saving})")
     } else if no_worse && !saves {
-        format!("ahorra poco ({saving})")
+        format!("saves little ({saving})")
     } else {
         String::new()
     };
     let adopt = no_worse && saves && why.is_empty();
     let line = if adopt {
-        format!("Adopté {name}: {saving}, {quality}")
+        format!("Adopted {name}: {saving}, {quality}")
     } else if n == 0 {
-        format!("Descarté {name}: {why}")
+        format!("Discarded {name}: {why}")
     } else if why.is_empty() {
-        format!("Descarté {name}: {quality}, {saving}")
+        format!("Discarded {name}: {quality}, {saving}")
     } else {
-        format!("Descarté {name}: {why}, {quality}")
+        format!("Discarded {name}: {why}, {quality}")
     };
     let voids = (t.voids > 0).then(|| {
         format!(
-            " · {} par(es) sin comparar: fallaron, usaron otro modelo o pedían algo que la captura no tiene",
+            " · {} pair(s) not compared: they failed, used another model or asked for something the capture lacks",
             t.voids
         )
     });

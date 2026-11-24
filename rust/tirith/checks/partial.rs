@@ -1,4 +1,4 @@
-//! The words of a run that did a part of its task, or could not: «a medias» against «falló», and a could-not said once.
+//! The words of a run that did a part of its task, or could not: «partly done» against «failed», and a could-not said once.
 use super::notice::failed_line;
 use super::store::Expected;
 use super::words::not_able;
@@ -28,7 +28,7 @@ fn the_real_case_reads_a_medias_with_the_cause_once() {
     let line = failed_line(&run("Buscar trabajo (Codex + jobs)"), &why, true);
     assert_eq!(
         line,
-        "✗ «Buscar trabajo (Codex + jobs)» a medias (lun 23/11 08:00): no pudo revisar DB ni HAD"
+        "✗ «Buscar trabajo (Codex + jobs)» partly done (Mon 23/11 08:00): no pudo revisar DB ni HAD"
     );
 }
 
@@ -36,19 +36,19 @@ fn the_real_case_reads_a_medias_with_the_cause_once() {
 fn no_part_done_still_reads_fallo() {
     let line = failed_line(
         &run("Rutina"),
-        &not_able("", "el portal pide sesión"),
+        &not_able("", "the portal asks for a session"),
         false,
     );
     assert_eq!(
         line,
-        "✗ «Rutina» falló (lun 23/11 08:00): no pudo: el portal pide sesión"
+        "✗ «Rutina» failed (Mon 23/11 08:00): could not: the portal asks for a session"
     );
 }
 
 #[test]
 fn a_could_not_is_never_said_twice() {
     for cause in [
-        "no pudo x",
+        "could not x",
         "No se pudo x",
         "no pude x",
         "Could not x",
@@ -58,10 +58,10 @@ fn a_could_not_is_never_said_twice() {
         assert_eq!(not_able("", cause), cause);
     }
     assert_eq!(
-        not_able("dijo ∅, pero ", "no pudo x"),
-        "dijo ∅, pero no pudo x"
+        not_able("said ∅, but ", "could not x"),
+        "said ∅, but could not x"
     );
-    assert_eq!(not_able("dijo ∅, pero ", "x"), "dijo ∅, pero no pudo: x");
+    assert_eq!(not_able("said ∅, but ", "x"), "said ∅, but could not: x");
 }
 
 #[test]
@@ -70,6 +70,6 @@ fn an_english_cause_is_kept_as_it_is() {
     let line = failed_line(&run("Jobs"), &why, true);
     assert_eq!(
         line,
-        "✗ «Jobs» a medias (lun 23/11 08:00): could not open the portal"
+        "✗ «Jobs» partly done (Mon 23/11 08:00): could not open the portal"
     );
 }

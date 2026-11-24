@@ -354,7 +354,7 @@ async fn replay_reaches_nobody() {
     });
     assert!(
         chat.iter()
-            .all(|(p, t)| p == KEY && (t.starts_with("Adopté") || t.starts_with("Descarté"))),
+            .all(|(p, t)| p == KEY && (t.starts_with("Adopted") || t.starts_with("Discarded"))),
         "only the lab's decision line, nothing of the replay's turns: {chat:?}"
     );
     let cards: i64 = app
@@ -429,7 +429,7 @@ async fn replay_pairs_that_asked_for_more_prove_nothing() {
     let line = row["numbers"]["line"].as_str().unwrap();
     assert_eq!(row["status"], "discarded", "{row}");
     assert!(
-        line.contains("sin comparaciones") && line.contains("2 par(es) sin comparar"),
+        line.contains("no comparisons") && line.contains("2 pair(s) not compared"),
         "{line}"
     );
     assert_eq!(row["numbers"]["tally"]["voids"], 2, "{row}");
@@ -604,7 +604,7 @@ async fn two_failed_runs_are_no_tie() {
     assert_eq!(row["numbers"]["tally"]["voids"], 2, "{row}");
     assert_eq!(row["numbers"]["tally"]["ties"], 0, "{row}");
     let line = row["numbers"]["line"].as_str().unwrap();
-    assert!(!line.contains("misma calidad"), "{line}");
+    assert!(!line.contains("same quality"), "{line}");
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }

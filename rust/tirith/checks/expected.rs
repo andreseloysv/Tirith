@@ -77,14 +77,14 @@ fn a_run_is_judged_by_what_it_did() {
     let no = |got: Option<String>, part: &str| {
         assert!(got.as_deref().is_some_and(|w| w.contains(part)), "{got:?}")
     };
-    no(judged(true, "∅ Nada nuevo", 0), "sin mirar");
+    no(judged(true, "∅ Nada nuevo", 0), "without looking");
     no(
         judged(true, "∅ No pude abrir la página", 2),
         "No pude abrir",
     );
     no(
         judged(true, "Miré una.\n\n∅ nada, la otra no pude abrirla", 2),
-        "no pudo",
+        "could not",
     );
     no(
         judged(true, "2 ofertas\n\n✗ el correo no abre", 2),
@@ -95,15 +95,18 @@ fn a_run_is_judged_by_what_it_did() {
         None,
         "its judge reads it"
     );
-    no(judged(true, "  ", 1), "sin responder");
-    no(judged(false, "Credit balance is too low", 0), "sin cuota");
+    no(judged(true, "  ", 1), "without answering");
+    no(
+        judged(false, "Credit balance is too low", 0),
+        "out of credits",
+    );
     no(
         judged(
             false,
             "API Error: Unable to connect to API (ECONNREFUSED)",
             0,
         ),
-        "sin red",
+        "no network",
     );
     assert_eq!(
         verdict::judged(true, true, "∅ nada que hacer", (0, &looked)),
@@ -167,11 +170,11 @@ fn a_new_routine_says_when_it_first_runs() {
     // Made on a Friday evening for weekdays: the weekend has none, and the line says so.
     let r = json!({"trigger": "schedule", "at": "08:00", "days": [1, 2, 3, 4, 5]});
     let line = words::first(&r, at(11, 20, "17:59"));
-    assert_eq!(line, " · lun a vie 08:00 · primera vez: lun 23/11 08:00");
+    assert_eq!(line, " · Mon to Fri 08:00 · first time: Mon 23/11 08:00");
     let r = json!({"trigger": "schedule", "at": "09:30", "days": [1, 2, 3, 4, 5, 6, 7]});
     assert_eq!(
         words::first(&r, at(11, 22, "07:00")),
-        " · cada día 09:30 · primera vez: dom 22/11 09:30"
+        " · every day 09:30 · first time: Sun 22/11 09:30"
     );
 }
 
@@ -193,7 +196,7 @@ fn days_tirith_was_away_leave_a_row_each_and_one_line() {
             (&r["status"], &r["trigger"], &r["routine"]),
             (&json!("failed"), &json!("schedule"), &json!("r1"))
         );
-        assert!(r["why"].as_str().unwrap().contains("dormía"), "{r}");
+        assert!(r["why"].as_str().unwrap().contains("asleep"), "{r}");
         assert!(
             r["ms"].is_null() && r["agent"] == "",
             "no time, no agent: {r}"
@@ -201,7 +204,7 @@ fn days_tirith_was_away_leave_a_row_each_and_one_line() {
     }
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(
-        said[0].contains("3 veces") && said[0].contains("Mirar"),
+        said[0].contains("3 times") && said[0].contains("Mirar"),
         "{}",
         said[0]
     );
@@ -239,8 +242,8 @@ fn stopped_is_told_from_asleep_and_a_day_not_its_own_is_no_miss() {
     assert_eq!(rows.len(), 1, "only Monday was one of its days: {rows:?}");
     assert!(
         said.len() == 1
-            && said[0].contains("lun 23/11 08:00")
-            && said[0].contains("NeoBot estaba parado"),
+            && said[0].contains("Mon 23/11 08:00")
+            && said[0].contains("NeoBot was stopped"),
         "{said:?}"
     );
     let _ = std::fs::remove_dir_all(&home);
@@ -269,7 +272,7 @@ fn a_restart_ends_what_it_cut_once() {
     let (rows, said) = kept(&app, &key);
     assert_eq!((rows.len(), said.len()), (2, 2), "{rows:?} {said:?}");
     assert!(
-        rows[0]["why"].as_str().unwrap().contains("a mitad"),
+        rows[0]["why"].as_str().unwrap().contains("midway"),
         "{}",
         rows[0]
     );
@@ -277,7 +280,7 @@ fn a_restart_ends_what_it_cut_once() {
         rows[1]["why"]
             .as_str()
             .unwrap()
-            .contains("antes de que empezara"),
+            .contains("before it started"),
         "{}",
         rows[1]
     );
@@ -336,7 +339,7 @@ async fn an_agent_that_never_starts_is_one_row_and_one_line() {
     let (rows, said) = kept(&app, &key);
     assert_eq!((rows.len(), said.len()), (1, 1), "{rows:?} {said:?}");
     assert!(
-        rows[0]["why"].as_str().unwrap().contains("no arrancó"),
+        rows[0]["why"].as_str().unwrap().contains("did not start"),
         "{}",
         rows[0]
     );
@@ -759,7 +762,7 @@ done
             assert_eq!(rows[0]["status"], "failed", "{name}");
             assert_eq!(said.len(), 1, "one line: {said:?}");
             assert!(
-                said[0].contains("no pudo")
+                said[0].contains("could not")
                     // the judge's cause alone; the answer's words only where no judge gave one
                     && said[0].contains("Codex falló") != said[0].contains("otro agente"),
                 "{said:?}"
@@ -934,7 +937,7 @@ fn a_turn_no_judge_grades_still_admits_in_the_first_person() {
     let sql = "SELECT status || ' ' || COALESCE(why, '') FROM turns WHERE id = ?1";
     let kept = app.query(sql, [turn], |r| r.get::<_, String>(0));
     assert!(
-        kept[0].starts_with("failed no pudo") && !kept[0].contains("not-a-real-value"),
+        kept[0].starts_with("failed could not") && !kept[0].contains("not-a-real-value"),
         "{kept:?}"
     );
     let _ = std::fs::remove_dir_all(&home);

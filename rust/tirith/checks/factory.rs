@@ -50,19 +50,19 @@ fn embedded_factory_has_todays_values() {
     assert!(f.words("cards", "kinds").contains(&"approval".to_string()));
     assert_eq!(
         f.metric("merged"),
-        ("En main (24 h)".to_string(), Some(10.0), true)
+        ("Landed (24 h)".to_string(), Some(10.0), true)
     );
     assert_eq!(
         f.metric("interruptions"),
         (
-            "Interrupciones por ítem (24 h)".to_string(),
+            "Interruptions per item (24 h)".to_string(),
             Some(1.0),
             false
         )
     );
     assert_eq!(
         f.metric("needless_cards"),
-        ("Tarjetas innecesarias (%)".to_string(), Some(25.0), false)
+        ("Needless cards (%)".to_string(), Some(25.0), false)
     );
     assert_eq!(f.metric("failed").1, None);
     assert!(!f.metric("idle").2);
@@ -457,7 +457,7 @@ fn overlay_wins_key_by_key() {
     assert_eq!(f.limits.max_load, 4.5);
     assert_eq!(f.limits.merge_train, 5); // untouched keys keep the factory's value
     assert_eq!(f.metric("merged").1, Some(3.0));
-    assert_eq!(f.metric("merged").0, "En main (24 h)");
+    assert_eq!(f.metric("merged").0, "Landed (24 h)");
     assert_eq!(f.role::<String>("worker", "agent").as_deref(), Some("muse"));
     assert_eq!(f.command("anthropic").as_deref(), Some("agent-a-test"));
     assert_eq!(f.command("codex").as_deref(), Some("codex")); // no config line needed, as before
@@ -716,7 +716,7 @@ fn evals_judge_the_owners_mood_and_whether_a_card_was_needed() {
     // Satisfaction is a measure like any other: label, target and side in the factory.
     assert_eq!(
         f.metric("satisfaction"),
-        ("Satisfacción del dueño (24 h)".to_string(), Some(0.0), true)
+        ("Owner satisfaction (24 h)".to_string(), Some(0.0), true)
     );
     // An eval on a missing event, with a missing judge or rubric, a sample outside 0 to 1, or an unknown key is invalid.
     let prompts = embedded_prompts();

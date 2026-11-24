@@ -10,7 +10,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
         ["chat", "clear"] => Some(conv().and_then(|p| call_json("POST", "/api/chat/clear", Some(json!({"project": p})))).map(|v| println!("chat cleared ({})", s(&v, "project")))),
         ["chat", "keep"] => Some(conv().and_then(|p| say(call_json("GET", &format!("/api/chat/keep?project={p}"), None), "the chat lives"))),
         ["chat", "keep", words @ ..] => Some(conv().and_then(|p| say(call_json("POST", "/api/chat/keep", Some(json!({"project": p, "keep": words.join(" ")}))), "the chat now lives"))),
-        ["chat", ..] => Some(Err("use: neobot chat clear | neobot chat keep [<time, as 1h, 24 h, 2 días, una semana, siempre>]".into())),
+        ["chat", ..] => Some(Err("use: neobot chat clear | neobot chat keep [<time, as 1h, 24 h, 2 days, a week, forever>]".into())),
         _ => None,
     }
 }
@@ -37,7 +37,7 @@ fn say(r: Result<Value, String>, what: &str) -> Result<(), String> {
             s(&v, "project"),
             Some(s(&v, "keep"))
                 .filter(|k| !k.is_empty())
-                .unwrap_or_else(|| "siempre".into())
+                .unwrap_or_else(|| "forever".into())
         )
     })
 }

@@ -47,7 +47,7 @@ pub(super) fn may_start(app: &Shared, role: &str, now: u64) -> bool {
         crate::expected::blocked(
             app,
             role,
-            "su tope de pasadas en 24 h (max_per_day) estaba gastado",
+            "its cap of passes in 24 h (max_per_day) was used up",
         );
     }
     under

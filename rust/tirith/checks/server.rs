@@ -216,7 +216,7 @@ async fn chat_roles_may_not_wait() {
     // A manager (a chat role, named by its token and no lane) waiting inside its turn is refused, with the reason that says what to do instead.
     let long = pre_bash(&app, "manager", "", "sleep 30; neobot status").await;
     assert!(deny(&long), "a manager's sleep 30 is refused: {long}");
-    assert_eq!(reason(&long), "no esperes dentro del turno: contesta y termina; NeoBot te avisa cuando una lane entre, falle o pregunte");
+    assert_eq!(reason(&long), "do not wait inside the turn: answer and finish; NeoBot tells you when a lane lands, fails or asks");
     // Five seconds is already a wait; a loop's short sleep is one too (it adds up behind the owner's messages).
     assert!(
         deny(&pre_bash(&app, "manager", "", "sleep 5").await),
@@ -335,7 +335,7 @@ async fn every_agent_obeys_the_rules() {
             .to_string()
     };
     let repo = app.cfg().project("p1").unwrap().repo.clone();
-    let wait = "no esperes dentro del turno: contesta y termina; NeoBot te avisa cuando una lane entre, falle o pregunte";
+    let wait = "do not wait inside the turn: answer and finish; NeoBot tells you when a lane lands, fails or asks";
     let cmd = |c: &str| serde_json::json!({"command": c});
     // The muse names for a shell: `bash` (its command in `command`) and `monitor`. A manager waiting in either is refused, as with `clocksleep`, its tool for waiting outright.
     let looped = pre(

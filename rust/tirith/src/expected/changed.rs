@@ -26,8 +26,11 @@ pub fn changed(was: &Value, r: &Value, now: DateTime<Local>) -> Option<String> {
         return None;
     }
     Some(match (timed, on) {
-        (false, _) => " · ya sin horario: espera a su evento".into(),
-        (true, false) => format!("{} · apagada: no se hará", super::words::days_and_time(r)),
-        (true, true) => super::words::runs(r, now, "próxima vez"),
+        (false, _) => " · no schedule now: it waits for its event".into(),
+        (true, false) => format!(
+            "{} · turned off: it will not run",
+            super::words::days_and_time(r)
+        ),
+        (true, true) => super::words::runs(r, now, "next time"),
     })
 }

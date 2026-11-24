@@ -1,14 +1,14 @@
 # A bot template: what «Desde plantilla» makes. Its folder's name is its skill's name.
-name = "Vigilar una web y avisar si cambia"
-start = "¿Qué página vigilo? Pégame su dirección y, si solo te importa una parte (un precio, una lista), dime cuál. La miro cada día a las 09:00 y solo te aviso si cambia."
+name = "Watch a web page for changes"
+start = "Which page should I watch? Paste its address and, if only a part matters to you (a price, a list), tell me which. I look at it every day at 09:00 and only tell you if it changes."
 
 [face]
 shape = "drop"
 color = "#3fb6a8"
 
 [routine]
-title = "Vigilar la web"
+title = "Watch the web"
 trigger = "schedule"
 days = "daily"
 at = "09:00"
-prompt = "Usa la skill vigilar-web: mira cada página que el dueño te dio, compárala con la última vez y cuenta solo lo que cambió."
+prompt = "Use the skill vigilar-web: look at each page the owner gave you, compare it with last time and report only what changed."

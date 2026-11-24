@@ -55,7 +55,7 @@ fn lane_ask_shows_in_open_questions() {
     assert!(
         cards.len() == 1
             && cards[0]["id"] == "l1"
-            && q.contains("lane bloqueada esperando al dueño")
+            && q.contains("lane blocked waiting for the owner")
             && q.contains("0,74"),
         "{q}"
     );

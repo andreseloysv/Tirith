@@ -170,7 +170,7 @@ fn lab_live_decides_by_the_rule() {
     assert_eq!(row["numbers"]["tally"]["ties"], 8);
     assert_eq!(
         lines(&app, "lab.adopted"),
-        vec!["Adopté gmail-safari v3: −38 % tokens, misma calidad (8/8)".to_string()]
+        vec!["Adopted gmail-safari v3: −38 % tokens, same quality (8/8)".to_string()]
     );
     let memory = std::fs::read_to_string(dir.join("memory.md")).unwrap();
     assert!(
@@ -193,7 +193,8 @@ fn lab_live_decides_by_the_rule() {
         r.get::<_, String>(0)
     });
     assert!(
-        said.iter().any(|t| t.starts_with("Adopté gmail-safari v3")),
+        said.iter()
+            .any(|t| t.starts_with("Adopted gmail-safari v3")),
         "one line in the bot's chat: {said:?}"
     );
 
@@ -210,7 +211,7 @@ fn lab_live_decides_by_the_rule() {
     assert_eq!(super::list(&app, KEY)[0]["status"], "discarded");
     assert_eq!(
         lines(&app, "lab.discarded"),
-        vec!["Descarté gmail-safari v4: peor calidad (3/8), −70 % tokens".to_string()]
+        vec!["Discarded gmail-safari v4: worse quality (3/8), −70 % tokens".to_string()]
     );
     assert!(!std::fs::read_to_string(dir.join("memory.md"))
         .unwrap()
@@ -256,7 +257,7 @@ fn lab_live_decides_by_the_rule() {
         rule(ties, 900.0),
         (
             false,
-            "Descarté x v: ahorra poco (−10 % tokens), misma calidad (8/8)".to_string()
+            "Discarded x v: saves little (−10 % tokens), same quality (8/8)".to_string()
         )
     );
     drop(app);
@@ -409,7 +410,7 @@ fn the_rule_is_fixed_before_the_test_and_expiry_needs_enough_comparisons() {
     assert_eq!(row["status"], "discarded", "{row}");
     let line = &lines(&app, "lab.discarded")[0];
     assert!(
-        line.contains("solo 2 comparaciones") && line.contains("mínimo 5"),
+        line.contains("only 2 comparisons") && line.contains("minimum 5"),
         "{line}"
     );
     drop(app);
@@ -429,7 +430,7 @@ fn days_that_ran_out_decide_with_enough_comparisons() {
     super::decide(&app, e);
     let line = &lines(&app, "lab.adopted")[0];
     assert!(
-        line.starts_with("Adopté") && line.contains("(5/5)"),
+        line.starts_with("Adopted") && line.contains("(5/5)"),
         "{line}"
     );
     drop(app);
@@ -617,7 +618,7 @@ async fn a_replay_is_ended_when_the_daemon_restarted_in_its_middle() {
     );
     let line = &lines(&app, "lab.discarded")[0];
     assert!(
-        line.contains("se reinició") && line.contains("1 pares"),
+        line.contains("restarted") && line.contains("1 pairs"),
         "{line}"
     );
     assert!(!tree.exists());
@@ -682,7 +683,7 @@ fn time_is_saved_only_when_most_pairs_saved_it() {
         "x v",
     );
     assert!(
-        !one.0 && one.1.contains("solo en alg"),
+        !one.0 && one.1.contains("only in some"),
         "one slow answer is no saving: {}",
         one.1
     );
@@ -766,7 +767,7 @@ fn one_dear_run_is_no_saving_in_tokens_or_dollars() {
     };
     let (a, b) = (side(93_000.0), side(74_000.0));
     let one = super::rule::decide(&lab, &tally(vec![0.0, 0.34]), &a, &b, "x v");
-    assert!(!one.0 && one.1.contains("solo en alg"), "{}", one.1);
+    assert!(!one.0 && one.1.contains("only in some"), "{}", one.1);
     let most = super::rule::decide(&lab, &tally(vec![0.2, 0.34, 0.01, 0.3, 0.2]), &a, &b, "x v");
     assert!(most.0, "{}", most.1);
 }

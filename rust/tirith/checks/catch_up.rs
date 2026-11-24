@@ -26,7 +26,7 @@ fn occurrences(app: &crate::app::Shared, conv: &str) -> Vec<(String, bool)> {
 fn lost_lines(app: &crate::app::Shared, conv: &str) -> Vec<String> {
     let sql = "SELECT text FROM chat WHERE project = ?1 AND role = 'tirith' ORDER BY id";
     let mut said = app.query(sql, [conv], |r| r.get::<_, String>(0));
-    said.retain(|t| t.contains("no se hizo") && !t.contains("no arrancó"));
+    said.retain(|t| t.contains("did not run") && !t.contains("did not start"));
     said
 }
 
@@ -173,7 +173,7 @@ async fn a_restart_hands_a_caught_up_run_again() {
         r.get::<_, String>(0)
     });
     assert!(
-        !why[0].contains("se paró antes"),
+        !why[0].contains("stopped before"),
         "handed again, not lost: {why:?}"
     );
     let _ = std::fs::remove_dir_all(&home);

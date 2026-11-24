@@ -25,12 +25,12 @@ pub fn admitted_by(app: &Shared, turn: i64, answer: &str, (cause, partial): (Opt
     let claimed: Vec<i64> = app.query(sql, params![FAILED, turn, OK], |r| r.get(0));
     for run in claimed.iter().flat_map(|id| select(app, "id = ?1", [*id])) {
         let why = match cause.map(|c| short(&redact_secrets(c), 160)) {
-            Some(cause) if quiet => not_able("dijo ∅, pero ", &cause),
+            Some(cause) if quiet => not_able("said ∅, but ", &cause),
             Some(cause) => not_able("", &cause),
             None => {
                 let said = answer.rsplit("\n\n").next().unwrap_or(answer);
                 format!(
-                    "no pudo, lo dice su respuesta: «{}»",
+                    "could not, its answer says so: «{}»",
                     short(&redact_secrets(said), 120)
                 )
             }
