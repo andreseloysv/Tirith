@@ -33,6 +33,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build and lint
         run: cargo build -q -p tirith && cargo clippy -q -p tirith -- -D warnings
+      # As a release is built: the page then comes from the binary's own copy, not from this checkout.
+      - name: Build as handed out
+        env:
+          TIRITH_DIST: "1"
+        run: cargo build -q -p tirith
       - name: The daemon serves its page and answers
         shell: pwsh
         run: ./scripts/checks/windows-smoke.ps1
