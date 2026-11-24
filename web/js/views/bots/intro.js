@@ -4,7 +4,7 @@ import { Face, NewFace } from './face.js';
 
 const SAMPLE = [['dome', '#3b82f6', 'watch'], ['cloud', '#ec4899', 'idle'], ['pill', '#4fb86e', 'idle'], ['round', '#8c8c8c', 'sleep'], ['blob', '#f07a3a', 'watch'], ['burst', '#8b5cf6', 'idle']];
 
-export function Intro({ onNew, onTemplate }) {
+export function Intro({ onNew, onTemplate, onImport }) {
   return html`<div class="bintro">
     <div class="btop"><span>OpenBot</span><span>Bots</span><span class="bnum">Agents that keep watch</span></div><div class="brule"></div>
     <h1>Bots that keep watch.</h1>
@@ -15,7 +15,8 @@ export function Intro({ onNew, onTemplate }) {
       <${Face} shape=${shape} color=${color} state=${state} size=${[84, 90, 80, 76, 86, 80][i]} /></span>`)}
       <button type="button" class="bpop bfirst" style="animation-delay:.95s" onClick=${onNew} aria-label="Create a bot"><${NewFace} size=${76} /></button></div>
     <div class="bfoot"><button type="button" class="bbtn pri bbig" onClick=${onNew}>Create your first bot</button>
-      <button type="button" class="bbtn bbig" onClick=${onTemplate}>Desde plantilla</button></div>
+      <button type="button" class="bbtn bbig" onClick=${onTemplate}>Desde plantilla</button>
+      <button type="button" class="bbtn bbig" onClick=${onImport}>Import a bot</button></div>
     <div class="bkeys"><div class="bk">Keywords</div>
       <div><h4>Signal</h4><p>Only what concerns you.</p></div>
       <div><h4>Routines</h4><p>Each bot has its tasks and its times.</p></div>

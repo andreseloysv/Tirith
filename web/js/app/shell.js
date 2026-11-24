@@ -2,7 +2,7 @@
 import { html, useState, useEffect } from '../../vendor/preact-htm.js';
 import { useStore, setUi } from '../store.js';
 import { go } from '../common.js';
-import { BotCard, BotTemplates } from '../views/bots.js';
+import { BotCard, BotTemplates, BotPackage } from '../views/bots.js';
 import { AddProject } from '../views/addproject.js';
 import { viewOf } from './views.js';
 import { useRoute } from './route.js';
@@ -19,6 +19,12 @@ function botCard(card) {
 function botTemplates() {
   const made = (b) => { setUi('botTemplates', null); go('bots', b.id); };
   return html`<${BotTemplates} onClose=${() => setUi('botTemplates', null)} onMade=${made} />`;
+}
+
+/* a bot package, imported or exported (`bot` set), drawn here too */
+function botPackage(ui) {
+  const made = (b) => { setUi('botPackage', null); go('bots', b.id); };
+  return html`<${BotPackage} bot=${ui.bot} onClose=${() => setUi('botPackage', null)} onMade=${made} />`;
 }
 
 export function App() {
@@ -38,5 +44,6 @@ export function App() {
     </div>
   </div>${adding ? html`<${AddProject} onClose=${() => setAdding(false)} />` : null}
   ${card ? botCard(card) : null}
-  ${s.botTemplates ? botTemplates() : null}`;
+  ${s.botTemplates ? botTemplates() : null}
+  ${s.botPackage ? botPackage(s.botPackage) : null}`;
 }

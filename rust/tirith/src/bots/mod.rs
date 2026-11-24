@@ -20,8 +20,11 @@ mod layer;
 mod library;
 mod list;
 mod look;
+mod make;
 mod migrate;
 mod notes;
+mod owner;
+mod package;
 mod routine;
 mod run;
 mod schedule;
@@ -65,6 +68,9 @@ mod git_tests;
 #[cfg(test)]
 #[path = "../../checks/hook_data.rs"]
 mod hook_tests;
+#[cfg(test)]
+#[path = "../../checks/bot_package.rs"]
+mod package_tests;
 #[cfg(test)]
 #[path = "../../checks/reschedule.rs"]
 mod reschedule_tests;
