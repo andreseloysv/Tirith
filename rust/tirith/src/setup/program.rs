@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 pub(super) fn ready(cx: &Context, known: &Known) -> Result<PathBuf, String> {
     let set = cx.cfg().factory.command(&known.alias);
-    if let Some(path) = find::agent(known, set.as_deref()) {
+    if let Some(path) = find::agent(known, set.as_deref()).filter(|p| starts(p)) {
         println!("  found {}", path.display());
         return Ok(path);
     }
@@ -54,4 +54,11 @@ pub(super) fn ready(cx: &Context, known: &Known) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("{} was installed but is not found: {again}", known.bin))?;
     println!("  installed {}", path.display());
     Ok(path)
+}
+
+/// Whether a program found starts at all: a broken leftover (an npm install without its platform package) is not
+/// installed, and installing it again says what it needs. One that does not end in time still counts.
+fn starts(path: &std::path::Path) -> bool {
+    let limit = std::time::Duration::from_secs(30);
+    super::run::quiet(path, &["--version"], &[], limit) != Some(false)
 }
