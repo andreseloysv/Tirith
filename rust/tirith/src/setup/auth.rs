@@ -62,11 +62,22 @@ pub fn forget(home: &Path, alias: &str, var: &str) -> Result<bool, String> {
 
 /// The variables of the agent whose command `program` is; none for any other program.
 pub fn for_program(app: &Shared, program: &str) -> Vec<(String, String)> {
-    let base = |p: &str| p.rsplit('/').next().unwrap_or(p).to_string();
     let agents = app.cfg().factory.commands();
     let same = agents.iter().find(|(_, c)| c == program);
     let named = || agents.iter().find(|(_, c)| base(c) == base(program));
     same.or_else(named)
         .map(|(alias, _)| env(&app.home, alias))
         .unwrap_or_default()
+}
+
+/// A program's file name without its folder (either slash) and, for `.exe`, `.cmd` and `.bat`, without that extension.
+pub(super) fn base(path: &str) -> String {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    let lower = name.to_ascii_lowercase();
+    for ext in [".exe", ".cmd", ".bat"] {
+        if lower.ends_with(ext) {
+            return name[..name.len() - ext.len()].to_string();
+        }
+    }
+    name.to_string()
 }

@@ -15,6 +15,9 @@ pub(super) fn provide(ask: &Ask, missing: &[&str]) -> Result<(), String> {
     if cfg!(target_os = "macos") {
         return Err(format!("{names} missing: run xcode-select --install"));
     }
+    if cfg!(windows) {
+        return super::winget::provide(ask, missing);
+    }
     let Some((manager, how)) = MANAGERS
         .iter()
         .find(|(m, _)| find::program(m).is_some())

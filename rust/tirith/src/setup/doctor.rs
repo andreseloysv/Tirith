@@ -17,7 +17,7 @@ pub(super) fn doctor() -> Result<bool, String> {
     let gone = needs::missing();
     line(
         gone.is_empty(),
-        "git, curl and bash",
+        needs::PROGRAMS_LABEL,
         &format!("{} missing", gone.join(" ")),
     );
     line(
