@@ -1,5 +1,6 @@
 // The sidebar's width: dragged by its right edge (or with the arrow keys on the handle), kept per browser.
 import { html, useState, useEffect } from '../../vendor/preact-htm.js';
+import { t } from '../i18n.js';
 
 const KEY = 'tirith.nav.width';
 export const MIN = 244, MAX = 560, DEFAULT = 296, STEP = 16;
@@ -27,7 +28,7 @@ export function NavResizer() {
     const to = { ArrowLeft: w - STEP, ArrowRight: w + STEP, Home: MIN, End: MAX }[e.key];
     if (to != null) { e.preventDefault(); set(to); }
   };
-  return html`<div class=${`navgrip${drag ? ' on' : ''}`} role="separator" aria-orientation="vertical" aria-label="Resize the sidebar"
-    aria-valuemin=${MIN} aria-valuemax=${MAX} aria-valuenow=${w} tabindex="0" title="Drag to resize"
+  return html`<div class=${`navgrip${drag ? ' on' : ''}`} role="separator" aria-orientation="vertical" aria-label=${t('Resize the sidebar')}
+    aria-valuemin=${MIN} aria-valuemax=${MAX} aria-valuenow=${w} tabindex="0" title=${t('Drag to resize')}
     onPointerDown=${(e) => { e.preventDefault(); setDrag(true); }} onKeyDown=${key} onDblClick=${() => set(DEFAULT)} />`;
 }

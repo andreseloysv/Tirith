@@ -3,10 +3,12 @@
 // question it carries (a card made with --lane), so the owner can answer it wherever they are looking.
 import { html, useState } from '../../vendor/preact-htm.js';
 import { setUi } from '../store.js';
-import { ago, go } from '../common.js';
+import { agoText, go } from '../common.js';
 import { useAnswer, WORDS } from './answer.js';
+import { t } from '../i18n.js';
 
-export const KIND = { credentials: 'Credentials', payment: 'Payment', account: 'Account', device: 'Device', decision: 'Decision', approval: 'Approval', lane: 'Agent' };
+const kind = (k) => ({ credentials: t('Credentials'), payment: t('Payment'), account: t('Account'), device: t('Device'), decision: t('Decision'), approval: t('Approval'), lane: t('Agent') })[k];
+const doneWord = (d) => (d === 'Answered' ? t('Answered') : d === 'Closed' ? t('Closed') : d);
 
 /** The open questions: the daemon's cards, and the lanes waiting on a question that no card carries (read live from
     the lanes, so one appears and goes with its lane, not only when the page loads). */
@@ -26,18 +28,18 @@ export function Need({ o, p, full, done, here }) {
   const send = async (text) => { if (await answer(text)) setDraft(''); };
   const words = WORDS.includes(o.kind) || !!o.lane; /* a lane's question wants words, not Done */
   const lane = o.lane && !here ? html`<button type="button" class="nlane" onClick=${() => { setUi('openLane', o.lane); go('agents', o.project); }}
-    title="Open the agent this question is for">${o.kind === 'lane' ? 'An agent asks the manager' : 'For an agent'}${o.item ? `: ${o.item.slice(0, 90)}${o.item.length > 90 ? '…' : ''}` : ''}</button>` : null;
+    title=${t('Open the agent this question is for')}>${o.kind === 'lane' ? t('An agent asks the manager') : t('For an agent')}${o.item ? `: ${o.item.slice(0, 90)}${o.item.length > 90 ? '…' : ''}` : ''}</button>` : null;
   return html`<li class=${`ncard${done ? ' done' : ''}`}>
     <div class="nhead"><div class=${`ntitle${full ? ' open' : ''}`}>${o.question}</div>${p ? html`<span class="nchip nproj"><i class="pdot" style=${`background:${p.color || '#9ca3af'}`}></i>${p.name || p.id}</span>` : null}
-      <span class="nchip">${done ? (typeof done === 'string' ? done : 'Done') : KIND[o.kind] || o.kind}</span>${done ? null : html`<span class="nage">${ago(o.at)}</span>`}
-      ${done || o.kind === 'lane' ? null : html`<button type="button" class="nclose" disabled=${busy} title="Close this card: it is no longer needed" aria-label="Close this card" onClick=${close}>×</button>`}</div>
+      <span class="nchip">${done ? (typeof done === 'string' ? doneWord(done) : t('Done')) : kind(o.kind) || o.kind}</span>${done ? null : html`<span class="nage">${agoText(o.at)}</span>`}
+      ${done || o.kind === 'lane' ? null : html`<button type="button" class="nclose" disabled=${busy} title=${t('Close this card: it is no longer needed')} aria-label=${t('Close this card')} onClick=${close}>×</button>`}</div>
     ${lane}
     ${done || words ? null : o.kind === 'approval' /* a yes or a no: a connector call runs once only on the yes */
-      ? html`<div class="nacts"><button class="nbtn primary" disabled=${busy} onClick=${() => send('yes')}>Yes</button><button class="nbtn" disabled=${busy} onClick=${() => send('no')}>No</button></div>`
-      : html`<div class="nacts"><button class="nbtn primary" disabled=${busy} onClick=${() => send('Done')}>Done</button></div>`}
-    ${done ? null : html`<div class="nwrite"><input class="iin" type="text" placeholder=${o.kind === 'lane' ? 'Answer it yourself…' : words ? 'Your answer…' : 'Or write what you need…'} aria-label="Answer"
+      ? html`<div class="nacts"><button class="nbtn primary" disabled=${busy} onClick=${() => send('yes')}>${t('Yes')}</button><button class="nbtn" disabled=${busy} onClick=${() => send('no')}>${t('No')}</button></div>`
+      : html`<div class="nacts"><button class="nbtn primary" disabled=${busy} onClick=${() => send('Done')}>${t('Done')}</button></div>`}
+    ${done ? null : html`<div class="nwrite"><input class="iin" type="text" placeholder=${o.kind === 'lane' ? t('Answer it yourself…') : words ? t('Your answer…') : t('Or write what you need…')} aria-label=${t('Answer')}
       value=${draft} disabled=${busy} onInput=${(e) => setDraft(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') send(draft); }} />
-      <button class="isend ovsend" disabled=${busy || !draft.trim()} onClick=${() => send(draft)}>${busy ? 'Sending…' : 'Answer'}</button></div>`}
+      <button class="isend ovsend" disabled=${busy || !draft.trim()} onClick=${() => send(draft)}>${busy ? t('Sending…') : t('Answer')}</button></div>`}
     ${err ? html`<div class="ierr">${err}</div>` : null}
   </li>`;
 }

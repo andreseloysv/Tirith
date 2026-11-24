@@ -4,12 +4,13 @@ import { html, useState } from '../../../vendor/preact-htm.js';
 import { api } from '../../store.js';
 import { clockTime } from '../../common.js';
 import { memo, Svg, CHEV, REFRESH, clip } from './bits.js';
+import { t } from '../../i18n.js';
 
 export const num = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : (Math.round(v * 10) / 10).toString());
 
 function Metric({ m }) {
   const target = m.target == null ? '' : `${m.at_least ? '≥' : '≤'} ${num(m.target)}`;
-  return html`<span class="stm" title=${m.facts || m.label}><i class=${`dot ${m.target == null ? 'grey' : m.red ? 'red' : 'green'}`}></i>${m.label}${' '}<b class=${m.red ? 'bad' : ''}>${num(m.value)}</b>${target ? html`<span class="mut"> / ${target}</span>` : null}</span>`;
+  return html`<span class="stm" title=${t(m.facts || m.label)}><i class=${`dot ${m.target == null ? 'grey' : m.red ? 'red' : 'green'}`}></i>${t(m.label)}${' '}<b class=${m.red ? 'bad' : ''}>${num(m.value)}</b>${target ? html`<span class="mut"> / ${target}</span>` : null}</span>`;
 }
 
 function Review({ reviews, reviewing }) {
@@ -22,13 +23,13 @@ function Review({ reviews, reviewing }) {
     setErr(''); setAsked(true);
     api('POST', '/api/review').catch((e) => setErr(String(e.message || e))).finally(() => setTimeout(() => setAsked(false), 3000));
   };
-  return html`<div class="stl stceo"><span class="stk">CEO</span>
-      ${busy ? html`<span class="ovlive"><i class="pdot2"></i>Reading the measures by factory version…</span>`
+  return html`<div class="stl stceo"><span class="stk">${t('CEO')}</span>
+      ${busy ? html`<span class="ovlive"><i class="pdot2"></i>${t('Reading the measures by factory version…')}</span>`
         : last ? html`<button class="iahead ovrev" aria-expanded=${open} onClick=${() => setOpen(!open)}>
-            <${Svg} s=${CHEV} /><span><span class="mut">Last pass ${clockTime(last.at)}${last.metric ? ` · ${last.metric}` : ''} ·</span> ${clip(last.text, 110)}</span></button>`
-        : html`<span class="mut">No pass yet</span>`}
-      <button class="ibtn ovnow" disabled=${busy} onClick=${now} title="Ask the CEO for a pass now: it may propose one change to the factory">
-        <${Svg} s=${REFRESH} /><span>Improve now</span></button></div>
+            <${Svg} s=${CHEV} /><span><span class="mut">${t('Last pass {time}', { time: clockTime(last.at) })}${last.metric ? ` · ${t(last.metric)}` : ''} ·</span> ${clip(last.text, 110)}</span></button>`
+        : html`<span class="mut">${t('No pass yet')}</span>`}
+      <button class="ibtn ovnow" disabled=${busy} onClick=${now} title=${t('Ask the CEO for a pass now: it may propose one change to the factory')}>
+        <${Svg} s=${REFRESH} /><span>${t('Improve now')}</span></button></div>
     ${open && last && !busy ? html`<div class="ia ovrevbody">${last.text}</div>` : null}
     ${err ? html`<div class="ierr ovinl">${err}</div>` : null}`;
 }
@@ -39,10 +40,11 @@ export const Status = memo(function Status({ data, working }) {
   if (!data) return null;
   const red = list.filter((m) => m.red);
   const merged = list.find((m) => m.id === 'merged');
-  const why = red.length ? `${red.length} ${red.length === 1 ? 'metric' : 'metrics'} off target: ${red.map((m) => m.label).join(', ')}` : 'Every metric on target';
+  const names = red.map((m) => t(m.label)).join(', ');
+  const why = red.length ? (red.length === 1 ? t('1 metric off target: {names}', { names }) : t('{n} metrics off target: {names}', { n: red.length, names })) : t('Every metric on target');
   return html`<section class=${`card stcard ${red.length ? 'bad' : 'ok'}`}>
-    <div class="stl stl1"><b>${red.length ? '🔴' : '🟢'} ${why}</b>${merged ? ` · ${num(merged.value)} on main in 24 h` : ''} · ${working} ${working === 1 ? 'agent' : 'agents'} working</div>
-    <div class="stl stms"><span class="stk">Metrics</span><span class="stmlist">${list.map((m) => html`<${Metric} key=${m.id} m=${m} />`)}</span></div>
+    <div class="stl stl1"><b>${red.length ? '🔴' : '🟢'} ${why}</b>${merged ? ` · ${t('{n} on main in 24 h', { n: num(merged.value) })}` : ''} · ${working === 1 ? t('1 agent working') : t('{n} agents working', { n: working })}</div>
+    <div class="stl stms"><span class="stk">${t('Metrics')}</span><span class="stmlist">${list.map((m) => html`<${Metric} key=${m.id} m=${m} />`)}</span></div>
     <${Review} reviews=${reviews} reviewing=${!!data.reviewing} />
   </section>`;
 });

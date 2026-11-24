@@ -2,6 +2,7 @@
 // named with its project), a bot, or the Manager (no project). Names and faces come from the factory (/api/models).
 import { useFetch, useStore } from '../../store.js';
 import { go } from '../../common.js';
+import { t } from '../../i18n.js';
 
 const PM_FACE = { shape: 'hex', color: '#8e7cf0' };
 const GM_FACE = { shape: 'dome', color: '#3fb6a8' };
@@ -15,9 +16,9 @@ export function useWho() {
   const roles = (M && M.roles) || {};
   return (key) => {
     const p = s.projects.find((x) => x.id === key);
-    if (p) return { name: (roles.manager && roles.manager.name) || 'Project Manager', place: p.name || p.id, face: faceOf(roles.manager, PM_FACE), open: () => go('overview', p.id) };
+    if (p) return { name: t((roles.manager && roles.manager.name) || 'Project Manager'), place: p.name || p.id, face: faceOf(roles.manager, PM_FACE), open: () => go('overview', p.id) };
     const k = roles[key] ? key : 'manager-general', role = roles[k];
     const id = k.startsWith('bot-') ? k.slice(4) : k;
-    return { name: (role && role.name) || 'Manager', place: '', face: faceOf(role, GM_FACE), open: () => go('bots', id) };
+    return { name: t((role && role.name) || 'Manager'), place: '', face: faceOf(role, GM_FACE), open: () => go('bots', id) };
   };
 }

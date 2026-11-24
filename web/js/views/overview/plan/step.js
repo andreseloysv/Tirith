@@ -4,6 +4,7 @@ import { ACTIVE } from '../../../common.js';
 import { Svg, IC, PLUS, hit } from '../bits.js';
 import { Bar, Item } from './items.js';
 import { AddItem } from './add.js';
+import { t } from '../../../i18n.js';
 
 function row(s, open, live, onToggle, setAdding) {
   return html`<div class="prow">
@@ -13,7 +14,7 @@ function row(s, open, live, onToggle, setAdding) {
         ${s.total ? html`<${Bar} done=${s.done} total=${s.total} cls="pbar" />` : html`<span class="pbar"></span>`}
         <span class="pcnt">${s.total ? `${s.done}/${s.total}` : '–'}</span>
       </button>
-      <span class="pedtools pstit"><button class="pedbtn" title="Add item" aria-label="Add item" onClick=${() => setAdding(s.num)}><${Svg} s=${PLUS} /></button></span>
+      <span class="pedtools pstit"><button class="pedbtn" title=${t('Add item')} aria-label=${t('Add item')} onClick=${() => setAdding(s.num)}><${Svg} s=${PLUS} /></button></span>
     </div>`;
 }
 
@@ -28,7 +29,7 @@ export function Step({ project, s, mode, onToggle, laneOf, q, adding, setAdding 
     ${shown.length || adding ? html`<ul class=${`pitems${mode === 'quiet' ? ' pquiet' : ''}`}>
       ${shown.map((i) => html`<${Item} key=${i.text} i=${i} lane=${laneOf(i)} />`)}
       ${open || adding ? add : null}
-    </ul>` : open && !s.total ? html`<ul class="pitems"><li class="none">No items yet</li>
+    </ul>` : open && !s.total ? html`<ul class="pitems"><li class="none">${t('No items yet')}</li>
       ${add}</ul>` : null}
   </li>`;
 }

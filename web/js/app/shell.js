@@ -10,6 +10,7 @@ import { Nav } from './nav.js';
 import { Top } from './top.js';
 import { useAgents, firstRun } from '../views/setup/agents.js';
 import { Welcome } from '../views/setup/welcome.js';
+import { t } from '../i18n.js';
 
 /* the bot's card (new or edit), drawn here, over any view */
 function botCard(card) {
@@ -45,7 +46,7 @@ export function App() {
     <${Nav} r=${r} onAdd=${() => setAdding(true)} bare=${bare} />
     <div id="content">
       ${bare ? null : html`<${Top} r=${r} />`}
-      ${!s.connected && s.loaded ? html`<div id="stale" class="stale" role="status">NeoBot is not updating — reconnecting…</div>` : null}
+      ${!s.connected && s.loaded ? html`<div id="stale" class="stale" role="status">${t('NeoBot is not updating — reconnecting…')}</div>` : null}
       <div id="view" class=${`view v-${first ? 'overview' : r.view}`}>${s.loaded && agents !== undefined ? view : null}</div>
     </div>
   </div>${adding ? html`<${AddProject} onClose=${() => setAdding(false)} />` : null}
