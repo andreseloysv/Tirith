@@ -32,12 +32,16 @@ function Paste({ a, act }) {
     <button type="submit" class="hm-btn hm-yes" disabled=${!code.trim()}>Send</button></form>`;
 }
 
+/* The sign-in page its login opened by itself is usually in front already; the button opens the one it printed,
+   whose page may hand back a code to paste, so the box shows only after that. */
 function SignIn({ a, act }) {
   const j = a.job;
+  const [opened, setOpened] = useState(false);
+  const open = () => { setOpened(true); act(`/api/setup/agents/${a.alias}/open`); };
   return html`<div class="su-sign">
     ${j.code ? html`<p class="su-code">Confirm this code in your browser: <b>${j.code}</b></p>` : null}
-    ${j.link ? html`<button type="button" class="hm-btn" onClick=${() => act(`/api/setup/agents/${a.alias}/open`)}>Open the sign-in page</button>` : null}
-    ${j.paste ? html`<${Paste} a=${a} act=${act} />` : null}
+    ${j.link ? html`<button type="button" class="hm-btn" onClick=${open}>Open the sign-in page</button>` : null}
+    ${j.paste && opened ? html`<${Paste} a=${a} act=${act} />` : null}
   </div>`;
 }
 
@@ -51,7 +55,6 @@ export function AgentRow({ a, act }) {
     <div class="su-top"><span class=${`dot ${s.dot}`}></span><b>${a.name}</b><span class="su-state">${s.text}</span>
       ${running ? null : html`<button type="button" class=${a.connected ? 'hm-btn' : 'hm-btn hm-yes'} onClick=${start}>${label}</button>`}</div>
     ${running && j.step === 'signin' ? html`<${SignIn} a=${a} act=${act} />` : null}
-    ${running && j.step !== 'signin' && j.said ? html`<p class="su-said">${j.said.split('\n').pop()}</p>` : null}
     ${s.again ? html`<p class="hm-err">${j.error}</p>` : null}
   </div>`;
 }

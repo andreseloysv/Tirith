@@ -7,7 +7,7 @@
 .su-top b { font-size: 15px; font-weight: 600; color: var(--fg); white-space: nowrap; }
 .su-state { flex: 1; min-width: 0; color: var(--mut); font-size: 14px; overflow-wrap: anywhere; }
 .su-top .dot.blue { background: var(--blue); }
-.su-said { margin: 4px 0 0 18px; color: var(--faint); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.su-note { margin: 10px 0 0; color: var(--faint); font-size: 13px; }
 .su-sign { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0 0 18px; }
 .su-code { flex-basis: 100%; margin: 0; color: var(--mut); font-size: 14px; }
 .su-code b { margin-left: 4px; color: var(--fg); font-size: 20px; font-weight: 600; letter-spacing: .08em; }

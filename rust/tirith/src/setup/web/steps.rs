@@ -27,9 +27,17 @@ pub(super) fn ready(alias: &str, known: &Known) -> Result<(PathBuf, bool), Strin
 
 pub(super) fn sign_in(cx: &Context, known: &Known, path: &std::path::Path) -> Result<(), String> {
     job::step(&known.alias, "signin");
-    login::login(cx, known, path)
-        .then_some(())
-        .ok_or_else(|| format!("{} was not signed in", known.name))
+    if login::login(cx, known, path) {
+        return Ok(());
+    }
+    let late =
+        job::get(&known.alias).is_some_and(|j| j.said.contains(super::capture::STOPPED.trim()));
+    Err(if late {
+        "no sign-in arrived within an hour: press Try again, then sign in in the browser that opens"
+            .into()
+    } else {
+        format!("{} was not signed in", known.name)
+    })
 }
 
 /// The roles whose agent has not worked here (not installed, a stand-in, or never answered) move to the one just connected.

@@ -5,6 +5,16 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+/// What the job hears when its program was stopped for taking too long.
+pub const STOPPED: &str = "\nit took too long and was stopped\n";
+
+/// How long a program may run: a sign-in waits an hour for the owner (who may come back to it later); anything
+/// else, a slow installer included, 20 minutes.
+pub fn limit(alias: &str) -> Duration {
+    let signs_in = job::get(alias).is_some_and(|j| j.step == "signin");
+    Duration::from_secs(if signs_in { 60 * 60 } else { 20 * 60 })
+}
+
 /// Whether it ended well within `limit`.
 pub fn run(
     alias: &str,
@@ -55,7 +65,7 @@ pub fn run(
             Ok(None) if Instant::now() < until => std::thread::sleep(Duration::from_millis(200)),
             _ => {
                 let _ = (child.kill(), child.wait());
-                job::heard(alias, "\nit took too long and was stopped\n");
+                job::heard(alias, STOPPED);
                 break false;
             }
         }

@@ -38,6 +38,7 @@ export function AgentList({ list }) {
   return html`<div class="su-list">
     ${list.map((a) => html`<${AgentRow} key=${a.alias} a=${a} act=${act} />`)}
     ${err ? html`<p class="hm-err" role="alert">${err}</p>` : null}
+    <p class="su-note">NeoBot's rules then watch that helper's other sessions on this computer too.</p>
   </div>`;
 }
 
