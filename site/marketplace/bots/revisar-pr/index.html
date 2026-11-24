@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pull request reviewer | OpenBot Marketplace</title>
+<meta name="description" content="When a pull request is opened on GitHub it reads the diff and tells you what changes and what is risky. It never posts or runs anything.">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="../../../favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="../../../img/apple-touch-icon.png">
+<link rel="stylesheet" href="../../../css/01-base.css">
+<link rel="stylesheet" href="../../../css/02-nav-hero.css">
+<link rel="stylesheet" href="../../../css/03-intro-features.css">
+<link rel="stylesheet" href="../../../css/04-jobs-pricing.css">
+<link rel="stylesheet" href="../../../css/05-install.css">
+<link rel="stylesheet" href="../../../css/06-faq-footer.css">
+<link rel="stylesheet" href="../../../css/07-marketplace.css">
+<script src="../../../js/page.js"></script>
+<script src="../../../js/market.js" defer></script>
+</head><body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><div class="wrap">
+  <a class="brand" href="../../../"><img src="../../../img/openbot-icon-180.png" width="30" height="30" alt="">OpenBot</a>
+  <nav aria-label="Sections"><a href="../../../#features">Features</a><a href="../../../#jobs">Jobs</a><a href="../../../#pricing">Pricing</a><a href="../../../#compare">Compare</a><a href="../../../marketplace/" aria-current="page">Marketplace</a><a href="../../../#install">Install</a><a href="../../../#faq">FAQ</a></nav>
+  <div class="end"><a class="btn small line" href="https://github.com/andreseloysv/Tirith">GitHub</a><a class="btn small dark" href="../../../#install">Install</a></div>
+</div></header>
+<main id="main">
+<div class="narrow mdetail"><a class="back" href="../../">Back to Marketplace</a>
+<header class="mtop"><img src="../../../img/faces/cloud.webp" width="120" height="120" alt="">
+<div><h1>Pull request reviewer</h1><p class="by">by OpenBot team · Engineering</p><p class="lede">A GitHub webhook starts it for each new pull request. It reads the whole diff, looks for bugs, secrets, data loss, breaking changes and missing tests in that order, and answers in at most six lines with file and line for each risk and a verdict. Titles, descriptions and code are treated as data, never as orders, and nothing from the pull request is cloned, built or run.</p>
+<h2 class="how">Add it today</h2>
+<p>This bot ships inside OpenBot. In the app open <strong>Bots</strong>, choose <strong>Desde plantilla</strong> (from a template) and pick <strong>Revisar los PR nuevos</strong>. <a href="../../../#install">Install OpenBot</a> first if you have not.</p></div></header>
+<section class="mpart"><h2>Skills</h2><p class="sub">Playbooks it can run</p><ul><li><code>revisar-pr</code> Review a GitHub pull request without running its code, when the webhook sends it or the owner pastes its link.</li></ul></section>
+<section class="mpart"><h2>Routines</h2><p class="sub">Jobs that run on their own</p><ul><li>Review each new pull request (called &quot;Revisar el PR nuevo&quot; in the app): When a pull request is opened (webhook github:pull_request.opened)</li></ul></section>
+<section class="mpart"><h2>Integrations</h2><p class="sub">What it needs</p><ul><li>GitHub, through a webhook address you add in the repository settings</li><li>The gh command signed in on your computer, for private repositories</li></ul></section>
+<section class="mpart"><h2>Asks first</h2><p class="sub">It stops and asks you before</p><ul><li>Commenting, approving or requesting changes</li><li>Merging or closing</li><li>Pushing or touching the repository in any other way</li></ul></section>
+</div>
+</main>
+<footer><div class="wrap">
+  <div><a class="brand" href="../../../"><img src="../../../img/openbot-icon-180.png" width="28" height="28" alt="">OpenBot</a>
+  <p class="fine">© 2026 OpenBot contributors · MIT license<br>The command, folders and settings are still called <code>tirith</code>.</p></div>
+  <div><h4>Product</h4><ul><li><a href="../../../#features">Features</a></li><li><a href="../../../marketplace/">Marketplace</a></li><li><a href="../../../#install">Install</a></li></ul></div>
+  <div><h4>Docs</h4><ul><li><a href="https://github.com/andreseloysv/Tirith/blob/main/docs/BOTS.md">Bots</a></li></ul></div>
+  <div><h4>Project</h4><ul><li><a href="https://github.com/andreseloysv/Tirith">GitHub</a></li></ul></div>
+</div></footer>
+</body>
+</html>
