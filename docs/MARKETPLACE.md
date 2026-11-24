@@ -49,6 +49,8 @@ Facts are from main at 3bc4f719 and the pages of x.ai (2026-11-24).
   may like or dislike it once. Free bots therefore have likes and dislikes only, never written reviews.
 - **Analytics:** self-hosted and cookie-less on the owner's Mac mini (GoatCounter), at a stats subdomain.
 - **Market service:** a separate small service beside agentsmessenger.
+- **Refused on sight:** the list below, approved by the owner on 2026-11-24. The automated checks before the
+  owner's review look for these, and the owner refuses them without further reading.
 
 ## Declared permissions and how each is proven
 
@@ -67,7 +69,7 @@ daemon's own gate proves it. Sandboxes are never attacked or probed, and no limi
 A permission that is not enforced is shown on the listing as "declared, not enforced" and blocks third-party
 publishing until it is.
 
-## Refuse on sight (draft, for the owner to approve)
+## Refuse on sight (approved by the owner, 2026-11-24)
 
 - Instructions that tell the agent to ignore OpenBot's approvals, hooks or sandbox, or to hide what it does.
 - Reading or sending secrets, keys, other bots' memory or chats; webhook addresses in the package.
@@ -117,7 +119,7 @@ publishing until it is.
    Needs: the Mac mini service and domain, who may publish (invite or open), how people prove who they are
    (their OpenBot key, or also an email).
 4. **Stranger's bot gates**: declared permissions enforced per bot (network, files, browser), automated checks
-   before your review (secret scan, forbidden instructions). Needs: the owner's rule on what is refused.
+   before your review (secret scan, forbidden instructions). The rule on what is refused is approved (above).
 5. **Paid bots**: Stripe Connect, licences, refunds, tax and terms. Needs: the owner's business and Stripe
    account, fee, and legal terms for creators and buyers.
 
