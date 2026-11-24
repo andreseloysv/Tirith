@@ -915,7 +915,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Merge the branch windows-setup-check: the Windows install test writes setup's output into files with a time limit and stops setup's daemon, and keeps its git identity in the throwaway profile; change nothing else (check: `grep -q 'WaitForExit' .github/workflows/windows-install.yml`)
 - [x] Merge the branch windows-detach: on Windows the daemon that setup starts no longer inherits setup's own standard handles, so a piped or captured setup ends; change nothing else (check: `grep -q 'HANDLE_FLAG_INHERIT' rust/tirith/src/os/spawn.rs`)
 - [x] Merge the branch windows-carried: the files a release carries are named with / on every system, so a Windows build finds its page, with a test of the names and CI's Windows smoke on a build made as a release is; change nothing else (check: `grep -q 'parts.join' rust/tirith/build.rs && grep -q 'TIRITH_DIST' .github/workflows/tirith.yml`)
-- [ ] Merge the branch site-rc2: the website's Windows links point at the 0.2.2-rc.2 test build instead of rc.1; change nothing else (check: `grep -q 'v0.2.2-rc.2/OpenBot-0.2.2-rc.2-x64-setup.exe' site/index.html`)
+- [x] Merge the branch site-rc2: the website's Windows links point at the 0.2.2-rc.2 test build instead of rc.1; change nothing else (check: `grep -q 'v0.2.2-rc.2/OpenBot-0.2.2-rc.2-x64-setup.exe' site/index.html`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
