@@ -5,7 +5,8 @@ import { Icon } from '../common.js';
 import { recall } from '../views/bots.js';
 import { SUB, viewOf } from './views.js';
 
-/* ⌘K or Ctrl+K focuses the search */
+/* ⌘K or Ctrl+K focuses the search; the hint says the one this computer has */
+const KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘K' : 'Ctrl K';
 function useSearchKey() {
   useEffect(() => {
     const key = (e) => {
@@ -34,6 +35,6 @@ export function Top({ r }) {
     <div id="crumb" class="crumb">${r.view === 'overview' ? null /* the Home's heading says it */ : crumb.map((c, i) => html`${i ? html`<span class="sep">/</span>` : null}<span class=${i === crumb.length - 1 ? 'last' : ''}>${c}</span>`)}</div>
     <label class="cmd"><${Icon} d="M11 4a7 7 0 100 14 7 7 0 000-14z M20 20l-4-4" size=${14} w=${2} />
       <input id="f-q" type="search" placeholder="Search" aria-label="Search" autocomplete="off" value=${s.q || ''}
-        onInput=${(e) => setUi('q', e.target.value)} /><kbd>⌘K</kbd></label>
+        onInput=${(e) => setUi('q', e.target.value)} /><kbd>${KEY}</kbd></label>
   </header>`;
 }
