@@ -906,7 +906,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Merge the branch web-icon: the tab icon of the site and of the page becomes the app's rounded tile under new names (site/favicon.ico, img/favicon-96.png, web/img/favicon-32.png); change nothing else (check: `test -f site/favicon.ico && test -f web/img/favicon-32.png && grep -q favicon.ico site/index.html && grep -q favicon-32.png web/index.html && test ! -e site/img/tirith-logo-64.png`)
 - [x] Merge the branch marketplace into main and change nothing else: it adds the static Marketplace pages under site/marketplace, their generator in tools/site and the plan in docs/MARKETPLACE.md (check: `test -f site/marketplace/index.html`)
 - [x] Merge the branch bot-package into main and change nothing else: it adds signed bot packages (export, a previewed owner-only import, owner-only from-template) in rust/tirith/src/bots/package and the Export and Import buttons of the Bots page (check: `test -f rust/tirith/src/bots/package/mod.rs`)
-- [ ] Merge the branch stats into main and change nothing else: it adds the cookie-less counter service in tools/stats and its script site/js/count.js on every site page (check: `test -f site/js/count.js`)
+- [x] Merge the branch stats into main and change nothing else: it adds the cookie-less counter service in tools/stats and its script site/js/count.js on every site page (check: `test -f site/js/count.js`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
