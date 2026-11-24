@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="所见即所得地配置、预览并复制 Bot Face Web Component。" />
+    <title>Bot Face · 所见即所得组件编辑器</title>
+    <link rel="stylesheet" href="./demo.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <a class="brand" href="./index.html" aria-label="Bot Face 编辑器首页">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+        <span>Bot Face <small>组件编辑器</small></span>
+      </a>
+      <div class="header-actions">
+        <span class="component-stats">63 状态 · 18 形状</span>
+        
+        
+        
+        
+      </div>
+    </header>
+
+    <main>
+      <div class="studio" aria-label="Bot Face 所见即所得编辑器">
+        <section id="edit" class="studio-panel controls-panel" aria-labelledby="edit-title">
+          <header class="panel-heading">
+            <span class="step-number">1</span>
+            <div><h1 id="edit-title">选择样式</h1><p>所有修改立即反映在中间。</p></div>
+          </header>
+
+          <form class="quick-editor" id="quick-editor">
+            <input id="demo-state" type="hidden" value="idle" />
+            <input id="demo-shape" type="hidden" value="blob" />
+
+            <fieldset class="state-fieldset">
+              <legend>全部状态 <span>63</span></legend>
+              <div class="state-grid" id="state-grid"></div>
+              <p class="catalog-note">先点中间的时间线步骤，再点这里的状态。目录缩略图隐藏彩色粒子，完整效果在中间播放。</p>
+            </fieldset>
+
+            <fieldset class="shape-fieldset">
+              <legend>全部形状 <span>18</span></legend>
+              <div class="shape-grid" id="shape-grid"></div>
+            </fieldset>
+
+            <fieldset class="material-fieldset">
+              <legend>形状材质 <span id="material-readout">纯色 · 墨黑</span></legend>
+              <div class="material-tabs" id="material-tabs" role="group" aria-label="材质类型"></div>
+              <div class="material-presets" id="material-presets" role="group" aria-label="材质预设"></div>
+              <div class="material-custom" id="material-custom"></div>
+            </fieldset>
+
+            <details class="advanced-controls">
+              <summary>尺寸、眼睛与播放设置 <span>＋</span></summary>
+              <div class="advanced-grid">
+                <label class="range-control"><span>尺寸</span><input id="demo-size" type="range" min="18" max="280" value="72" /><output id="demo-size-output">72px</output></label>
+                <label class="field"><span>眼睛颜色</span><input id="demo-eye-color" type="color" value="#ffffff" /></label>
+                <label class="field"><span>播放速度</span><select id="demo-speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label>
+                <label class="toggle"><input id="demo-pointer" type="checkbox" /><span>跟随指针</span></label>
+                <button id="demo-pause" class="pause-action" type="button">暂停动画</button>
+              </div>
+            </details>
+          </form>
+        </section>
+
+        <section id="display" class="studio-panel preview-panel" aria-labelledby="display-title">
+          <header class="panel-heading preview-heading">
+            <span class="step-number">2</span>
+            <div><h2 id="display-title">实时预览</h2><p>切换容器，检查它在真实界面里的样子。</p></div>
+          </header>
+
+          <div class="preview-mode-tabs" role="group" aria-label="预览模式">
+            <button class="is-active" type="button" data-preview-mode="sequence">状态时间线</button>
+            <button type="button" data-preview-mode="dialogue">对话导演 <span>NEW</span></button>
+          </div>
+
+          <div id="sequence-workspace" class="sequence-workspace">
+            <div class="context-tabs" role="group" aria-label="预览场景">
+              <button class="is-active" type="button" data-context="solo">单独</button>
+              <button type="button" data-context="button">按钮</button>
+              <button type="button" data-context="card">任务卡</button>
+              <button type="button" data-context="page">页面</button>
+            </div>
+
+            <div class="sequence-builder" id="sequence-builder" aria-label="动画时间线编辑器">
+              <div class="sequence-heading">
+                <p><strong>动画时间线</strong><span>状态停留 → Morph → 下一状态</span></p>
+                <label><input id="sequence-loop" type="checkbox" /> 循环</label>
+              </div>
+              <div class="sequence-list" id="sequence-list"></div>
+              <fieldset class="sequence-morph-picker">
+                <legend><span>所选步骤停留后播放</span><output id="selected-sequence-step">第 2 步</output></legend>
+                <div class="sequence-morph-grid" id="sequence-morph-grid"></div>
+              </fieldset>
+              <div class="sequence-action-row">
+                <button id="add-sequence-step" class="add-sequence-step" type="button">＋ 添加状态</button>
+                <span id="sequence-summary">3 步</span>
+                <button id="stop-sequence" class="stop-sequence" type="button" disabled>停止</button>
+                <button id="preview-sequence" class="preview-sequence" type="button"><span>▶</span> 播放时间线</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="dialogue-workspace" class="dialogue-builder" hidden aria-label="对话导演编辑器">
+            <div class="dialogue-heading">
+              <p><strong>写一句，让 Bot 演出来</strong><span>自动编排会读语气和标点；也可以输入 <kbd>@</kbd> 精确插入。</span></p>
+              <div class="dialogue-heading-actions">
+                <button id="dialogue-undo-auto" class="dialogue-undo-auto" type="button" hidden>撤销自动</button>
+                <button id="dialogue-auto-action" class="dialogue-auto-action" type="button"><b>✦</b><span>自动编排</span></button>
+                <button id="dialogue-add-action" class="dialogue-add-action" type="button"><b>@</b> 手动插入</button>
+              </div>
+            </div>
+            <div class="dialogue-editor-shell">
+              <div id="dialogue-editor" class="dialogue-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="对话文字和动作" data-placeholder="输入一句话，键入 @ 添加表情…" spellcheck="true"></div>
+              <div id="dialogue-action-menu" class="dialogue-action-menu" hidden>
+                <header><strong>选择动作</strong><span>↑↓ 选择 · Enter 插入 · Esc 关闭</span></header>
+                <div id="dialogue-action-list" class="dialogue-action-list" role="listbox"></div>
+              </div>
+            </div>
+            <output id="dialogue-auto-status" class="dialogue-auto-status" aria-live="polite">输入文字后，一键生成贴合语气的动作。</output>
+            <div id="dialogue-action-inspector" class="dialogue-action-inspector" hidden>
+              <span id="dialogue-inspector-type">表情</span>
+              <label>动作<select id="dialogue-inspector-value"></select></label>
+              <label>过渡时间<input id="dialogue-inspector-duration" type="number" min="0" max="20" step="0.05" /><i>秒</i></label>
+              <button id="dialogue-delete-action" type="button">删除标签</button>
+            </div>
+            <div class="dialogue-score" aria-label="对话播放进度">
+              <div id="dialogue-score-markers" class="dialogue-score-markers"></div>
+              <i id="dialogue-progress-bar"></i>
+            </div>
+            <div class="dialogue-transport">
+              <label><span>角色声音</span><select id="dialogue-voice"></select></label>
+              <label><span>英文节奏</span><select id="dialogue-english-mode"><option value="phonetic" selected>组合音素</option><option value="letters">逐字母</option></select></label>
+              <label><span>说话速度</span><select id="dialogue-rate"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select></label>
+              <output id="dialogue-time">0:00.0 / 0:00.0</output>
+              <button id="stop-dialogue" class="stop-dialogue" type="button" disabled>停止</button>
+              <button id="preview-dialogue" class="preview-dialogue" type="button"><span>▶</span> 播放对话</button>
+            </div>
+            <p id="dialogue-voice-hint" class="dialogue-voice-hint"></p>
+          </div>
+
+          <figure class="preview-stage" id="preview-stage" data-context="solo" data-mode="sequence">
+            <div class="stage-grid" aria-hidden="true"></div>
+            <div class="preview-object">
+              <bot-face id="demo-bot" state="idle" shape="blob" size="72" color="#0b0b0b" eye-color="#ffffff" label="Configured animated bot"></bot-face>
+              <div class="context-copy"><strong id="context-title">等待任务</strong><span id="context-description">状态可以随时切换</span></div>
+              <div id="dialogue-bubble" class="dialogue-bubble" hidden><span id="dialogue-caption">准备好后点击播放</span></div>
+            </div>
+            <figcaption>
+              <strong id="demo-readout">idle · blob · 72px</strong>
+              <code id="demo-runtime">E00 · ENTER</code>
+            </figcaption>
+          </figure>
+        </section>
+
+        <section id="use" class="studio-panel output-panel" aria-labelledby="use-title">
+          <header class="panel-heading">
+            <span class="step-number">3</span>
+            <div><h2 id="use-title">复制使用</h2><p>代码始终与当前预览一致。</p></div>
+          </header>
+
+          <div class="first-use">
+            <span class="first-use-label">第一次使用？</span>
+            <p>El componente vive en esta app, en la carpeta <code>vendor/botface/</code>; copia el código tal cual.</p>
+          </div>
+
+          <div class="code-card">
+            <div class="code-card-bar">
+              <div class="code-mode-tabs" role="group" aria-label="代码类型">
+                <button class="is-active" type="button" data-code-mode="static">单状态</button>
+                <button type="button" data-code-mode="sequence">时间线</button>
+                <button type="button" data-code-mode="dialogue">对话</button>
+              </div>
+              <span class="sync-indicator"><i></i> 已同步</span>
+            </div>
+            <pre><code id="component-code"></code></pre>
+            <button id="copy-component-code" type="button">复制这段代码</button>
+          </div>
+
+          <div class="use-checklist" aria-label="使用步骤">
+            <p><span>1</span> 解压组件包到项目</p>
+            <p><span>2</span> 粘贴上面的代码</p>
+            <p><span>3</span> 打开页面即可看到</p>
+          </div>
+
+          <details class="runtime-details">
+            <summary>需要用 JS 切换状态？ <span>查看 API</span></summary>
+            <pre><code>const bot = document.querySelector("bot-face");
+
+bot.setState("thinking");
+bot.setShape("hex");
+await bot.playMorph("send");
+await bot.playSequence(sequence);
+await bot.performDialogue(dialogue);</code></pre>
+          </details>
+        </section>
+      </div>
+
+      <section class="below-studio" aria-labelledby="examples-title">
+        <header>
+          <p>场景参考</p>
+          <h2 id="examples-title">Bot 可以放在哪里？</h2>
+          <span>下面展示按钮、任务卡和页面加载的实际组合方式。<code>progress</code> 是循环动画，不代表真实百分比。</span>
+        </header>
+        <div class="example-grid">
+          <article>
+            <div class="button-example"><button type="button" disabled><bot-face state="loading" shape="blob" size="18" color="#ffffff" eye-color="#4f66dd" decorative></bot-face><span>正在生成</span></button></div>
+            <strong>按钮内加载</strong><code>size="18"</code>
+          </article>
+          <article>
+            <div class="card-example"><bot-face state="thinking" shape="hex" size="44" decorative></bot-face><p><b>正在整理答案</b><span>通常只需要几秒钟</span></p></div>
+            <strong>任务状态</strong><code>state="thinking"</code>
+          </article>
+          <article>
+            <div class="page-example"><bot-face state="progress" shape="pebble" size="82" decorative></bot-face><span>PREPARING WORKSPACE</span></div>
+            <strong>页面加载</strong><code>shape="pebble"</code>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer><span>Bot Face Element · framework-free Web Component</span></footer>
+    <script type="module" src="./demo.js"></script>
+  </body>
+</html>

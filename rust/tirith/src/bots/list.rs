@@ -49,7 +49,7 @@ fn bot_of(
     let routines = routines_of(routes, key, id, last);
     let hears = hears_of(routes, key);
     Some(
-        json!({"id": id, "key": key, "system": !key.starts_with("bot-"), "show": role["show"] != false, "name": or(s(role, "name"), id), "shape": or(s(&role["face"], "shape"), "round"), "color": or(s(&role["face"], "color"), "#3b82f6"), "session": or(s(role, "session"), "chat"), "access": s(role, "access"), "chat_keep": s(role, "chat_keep"), "routes": hears, "routines": routines}),
+        json!({"id": id, "key": key, "system": !key.starts_with("bot-"), "show": role["show"] != false, "name": or(s(role, "name"), id), "shape": or(s(&role["face"], "shape"), "round"), "color": or(s(&role["face"], "color"), "#3b82f6"), "material": or(s(&role["face"], "material"), "solid"), "eye": or(s(&role["face"], "eye"), "#161616"), "gradient": s(&role["face"], "gradient"), "gstart": s(&role["face"], "gstart"), "gend": s(&role["face"], "gend"), "gangle": role["face"]["gangle"].clone(), "glass": s(&role["face"], "glass"), "session": or(s(role, "session"), "chat"), "access": s(role, "access"), "chat_keep": s(role, "chat_keep"), "routes": hears, "routines": routines}),
     )
 }
 /// The bots as the page sees them: every role of `raw` with `scope = "own"` (an owner's `bot-<id>`, in config.toml, or a system bot by its key; its name, face and `show`), with its `schedule` routes as routines (`last` says a routine's last run), its other routes as `routes` (each as written; writing one back sets its `to` to this bot), and its `session` and `access`: the whole configuration its card shows and changes. `key` is its conversation; `id` is its page id (a system bot's key).

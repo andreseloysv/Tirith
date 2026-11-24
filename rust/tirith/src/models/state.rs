@@ -36,7 +36,7 @@ fn role_view(app: &Shared, cfg: &Config, r: &str) -> Value {
         .for_each(|(k, x)| v[k] = json!(x));
     v["show"] = json!(cfg.factory.role::<bool>(r, "show"));
     let face = |k: &str| get::<String>(&cfg.factory.raw, &["roles", r, "face", k]);
-    v["face"] = json!({"shape": face("shape"), "color": face("color")});
+    v["face"] = json!({"shape": face("shape"), "color": face("color"), "material": face("material"), "eye": face("eye"), "gradient": face("gradient"), "gstart": face("gstart"), "gend": face("gend"), "glass": face("glass"), "gangle": get::<f64>(&cfg.factory.raw, &["roles", r, "face", "gangle"])});
     v
 }
 /// The models of `[models.choices]`: a list, or a table of lists per agent.

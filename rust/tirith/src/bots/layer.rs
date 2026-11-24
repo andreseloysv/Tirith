@@ -28,6 +28,14 @@ pub(super) fn lay_system(doc: &mut DocumentMut, b: &Value) {
             toml_edit::value(s(b, "access")),
             toml_edit::value(s(b, "shape")),
             toml_edit::value(s(b, "color")),
-        )
+        );
+        for k in super::look::KEYS {
+            if !s(b, k).is_empty() {
+                role["face"][k] = toml_edit::value(s(b, k));
+            }
+        }
+        if let Some(a) = b["gangle"].as_f64() {
+            role["face"]["gangle"] = toml_edit::value(a);
+        }
     });
 }

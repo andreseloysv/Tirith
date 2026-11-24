@@ -6,6 +6,7 @@ use serde_json::{json, Map, Value};
 fn role_of(b: &Value) -> Value {
     let mut role = json!({"extends": "manager", "scope": "own", "name": s(b, "name"), "face": {"shape": s(b, "shape"), "color": s(b, "color")}, "prompt": ["prompts/bot.md"], "session": Some(s(b, "session")).filter(|x| !x.is_empty()).unwrap_or_else(|| "chat".into()), "access": s(b, "access")});
     let _ = (!s(b, "chat_keep").is_empty()).then(|| role["chat_keep"] = json!(s(b, "chat_keep"))); // the chat's longest life, kept as written (see chat.rs)
+    super::look::face_into(&mut role, b);
     role
 }
 /// A routine as its route: on `schedule` with its days, its time and a `catch_up` that is not the default, or on `webhook` with its `when`.

@@ -3,6 +3,7 @@
 import { useStore, useTalk, useFetch } from '../../store.js';
 import { useUnread } from '../../unread.js';
 import { projName } from './util.js';
+import { lookOf } from '../bots/face/face-map.js';
 
 const LABEL = { work: 'Working', watch: 'Waiting', sleep: 'Asleep' };
 
@@ -26,7 +27,7 @@ export function useSpeaker(project, who) {
   const bot = unread.bots.find((b) => (b.key || `bot-${b.id}`) === project) || null;
   const unseen = bot ? unread.by[bot.id] || 0 : 0;
   /* a bot's own, until the models say it: the face at work is there from the first dot */
-  const face = (entry && entry.face && entry.face.shape && entry.face) || (bot && bot.shape && { shape: bot.shape, color: bot.color }) || (isProject ? { shape: 'hex', color: '#8e7cf0' } : null);
+  const face = (entry && entry.face && entry.face.shape && lookOf(entry.face)) || (bot && bot.shape && lookOf(bot)) || (isProject ? lookOf({ shape: 'hex', color: '#8e7cf0' }) : null);
   const faceState = faceStateOf(busy, bot);
   return { s, talk, name, isProject, role, whoName, face, busy, bot, unseen, faceState, stateLabel: LABEL[faceState] };
 }

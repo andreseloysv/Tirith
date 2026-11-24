@@ -3,7 +3,10 @@
 // headless Edge/Chrome and traces 5 s with motion and 5 s with reduced motion, summing
 // the same timeline events the 2026-11-21 measurement used (GPUTask, RasterTask, Paint,
 // Layout, Layerize) as ms per second. With motion the sum must stay at or below the
-// limit (default 40 ms/s; it was ~235 when every frame re-blurred every face).
+// limit (default 180 ms/s). The faces changed renderer on 2026-11-23 (the owner asked
+// for the vendored animation exact, free-running): the old 40 ms/s belonged to the old
+// layered faces; the exact ones measured 67-162 ms/s here, the spread being the headless
+// software GPU. 180 keeps this meter to catching a new order-of-magnitude regression.
 //
 //   node tools/perf/faces.mjs [--shots <dir>] [--limit <ms>]
 // --shots also writes faces-dark.png / faces-light.png for an eyeball comparison.
@@ -22,7 +25,7 @@ const EVENTS = ['GPUTask', 'RasterTask', 'Paint', 'Layout', 'Layerize'];
 const TRACE_S = 5;
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : dflt; };
-const LIMIT = Number(opt('--limit', process.env.FACES_LIMIT_MS || 40));
+const LIMIT = Number(opt('--limit', process.env.FACES_LIMIT_MS || 180));
 const SHOTS = opt('--shots', null);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -44,7 +47,7 @@ const faces = Array.from({ length: 17 }, (_, i) => ({
 render(html\`\${faces.map((f) => html\`<\${Face} ...\${f} />\`)}\`, document.getElementById('grid'));
 </script>`;
 
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.wav': 'audio/wav' };
 const server = createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (path === '/__faces.html') { res.writeHead(200, { 'content-type': 'text/html' }); res.end(PAGE); return; }

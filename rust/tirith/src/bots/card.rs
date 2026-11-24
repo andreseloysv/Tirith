@@ -27,6 +27,9 @@ pub(super) fn checked(b: &Value) -> Result<(String, String), String> {
     (matches!(s(b, "session").as_str(), "" | "chat" | "turn") && matches!(s(b, "access").as_str(), "" | "read" | "write") && hears_ok(b))
         .then_some(())
         .ok_or("a bot's session is chat or turn, its access read or write, and each route is on an event of the closed list (not schedule) as a turn or a note")?;
+    super::look::look_ok(b)
+        .then_some(())
+        .ok_or("a bot's material is solid, gradient or rainbow-glass, its presets are the face's own, and its colours are #rrggbb")?;
     Ok((name, color))
 }
 /// The card `b` laid over the bot: what it carries (even emptied) wins, what it does not carry stays.
@@ -64,6 +67,7 @@ fn change(bot: &mut Value, b: &Value, name: String, color: String) {
         routes,
         json!(true),
     ); // `dirty`: a system bot's change is written as a layer in config.toml
+    super::look::lay(bot, b);
 }
 /// A new bot (no `id`), or a change to one's card: its name, shape and colour, its `session` and `access`, and its routes (each on an event of the closed list but `schedule` — those are its routines — as a turn or a note, with its chat line and phones as written). What the body does not carry stays as it was.
 pub(crate) fn save(app: &Shared, b: Value) -> Result<Value, String> {

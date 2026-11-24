@@ -739,3 +739,46 @@ fn deleting_a_bot_drops_its_grants() {
         "no grant moved to another bot"
     );
 }
+
+#[test]
+fn a_bots_material_and_eyes_live_in_its_face() {
+    // A bot with a material of its own, and one without: written into config and read back as the page sees them.
+    let bots = json!([
+        {"id": "abc123", "name": "N", "shape": "hex", "color": "#22d3ee", "material": "gradient", "eye": "#ffffff", "gradient": "ocean-signal", "gstart": "", "gend": "", "gangle": 135.0, "glass": "", "routines": []},
+        {"id": "def456", "name": "M", "shape": "blob", "color": "#111111", "routines": []}
+    ]);
+    let text = super::written::written("", bots.as_array().unwrap()).unwrap();
+    assert!(
+        text.contains("material = \"gradient\"")
+            && text.contains("eye = \"#ffffff\"")
+            && text.contains("gradient = \"ocean-signal\""),
+        "the face carries its material:\n{text}"
+    );
+    let read = super::list::bots_of(
+        &serde_json::to_value(text.parse::<toml::Table>().unwrap()).unwrap(),
+        &|_, _| String::new(),
+    );
+    let by = |id: &str| read.iter().find(|b| b["id"] == id).unwrap();
+    assert_eq!(
+        (
+            by("abc123")["material"].as_str(),
+            by("abc123")["eye"].as_str(),
+            by("abc123")["gradient"].as_str(),
+            by("abc123")["gangle"].as_f64()
+        ),
+        (
+            Some("gradient"),
+            Some("#ffffff"),
+            Some("ocean-signal"),
+            Some(135.0)
+        )
+    );
+    assert_eq!(
+        (
+            by("def456")["material"].as_str(),
+            by("def456")["eye"].as_str()
+        ),
+        (Some("solid"), Some("#161616")),
+        "a bot without one is solid with ink eyes"
+    );
+}

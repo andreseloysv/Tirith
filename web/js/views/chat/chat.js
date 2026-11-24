@@ -48,7 +48,7 @@ export function Chat({ project = '', who = '', hint = '' }) {
   const notes = useNotes(sp.bot);   /* and its memory citations show their notes */
 
   return html`<section class=${`mchat${att.drag ? ' drop' : ''}`}>
-    ${head(sp, project, interrupt)}
+    ${head(sp, project, interrupt, !!draft.trim())}
     ${thread({ sp, project, hint, items, hidden, scroll, onEarlier, setZoom, send, turns, notes })}
     ${composer({ sp, err, att, ta, file, draft, edit, keys, send: send.send })}
     ${zoom ? html`<${Lightbox} src=${zoom} onClose=${() => setZoom(null)} />` : null}

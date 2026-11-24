@@ -22,7 +22,7 @@ function faceButton(f, sel, drag, card) {
       onClick=${() => { if (!drag.swallowed()) f.open(); }} onKeyDown=${(e) => drag.key(e, f.id)}
       onPointerEnter=${(e) => { if (!e.buttons && e.pointerType !== 'touch') show(e); }} onPointerLeave=${card.hide}
       onFocus=${(e) => { if (e.currentTarget.matches(':focus-visible')) show(e); }} onBlur=${card.now}>
-    <${Face} shape=${f.shape} color=${f.color} size=${64} state=${f.state} />
+    <${Face} ...${f.look} size=${64} state=${f.state} />
     ${n ? html`<em class="nunread">${n > 9 ? '9+' : n}</em>` : null}</button>`;
 }
 

@@ -58,8 +58,9 @@ fn content_kinds_split_page_from_attachment() {
 /// A face in a list or a head is an avatar in one fixed box: the served CSS sizes it and keeps its glow and its
 /// float inside that box (`overflow: hidden` on the face and on its SVG layers), so no face can grow its row,
 /// mount its neighbours or cover the name and text beside it — as the owner's 2026-11-21 phone captures showed.
-/// The motion itself stays: the served face script still carries the size as `--fs` and still moves the floating
-/// layer by transform. Read through `web_file`, the handler that serves the page, so what is pinned is what is served.
+/// The motion itself stays, now inside the vendored face element: the served face script still carries the
+/// size as `--fs` and renders that element, which fills its box. Read through `web_file`, the handler that
+/// serves the page, so what is pinned is what is served.
 #[tokio::test]
 async fn face_avatars_stay_in_their_box() {
     let app = home("faces");
@@ -118,11 +119,14 @@ async fn face_avatars_stay_in_their_box() {
         chat.contains(".mc-head .mc-face .bot { width: 64px; height: 64px; }"),
         "and the phone head's big face is a fixed 64px"
     );
-    // The movement is not the price: the float still moves as a composited layer inside the box.
-    assert!(bots.contains(".bot.face .ffloat { position: absolute; inset: 0; transform-origin: 50% 82.258%; will-change: transform; }"), "the floating layer still rides the compositor");
+    // The movement is not the price: the animated element fills the box and moves inside it.
     assert!(
-        face.contains("this.float.style.transform"),
-        "the animator still moves the face by transform"
+        bots.contains(".bot.face > bot-face { display: block; width: 100%; height: 100%; }"),
+        "the face element fills its box"
+    );
+    assert!(
+        face.contains("<bot-face") && face.contains("vendor/botface/bot-face.js"),
+        "the face script renders the vendored animated face"
     );
 }
 
