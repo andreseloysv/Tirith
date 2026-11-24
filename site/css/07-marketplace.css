@@ -1,0 +1,37 @@
+/* The marketplace: the index with its category tabs and cards, and a bot's page. */
+.mhead { padding-top: 72px; text-align: center; }
+.mhead h1 { font-size: clamp(40px, 6vw, 64px); }
+.mhead .lede { margin: 16px auto 0; max-width: 620px; }
+.mtabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 32px; }
+.mtab {
+  display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line);
+  background: #fff; color: var(--ink2); font: 500 14px/1 var(--font); text-decoration: none; cursor: pointer;
+}
+.mtab[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: #fff; }
+.mlist { padding-top: 56px; display: grid; gap: 12px; }
+.msub { font-size: 24px; letter-spacing: -0.01em; margin-bottom: 8px; }
+.mcard { display: grid; grid-template-columns: 56px 1fr auto; gap: 20px; align-items: center; padding: 20px 24px; background: var(--card); border-radius: var(--r-md); }
+.mcard[hidden] { display: none; }
+.mcard h3 a { text-decoration: none; }
+.mcard h3 a:hover { text-decoration: underline; }
+.mcard p { color: var(--ink2); font-size: 15px; margin-top: 4px; }
+.mcard .by, .mdetail .by { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.mnote { padding: 40px 0 64px; color: var(--muted); text-align: center; font-size: 15px; }
+.mdetail { padding-top: 40px; }
+.back { color: var(--muted); font-size: 15px; text-decoration: none; }
+.back:hover { color: var(--ink); }
+.mtop { display: grid; grid-template-columns: 120px 1fr; gap: 32px; margin-top: 32px; align-items: start; }
+.mtop h1 { font-size: clamp(32px, 5vw, 48px); }
+.mtop .lede { margin-top: 16px; }
+.mtop .how { font-size: 18px; letter-spacing: 0; margin-top: 28px; }
+.mtop .how + p { margin-top: 8px; color: var(--ink2); font-size: 16px; }
+.mpart { margin-top: 56px; border-top: 1px solid var(--line); padding-top: 28px; }
+.mpart h2 { font-size: 24px; }
+.mpart .sub { color: var(--muted); margin-top: 4px; }
+.mpart ul { margin: 16px 0 0; padding-left: 20px; display: grid; gap: 8px; color: var(--ink2); }
+@media (max-width: 720px) {
+  .mcard { grid-template-columns: 48px 1fr; }
+  .mcard .btn { grid-column: 2; justify-self: start; }
+  .mtop { grid-template-columns: 1fr; }
+  .mtop img { width: 80px; height: 80px; }
+}
