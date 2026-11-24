@@ -1,5 +1,6 @@
 //! The steps of a page setup that wait on programs (run off the async threads): the machine, the program and its hooks, a sign-in, and which agent the roles run on once it answers.
 use super::job;
+use crate::app::Shared;
 use crate::setup::{
     catalog, catalog::Known, configure, connect, context::Context, find, login, needs, program,
     signin,
@@ -31,21 +32,21 @@ pub(super) fn sign_in(cx: &Context, known: &Known, path: &std::path::Path) -> Re
         .ok_or_else(|| format!("{} was not signed in", known.name))
 }
 
-/// The roles whose agent this machine cannot run move to the one just connected.
-pub(super) fn roles(alias: &str) -> Result<(), String> {
+/// The roles whose agent has not worked here (not installed, a stand-in, or never answered) move to the one just connected.
+pub(super) fn roles(app: &Shared, alias: &str) -> Result<(), String> {
     let cx = Context::page(alias)?;
     let cfg = cx.cfg();
-    let runs = |a: &String| {
+    let works = |a: &String| {
         let set = cfg.factory.command(a);
         let known = catalog::known(a).unwrap_or_default();
-        find::agent(&known, set.as_deref()).is_some()
+        find::agent(&known, set.as_deref()).is_some() && super::list::worked(app, a)
     };
     let usable: Vec<String> = cfg
         .factory
         .commands()
         .into_iter()
         .map(|(a, _)| a)
-        .filter(runs)
+        .filter(works)
         .collect();
     configure::roles(&cx.home, &usable, alias).map(|_| ())
 }

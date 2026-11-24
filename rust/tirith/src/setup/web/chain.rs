@@ -47,7 +47,8 @@ async fn steps(app: &Shared, alias: &str) -> Result<(), String> {
         blocking(move || sign_in(&Context::page(&a)?, &k, &p)).await?;
     }
     let a = alias.to_string();
-    blocking(move || roles(&a)).await?;
+    let held = app.clone();
+    blocking(move || roles(&held, &a)).await?;
     app.reload_config(true);
     Ok(())
 }
