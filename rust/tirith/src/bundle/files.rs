@@ -15,3 +15,13 @@ pub fn below(dir: &str) -> Vec<(&'static str, &'static [u8])> {
         .filter_map(|(p, b)| p.strip_prefix(prefix.as_str()).map(|rest| (rest, *b)))
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    /// The lookups say `web/index.html` on every system: a name with `\` (a Windows build once) is never found.
+    #[test]
+    fn names_part_with_slashes() {
+        assert!(super::file("web/index.html").is_some());
+        assert!(super::FILES.iter().all(|(name, _)| !name.contains('\\')));
+    }
+}
