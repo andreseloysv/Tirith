@@ -1,1 +1,23 @@
-{}
+{
+ "Hi {name}! I'm your new personal assistant. I can help with your work and everyday life, and take things off your plate.": "¡Hola, {name}! Soy tu nuevo asistente personal. Puedo ayudarte con tu trabajo y tu día a día, y quitarte cosas de encima.",
+ "Hi! I'm your new personal assistant. I can help with your work and everyday life, and take things off your plate.": "¡Hola! Soy tu nuevo asistente personal. Puedo ayudarte con tu trabajo y tu día a día, y quitarte cosas de encima.",
+ "What would you like to call me? You can always change this later.": "¿Cómo quieres llamarme? Siempre podrás cambiarlo después.",
+ "{bot} it is! Nice to meet you, {name}.": "¡{bot}, entonces! Encantado de conocerte, {name}.",
+ "{bot} it is! Nice to meet you.": "¡{bot}, entonces! Encantado de conocerte.",
+ "A little about me:": "Un poco sobre mí:",
+ "I keep working while you're away, here on your computer.": "Sigo trabajando cuando no estás, aquí en tu ordenador.",
+ "I use your apps and websites, like email and calendar, just like you do.": "Uso tus aplicaciones y webs, como el correo y el calendario, igual que tú.",
+ "I ask you before anything important, and you can see everything I do.": "Te pregunto antes de hacer algo importante, y puedes ver todo lo que hago.",
+ "Here's some of what I can do for you:": "Esto es algo de lo que puedo hacer por ti:",
+ "Summarize your new email every morning": "Resumirte el correo nuevo cada mañana",
+ "Draft replies and send them once you approve": "Preparar respuestas y enviarlas cuando las apruebes",
+ "Watch a website and tell you when something changes": "Vigilar una web y avisarte cuando algo cambie",
+ "Remind you of what matters, before it is urgent": "Recordarte lo importante antes de que sea urgente",
+ "Want me to find a few things I can help with? I'll only look: nothing gets sent, deleted or changed.": "¿Quieres que busque algunas cosas en las que pueda ayudarte? Solo miraré: no se envía, borra ni cambia nada.",
+ "Suggest a task": "Sugiéreme una tarea",
+ "Check my email every morning": "Revisa mi correo cada mañana",
+ "Something else": "Otra cosa",
+ "Suggest a few tasks you could take off my plate. Only look: send, delete or change nothing.": "Sugiéreme algunas tareas que podrías quitarme de encima. Solo mira: no envíes, borres ni cambies nada.",
+ "Skip": "Saltar",
+ "A name for me": "Un nombre para mí"
+}
