@@ -33,7 +33,7 @@ pub(super) fn biggest_dirs(dir: &Path, n: usize) -> Vec<(String, u64)> {
     rows.sort_by_key(|a| std::cmp::Reverse(a.1));
     rows.into_iter().take(n).collect()
 }
-/// Below the factory's low-disk limit on the disk of the lanes' worktrees: one ask-owner card (kind device, of no project, since every project shares that disk) naming the biggest of OpenBot's own folders.
+/// Below the factory's low-disk limit on the disk of the lanes' worktrees: one ask-owner card (kind device, of no project, since every project shares that disk) naming the biggest of NeoBot's own folders.
 pub(super) async fn warn_low_disk(app: &Shared) {
     let (home, key, free) = (
         app.home.clone(),
@@ -55,6 +55,6 @@ pub(super) async fn warn_low_disk(app: &Shared) {
         .map(|(p, k)| format!("{p} ({:.1} GB)", *k as f64 / 1e6))
         .collect::<Vec<_>>()
         .join(", ");
-    let q = format!("Only {free:.1} GB free on this disk: lanes will fail with No space left on device. The biggest of OpenBot's own folders: {list}. Free some space (delete what you no longer need).");
+    let q = format!("Only {free:.1} GB free on this disk: lanes will fail with No space left on device. The biggest of NeoBot's own folders: {list}. Free some space (delete what you no longer need).");
     let _ = crate::manager::ask_owner(app, "", "device", &q, "");
 }

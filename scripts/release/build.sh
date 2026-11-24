@@ -1,9 +1,9 @@
 #!/bin/sh
-# One release binary of tirith for one target, from a Mac or Linux: nothing needed but rustup and clang.
+# One release binary of neobot for one target, from a Mac or Linux: nothing needed but rustup and clang.
 #   sh scripts/release/build.sh <target> [out-file]
 # Targets: aarch64-apple-darwin, x86_64-apple-darwin, aarch64-unknown-linux-musl, x86_64-unknown-linux-musl.
 # Linux binaries are static (no glibc, sqlite or OpenSSL of the machine). Cache: $TIRITH_RELEASE_CACHE.
-# TIRITH_RELEASE names the version the binary says; TIRITH_AGENTS_FILE adds what `tirith setup` may offer.
+# TIRITH_RELEASE names the version the binary says; TIRITH_AGENTS_FILE adds what `neobot setup` may offer.
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 target=${1:?usage: build.sh <target> [out-file]}
@@ -42,7 +42,7 @@ esac
 export "CARGO_TARGET_${VAR}_RUSTFLAGS=$flags"
 
 cargo build --release --locked -p tirith --target "$target" --manifest-path "$root/Cargo.toml" >&2
-bin="$build/$target/release/tirith"
+bin="$build/$target/release/neobot"
 if [ $# -ge 2 ]; then
   mkdir -p "$(dirname "$2")"
   cp "$bin" "$2"

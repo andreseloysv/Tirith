@@ -1,4 +1,4 @@
-//! When OpenBot was away: it keeps that it is alive, so what was missed says whether OpenBot was stopped or the machine slept.
+//! When NeoBot was away: it keeps that it is alive, so what was missed says whether NeoBot was stopped or the machine slept.
 use super::calendar::local;
 use super::words::when;
 use crate::app::App;
@@ -17,7 +17,7 @@ const KEPT: usize = 20;
 /// The homes this process beat for: its first beat follows a start.
 static BEATING: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
 
-/// OpenBot is alive now; a hole since the last time is kept, with whether this process had just started.
+/// NeoBot is alive now; a hole since the last time is kept, with whether this process had just started.
 pub(super) fn beat(app: &App, now: DateTime<Local>) {
     let just_started = BEATING.lock().unwrap().insert(app.home.clone());
     let now_kept = super::calendar::utc(now);
@@ -41,16 +41,16 @@ fn gaps(app: &App) -> Vec<Value> {
         .unwrap_or_default()
 }
 
-/// Why nothing could start at `due`, when OpenBot was away then.
+/// Why nothing could start at `due`, when NeoBot was away then.
 pub(super) fn over(app: &App, due: &str) -> Option<String> {
     let gap = gaps(app)
         .into_iter()
         .find(|g| s(g, "from").as_str() <= due && due <= s(g, "to").as_str())?;
     let span = format!("de {} a {}", when(&s(&gap, "from")), when(&s(&gap, "to")));
     Some(if gap["stopped"] == true {
-        format!("OpenBot estaba parado ({span})")
+        format!("NeoBot estaba parado ({span})")
     } else {
-        format!("la máquina dormía o OpenBot no respondía ({span})")
+        format!("la máquina dormía o NeoBot no respondía ({span})")
     })
 }
 

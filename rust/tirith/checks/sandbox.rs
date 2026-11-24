@@ -89,7 +89,7 @@ fn the_proxy_is_no_way_round_to_the_daemon() {
 fn the_kernel_tells_a_confined_caller_from_the_owner() {
     let me = std::process::id() as libc::pid_t;
     if super::mac::ours(me) {
-        return; // the tests themselves run in OpenBot's sandbox, and sandboxes do not nest
+        return; // the tests themselves run in NeoBot's sandbox, and sandboxes do not nest
     }
     let mut child = std::process::Command::new(super::profile::SANDBOX_EXEC)
         .args(["-p", PROFILE, "/bin/sleep", "5"])

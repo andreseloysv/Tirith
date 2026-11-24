@@ -1,4 +1,4 @@
-//! Whether a connection to the daemon comes from inside OpenBot's sandbox, as the kernel tells it: on Linux by the address only the sandbox's relay calls from, on macOS by the profile of the process that holds the socket.
+//! Whether a connection to the daemon comes from inside NeoBot's sandbox, as the kernel tells it: on Linux by the address only the sandbox's relay calls from, on macOS by the profile of the process that holds the socket.
 use std::net::SocketAddr;
 
 /// True when the caller at `from`, connected to `to`, runs confined.

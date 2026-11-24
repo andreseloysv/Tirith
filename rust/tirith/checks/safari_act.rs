@@ -97,14 +97,14 @@ fn what_is_not_a_click_or_a_typing_is_refused() {
 
 #[test]
 fn each_browser_says_how_to_act_and_where_to_sign_in() {
-    assert!(how("safari").contains("tirith safari open") && how("safari").contains("click"));
+    assert!(how("safari").contains("neobot safari open") && how("safari").contains("click"));
     assert!(
-        how("openbot").contains("tirith browser login") && how("openbot").contains("browser tools")
+        how("neobot").contains("neobot browser login") && how("neobot").contains("browser tools")
     );
     assert_eq!(
         how("anything else"),
-        how("openbot"),
-        "OpenBot's own until the owner chooses"
+        how("neobot"),
+        "NeoBot's own until the owner chooses"
     );
 }
 

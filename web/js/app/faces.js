@@ -36,7 +36,7 @@ export function Faces({ r }) {
   const drag = useDrag(ids, place, card.now);
   const shown = card.at && faces.find((f) => f.id === card.at.id);
   return html`<nav class="nbots" aria-label="Agents" onScroll=${card.now}>
-    <div class="nlogo" title="OpenBot">${BRAND}</div>
+    <div class="nlogo" title="NeoBot">${BRAND}</div>
     ${faces.map((f) => faceButton(f, sel, drag, card))}
     <button type="button" class="nbot nnew" title="New bot" aria-label="New bot" onClick=${() => setUi('botCard', {})}><${NewFace} size=${46} /></button>
     ${shown ? html`<${HoverCard} face=${shown} at=${card.at} line=${whereOf(shown, s)} />` : null}

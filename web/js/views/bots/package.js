@@ -7,7 +7,7 @@ import { PackagePreview } from './package-preview.js';
 const save = (name, data) => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-  a.download = `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.openbot-bot.json`;
+  a.download = `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.neobot-bot.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
@@ -30,7 +30,7 @@ function Exporter({ bot }) {
   const set = (k) => (e) => setAbout({ ...about, [k]: e.target.value });
   const go = () => api('POST', `/api/bots/${encodeURIComponent(bot.id)}/export`, about).then((p) => save(bot.name, p), (e) => setErr(e.message));
   return html`<div class="btlist bpkgbody">
-    <p class="bmut">Routines, skills and the connectors it is granted go in, signed with this OpenBot's key. Memory, chats, logins and webhook addresses never do.</p>
+    <p class="bmut">Routines, skills and the connectors it is granted go in, signed with this NeoBot's key. Memory, chats, logins and webhook addresses never do.</p>
     <textarea placeholder="Description" aria-label="Description" maxlength="2000" value=${about.description} onInput=${set('description')} />
     <textarea placeholder="Instructions for whoever adds it (optional)" aria-label="Instructions" value=${about.instructions} onInput=${set('instructions')} />
     <button type="button" class="bbtn pri" onClick=${go}>Export ${bot.name}</button>${err ? html`<p class="berr">${err}</p>` : null}</div>`;

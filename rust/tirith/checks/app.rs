@@ -8,6 +8,19 @@ fn lane_log_redacts_key_prefixes() {
         .for_each(|leak| assert!(!out.contains(leak), "leaked {leak}: {out}"));
     assert!(out.contains("GOOGLE_API_KEY=[redacted]") && out.contains("plain line"));
 }
+/// Both names of the command resolve in the folder lanes and agents get on their PATH, each to this binary.
+#[test]
+fn both_names_of_the_command_resolve_for_agents() {
+    let dir = std::env::temp_dir().join(format!("tirith-alias-{}", std::process::id()));
+    super::link_names(&dir);
+    super::link_names(&dir); // a second time changes nothing
+    let exe = std::fs::canonicalize(super::exe().unwrap()).unwrap();
+    for name in ["neobot", "tirith"] {
+        let link = dir.join(name);
+        assert_eq!(std::fs::canonicalize(&link).unwrap(), exe, "{name}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
 #[test]
 fn child_path_includes_cargo_bin() {
     let home = std::env::temp_dir().join(format!("tirith-cp-{}", std::process::id()));

@@ -1,51 +1,51 @@
-tirith setup [--server] [--agents a,b]         the guide: this machine, server mode, and connecting the agents
-tirith connect [<agent>] [--token]             connect one agent (install, sign in, rules, one real turn)
-tirith service install [--boot]|status|start|stop|restart|uninstall|logs   (the owner; status and logs anyone) the daemon starts by itself and comes back when it ends (launchd, systemd)
-tirith doctor                                  what works on this machine and what does not, with the fix
-tirith --version                               the version of this binary
-tirith serve                                   run the daemon (page on http://127.0.0.1:<port>/)
-tirith open [link]                             (the owner) open the page signed in as you; link: print a link that does it once, within 10 minutes
-tirith status [--project P]                    lanes and the merge queue (of one project)
-tirith plan show <project>                     the plan with what works on each item
-tirith plan add <project> <step> "<text>"      add an item to a step
-tirith plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
-tirith plan step delete <project> <number>     remove that step with all its items (refused while a lane of it is not merged)
-tirith lane start <project> <step> "<item>" [--agent <alias>]
-tirith lane stop <lane>                        stop it: its work is kept and the autopilot skips its item
-tirith lane delete <lane>                      throw it away: agent, branch, unsaved work and its open plan item
-tirith card close <card> "<why>"               (the manager) close an open card that is no longer needed
-tirith lane log <lane>
-tirith ask "<question>"                       (inside a lane) ask the manager, then end your turn
-tirith answer <lane|card> "<answer>"           (the manager) answer a waiting lane, or close a card the owner answered in the chat
-tirith ask-owner [--project P] [--lane L] --kind credentials|payment|account|device|decision|approval "<question>"   (the manager; with --lane the card carries that lane's question and the answer goes to the lane)
-tirith autopilot on|off <project>              let OpenBot start the plan's items by itself, or not
-tirith secret set <bot> <NAME>                  (the owner) keep a bot's secret: the value comes on stdin (typed unseen, or piped), never as an argument
-tirith secret list <bot>                       (the owner) the names of a bot's secrets, never their values
-tirith secret remove <bot> <NAME>              (the owner) delete one; deleting the bot deletes all of its own
-tirith connector login <id> --bot <bot>        (the owner) sign a bot in to a remote connector: the sign-in opens in your browser, its tokens stay in that bot's secret store
-tirith mcp --bot <id>                          (a bot's run, started by OpenBot) the MCP server of the connectors granted to that bot: it lists and calls only what their verdict allows
-tirith project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the page's + does the same)
-tirith say [--project P] "<text>"              write to the project's manager (without one: the manager of no project)
-tirith chat clear [--project P]                clear a conversation (this session's, or P's): its bot starts fresh
-tirith chat keep [<time>] [--project P]        how long a chat lives, in your words (30m, 1h, 24 h, 2 días, una semana; "siempre" = no limit); without a time it says the current one
-tirith turn checks <passed>/<total> "<names>"  (a bot, in its session) keep what its own validation checked on its turn now
-tirith lab start <bot> <branch> --routine <id> --mode live|replay|shadow --hypothesis "<text>"
+neobot setup [--server] [--agents a,b]         the guide: this machine, server mode, and connecting the agents
+neobot connect [<agent>] [--token]             connect one agent (install, sign in, rules, one real turn)
+neobot service install [--boot]|status|start|stop|restart|uninstall|logs   (the owner; status and logs anyone) the daemon starts by itself and comes back when it ends (launchd, systemd)
+neobot doctor                                  what works on this machine and what does not, with the fix
+neobot --version                               the version of this binary
+neobot serve                                   run the daemon (page on http://127.0.0.1:<port>/)
+neobot open [link]                             (the owner) open the page signed in as you; link: print a link that does it once, within 10 minutes
+neobot status [--project P]                    lanes and the merge queue (of one project)
+neobot plan show <project>                     the plan with what works on each item
+neobot plan add <project> <step> "<text>"      add an item to a step
+neobot plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
+neobot plan step delete <project> <number>     remove that step with all its items (refused while a lane of it is not merged)
+neobot lane start <project> <step> "<item>" [--agent <alias>]
+neobot lane stop <lane>                        stop it: its work is kept and the autopilot skips its item
+neobot lane delete <lane>                      throw it away: agent, branch, unsaved work and its open plan item
+neobot card close <card> "<why>"               (the manager) close an open card that is no longer needed
+neobot lane log <lane>
+neobot ask "<question>"                       (inside a lane) ask the manager, then end your turn
+neobot answer <lane|card> "<answer>"           (the manager) answer a waiting lane, or close a card the owner answered in the chat
+neobot ask-owner [--project P] [--lane L] --kind credentials|payment|account|device|decision|approval "<question>"   (the manager; with --lane the card carries that lane's question and the answer goes to the lane)
+neobot autopilot on|off <project>              let NeoBot start the plan's items by itself, or not
+neobot secret set <bot> <NAME>                  (the owner) keep a bot's secret: the value comes on stdin (typed unseen, or piped), never as an argument
+neobot secret list <bot>                       (the owner) the names of a bot's secrets, never their values
+neobot secret remove <bot> <NAME>              (the owner) delete one; deleting the bot deletes all of its own
+neobot connector login <id> --bot <bot>        (the owner) sign a bot in to a remote connector: the sign-in opens in your browser, its tokens stay in that bot's secret store
+neobot mcp --bot <id>                          (a bot's run, started by NeoBot) the MCP server of the connectors granted to that bot: it lists and calls only what their verdict allows
+neobot project add <folder> [--name N] [--color #rrggbb]   add a folder as a project (the page's + does the same)
+neobot say [--project P] "<text>"              write to the project's manager (without one: the manager of no project)
+neobot chat clear [--project P]                clear a conversation (this session's, or P's): its bot starts fresh
+neobot chat keep [<time>] [--project P]        how long a chat lives, in your words (30m, 1h, 24 h, 2 días, una semana; "siempre" = no limit); without a time it says the current one
+neobot turn checks <passed>/<total> "<names>"  (a bot, in its session) keep what its own validation checked on its turn now
+neobot lab start <bot> <branch> --routine <id> --mode live|replay|shadow --hypothesis "<text>"
                                               (the Coach) start an experiment: the branch (one commit on the bot's main) against its main, decided by the [lab] rule it started with; live on the routine's real runs, replay on its last captured runs done again offline, shadow beside each real run with every outward action refused
-tirith lab list [<bot>]                       the experiments (a bot's, or every bot's): change, hypothesis, mode, comparisons, numbers and decision
-tirith teach rehearse "<skill>"                (a bot, in its session) start a rehearsal of a draft in the owner's Edge (10 minutes at most)
-tirith teach do open "<url>"                   (a bot, rehearsing) open the page in the rehearsal's tab: the result and a screenshot's path
-tirith teach do click "<selector or text>"     (a bot, rehearsing) click it there: the result and a screenshot's path
-tirith teach do type "<field>" "<value>"       (a bot, rehearsing) type the value in the field (its label, placeholder, name or selector)
-tirith teach stop                              (a bot) end the rehearsal
-tirith net allow                               (Linux, with sudo, once) let this binary make the network sandbox where AppArmor forbids it
-tirith hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E); sends the agent's TIRITH_TOKEN, and without one only refuses
-tirith hooks install                           point the agents' hooks at the daemon over HTTP, each sending TIRITH_TOKEN
-tirith safari open <url>                       (the managers and bots) open the page in the owner's Safari, through the daemon
-tirith safari read [<url>]                     (the managers and bots) URL, title and text of Safari's current tab (or of the tab whose URL starts with <url>)
-tirith safari click <target> [<url>]          (the managers and bots) click in Safari's shown page (or that tab) the element with those words, through Accessibility
-tirith safari type <target> <text> [<url>]    (the managers and bots) type <text> into the field with that label or placeholder (a list: choose the option with those words)
-tirith browser [use openbot|safari]           (the managers and bots) the browser the owner chose for acting on the web, or set their choice
-tirith browser login <url>                    (the managers and bots) show that page in OpenBot's own browser on the owner's screen, to sign in once
-(modules add: tirith room …, tirith net …, tirith models …, tirith guard …)
+neobot lab list [<bot>]                       the experiments (a bot's, or every bot's): change, hypothesis, mode, comparisons, numbers and decision
+neobot teach rehearse "<skill>"                (a bot, in its session) start a rehearsal of a draft in the owner's Edge (10 minutes at most)
+neobot teach do open "<url>"                   (a bot, rehearsing) open the page in the rehearsal's tab: the result and a screenshot's path
+neobot teach do click "<selector or text>"     (a bot, rehearsing) click it there: the result and a screenshot's path
+neobot teach do type "<field>" "<value>"       (a bot, rehearsing) type the value in the field (its label, placeholder, name or selector)
+neobot teach stop                              (a bot) end the rehearsal
+neobot net allow                               (Linux, with sudo, once) let this binary make the network sandbox where AppArmor forbids it
+neobot hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E); sends the agent's TIRITH_TOKEN, and without one only refuses
+neobot hooks install                           point the agents' hooks at the daemon over HTTP, each sending TIRITH_TOKEN
+neobot safari open <url>                       (the managers and bots) open the page in the owner's Safari, through the daemon
+neobot safari read [<url>]                     (the managers and bots) URL, title and text of Safari's current tab (or of the tab whose URL starts with <url>)
+neobot safari click <target> [<url>]          (the managers and bots) click in Safari's shown page (or that tab) the element with those words, through Accessibility
+neobot safari type <target> <text> [<url>]    (the managers and bots) type <text> into the field with that label or placeholder (a list: choose the option with those words)
+neobot browser [use neobot|safari]           (the managers and bots) the browser the owner chose for acting on the web, or set their choice
+neobot browser login <url>                    (the managers and bots) show that page in NeoBot's own browser on the owner's screen, to sign in once
+(modules add: neobot room …, neobot net …, neobot models …, neobot guard …)
 Who calls is known by a token alone: yours is <home>/owner.token (0600, unreadable inside the sandbox), read by
 these commands in your terminal; an agent's is TIRITH_TOKEN, which says its lane, or its role, project and bot.

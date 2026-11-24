@@ -1,4 +1,4 @@
-//! `tirith plan show` (each step with its open items and their lanes) and `tirith plan step`.
+//! `neobot plan show` (each step with its open items and their lanes) and `neobot plan step`.
 use crate::client;
 use serde_json::{json, Value};
 

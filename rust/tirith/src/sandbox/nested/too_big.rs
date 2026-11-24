@@ -7,7 +7,7 @@ const HEAD: usize = 256;
 /// Why it failed, for the model and for the caller.
 pub(super) fn why() -> String {
     let most = super::frames::MOST >> 20;
-    format!("OpenBot stopped this call: it carries more than {most} MiB at once, the most a limited Codex's commands and patches pass. Work on it in smaller parts.")
+    format!("NeoBot stopped this call: it carries more than {most} MiB at once, the most a limited Codex's commands and patches pass. Work on it in smaller parts.")
 }
 
 /// The error that answers the call of which `start` is the beginning; none when it has no id (then nothing can be told so).

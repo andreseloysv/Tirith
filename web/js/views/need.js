@@ -1,4 +1,4 @@
-// One open question for the owner with its answer box: a card the manager sent with tirith ask-owner, or a lane
+// One open question for the owner with its answer box: a card the manager sent with neobot ask-owner, or a lane
 // waiting on its question. The same card shows in "Needs you", in the chat where it was asked and on the lane whose
 // question it carries (a card made with --lane), so the owner can answer it wherever they are looking.
 import { html, useState } from '../../vendor/preact-htm.js';

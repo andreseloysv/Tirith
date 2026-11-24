@@ -167,7 +167,7 @@ async fn a_restart_hands_a_caught_up_run_again() {
         due: &due,
         task: "water, late",
     };
-    super::expect(&app, &new); // caught up today, and not started when OpenBot stopped
+    super::expect(&app, &new); // caught up today, and not started when NeoBot stopped
     super::start(app.clone());
     let why = app.query("SELECT COALESCE(why, '') FROM expected_runs", [], |r| {
         r.get::<_, String>(0)

@@ -17,7 +17,7 @@ pub(super) fn child(
     parent: i32,
 ) -> ! {
     if let Err(why) = prepare(&mut link, (ports, hidden), parent) {
-        eprintln!("tirith sandbox: {why}");
+        eprintln!("neobot sandbox: {why}");
         std::process::exit(REFUSED);
     }
     drop(link);
@@ -25,7 +25,7 @@ pub(super) fn child(
         std::process::exit(0);
     };
     let why = std::process::Command::new(name).args(args).exec();
-    eprintln!("tirith sandbox: cannot start {name}: {why}");
+    eprintln!("neobot sandbox: cannot start {name}: {why}");
     std::process::exit(127);
 }
 

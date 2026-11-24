@@ -58,7 +58,7 @@ fn answer(door: &Door, session: &str, msg: &Value) -> Option<Value> {
             return Some(error(
                 id,
                 -32601,
-                &format!("tirith mcp has no method {method}"),
+                &format!("neobot mcp has no method {method}"),
             ))
         }
     };

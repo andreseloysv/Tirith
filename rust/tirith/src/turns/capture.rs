@@ -1,4 +1,4 @@
-//! What a turn read, as its agent saw it: the message that started it (without the memory OpenBot lays before it) and, in order, each tool call with its input and its result — Anthropic's `tool_result` blocks in its `user` lines, Muse's `tool.result`, Codex's and Copilot's calls — up to 256 KB a turn.
+//! What a turn read, as its agent saw it: the message that started it (without the memory NeoBot lays before it) and, in order, each tool call with its input and its result — Anthropic's `tool_result` blocks in its `user` lines, Muse's `tool.result`, Codex's and Copilot's calls — up to 256 KB a turn.
 use super::capture_fit::{fitted, text_of};
 use super::capture_told::taken;
 use serde_json::{json, Value};

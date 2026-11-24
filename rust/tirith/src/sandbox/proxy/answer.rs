@@ -25,7 +25,7 @@ pub async fn refuse(
     rule: &str,
 ) -> Result<(), String> {
     record(app, who, host, port, Some(rule));
-    let body = format!("Blocked by OpenBot: {host} (rule {rule}). The owner blocked it; it is allowed again with: tirith net unblock {rule}\n");
+    let body = format!("Blocked by NeoBot: {host} (rule {rule}). The owner blocked it; it is allowed again with: neobot net unblock {rule}\n");
     answer(
         c,
         "403 Forbidden",

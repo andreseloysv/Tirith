@@ -17,7 +17,7 @@ async fn ensure_slot(app: &Shared, project: &Project, lane: &mut Lane) -> Result
     }
     Ok(())
 }
-/// The brief, with OpenBot's pending message after it.
+/// The brief, with NeoBot's pending message after it.
 fn write_brief(app: &Shared, lane: &Lane, msg: &str, path: &Path) -> Result<(), String> {
     std::fs::write(
         path,
@@ -25,7 +25,7 @@ fn write_brief(app: &Shared, lane: &Lane, msg: &str, path: &Path) -> Result<(), 
             + &if msg.is_empty() {
                 String::new()
             } else {
-                format!("\n## Message from OpenBot\n{msg}\n")
+                format!("\n## Message from NeoBot\n{msg}\n")
             },
     )
     .map_err(|e| e.to_string())

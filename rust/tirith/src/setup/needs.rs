@@ -29,7 +29,7 @@ pub(super) fn git_identity() -> bool {
         .all(|k| run::output("git", &["config", "--get", k]).is_some_and(|v| !v.is_empty()))
 }
 
-/// Programs and the identity OpenBot commits with; what is still missing.
+/// Programs and the identity NeoBot commits with; what is still missing.
 pub(super) fn machine(cx: &Context) -> Vec<String> {
     let gone = missing();
     if !gone.is_empty() {
@@ -41,7 +41,7 @@ pub(super) fn machine(cx: &Context) -> Vec<String> {
         return vec![];
     }
     println!("Git has no name and email on this machine, and the agents' commits need both.");
-    let name = cx.ask.text("  Name for the commits", "OpenBot");
+    let name = cx.ask.text("  Name for the commits", "NeoBot");
     let email = cx.ask.text("  Email for the commits", "tirith@localhost");
     let set = |k: &str, v: &str| run::output("git", &["config", "--global", k, v]).is_some();
     if set("user.name", &name) && set("user.email", &email) {

@@ -1,4 +1,4 @@
-//! `tirith serve`: the daemon.
+//! `neobot serve`: the daemon.
 use crate::app::{App, Shared};
 use crate::{
     bots, chat, config, expected, guard, lab, lanes, manager, merge, metrics, models, plan, power,
@@ -19,13 +19,13 @@ pub(super) fn serve() -> Result<(), String> {
         let port = app.cfg().port;
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
-            .map_err(|e| format!("port {port} is taken (is tirith already running?): {e}"))?;
+            .map_err(|e| format!("port {port} is taken (is neobot already running?): {e}"))?;
         sandbox::prepare(&app);
         super::hooks_token::at_start(&app);
         metrics::born(&app);
         start_workers(&app);
         println!(
-            "tirith: http://127.0.0.1:{port}/ (home {})",
+            "neobot: http://127.0.0.1:{port}/ (home {})",
             app.home.display()
         );
         let door = server::door(listener, app.clone());

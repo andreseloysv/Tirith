@@ -18,7 +18,7 @@ pub async fn bearer(
     if !renew && alive(h.grant.expires_at) {
         return Ok(Some(h.access));
     }
-    let again = format!("run tirith connector login {id} --bot {bot} again");
+    let again = format!("run neobot connector login {id} --bot {bot} again");
     let Some(refresh) = h.refresh else {
         return Err(format!("its sign-in ended: {again}"));
     };

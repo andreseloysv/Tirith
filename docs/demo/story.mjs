@@ -24,7 +24,7 @@ export const DECISION = 'Dark mode is merged and its tests pass. Ship it in v1.2
 
 const TODO1 = [{ content: 'Add the plan items', status: 'in_progress' }, { content: 'Write a brief and start an agent per item', status: 'pending' }, { content: 'Merge what passes, report back', status: 'pending' }];
 const TODO2 = [{ content: 'Add the plan items', status: 'completed' }, { content: 'Write a brief and start an agent per item', status: 'in_progress' }, { content: 'Merge what passes, report back', status: 'pending' }];
-const BRIEF = [['+', '# Step 4: dark mode'], ['+', 'Goal: the app follows the system theme and has a toggle in Settings.'], ['+', 'Done when: `tirith run --project chromasol --stage test` passes'], ['+', 'and the theme tokens have no hard-coded colours left.'], ['+', 'Not allowed: editing the plan, starting helpers, skipping the commit checks.']];
+const BRIEF = [['+', '# Step 4: dark mode'], ['+', 'Goal: the app follows the system theme and has a toggle in Settings.'], ['+', 'Done when: `neobot run --project chromasol --stage test` passes'], ['+', 'and the theme tokens have no hard-coded colours left.'], ['+', 'Not allowed: editing the plan, starting helpers, skipping the commit checks.']];
 
 // the manager's turn, one step at a time (the recorder reveals them while it films)
 export const MANAGER = [
@@ -32,35 +32,35 @@ export const MANAGER = [
   { kind: 'tool', name: 'Read', summary: 'Read docs/PLAN.md' },
   { kind: 'result', name: 'Read', summary: '# ChromaSol · steps 1-3 done, nothing open  … +31 lines' },
   { kind: 'todo', name: 'TodoWrite', summary: 'Task list', todos: TODO1 },
-  { kind: 'tool', name: 'Bash', summary: 'Bash: tirith plan add --project chromasol --step 4 "Theme tokens for light and dark"' },
+  { kind: 'tool', name: 'Bash', summary: 'Bash: neobot plan add --project chromasol --step 4 "Theme tokens for light and dark"' },
   { kind: 'result', name: 'Bash', summary: 'step 4 "Dark mode" · item added' },
-  { kind: 'tool', name: 'Bash', summary: 'Bash: tirith plan add --project chromasol --step 5 "Reuse the pose task between photos"' },
+  { kind: 'tool', name: 'Bash', summary: 'Bash: neobot plan add --project chromasol --step 5 "Reuse the pose task between photos"' },
   { kind: 'result', name: 'Bash', summary: 'step 5 "Faster scan" · item added' },
   { kind: 'todo', name: 'TodoWrite', summary: 'Task list', todos: TODO2 },
   { kind: 'tool', name: 'Write', summary: 'Write briefs/step-4-dark-mode.md', diff: { path: 'briefs/step-4-dark-mode.md', rows: BRIEF, more: 0 } },
-  { kind: 'tool', name: 'Bash', summary: 'Bash: tirith lane run --project chromasol --step 4 --item "Theme tokens for light and dark"' },
+  { kind: 'tool', name: 'Bash', summary: 'Bash: neobot lane run --project chromasol --step 4 --item "Theme tokens for light and dark"' },
   { kind: 'result', name: 'Bash', summary: 'lane started · Wren · step 4' },
-  { kind: 'tool', name: 'Bash', summary: 'Bash: tirith lane run --project chromasol --step 5 --item "Reuse the pose task between photos"' },
+  { kind: 'tool', name: 'Bash', summary: 'Bash: neobot lane run --project chromasol --step 5 --item "Reuse the pose task between photos"' },
   { kind: 'result', name: 'Bash', summary: 'lane started · Ivren · step 5' },
   { kind: 'text', summary: 'Both agents are working. I merge what passes and bring you only what is yours.' },
 ];
-const RAW = 'tirith: raw-stage: running the tests raw is not allowed. Do this instead: tirith run --project chromasol --stage test';
+const RAW = 'tirith: raw-stage: running the tests raw is not allowed. Do this instead: neobot run --project chromasol --stage test';
 export const WREN = [
   { kind: 'tool', name: 'Read', summary: 'Read app/src/main/java/ui/Theme.kt' },
   { kind: 'tool', name: 'Edit', summary: 'Edit app/src/main/java/ui/Theme.kt', diff: { path: 'app/src/main/java/ui/Theme.kt', rows: [['-', 'val Background = Color(0xFFFFFFFF)'], ['+', 'val BackgroundLight = Color(0xFFFFFFFF)'], ['+', 'val BackgroundDark = Color(0xFF121212)'], ['+', 'fun background(dark: Boolean) = if (dark) BackgroundDark else BackgroundLight']], more: 0 } },
   { kind: 'tool', name: 'Bash', summary: 'Bash: ./gradlew testDebugUnitTest' },
   { kind: 'result', name: 'Bash', summary: RAW, error: true },
   { kind: 'text', summary: 'Blocked: tests go through Tirith. Using the command it gave me.' },
-  { kind: 'tool', name: 'Bash', summary: 'Bash: tirith run --project chromasol --stage test' },
+  { kind: 'tool', name: 'Bash', summary: 'Bash: neobot run --project chromasol --stage test' },
   { kind: 'result', name: 'Bash', summary: 'chromasol#8 · test passed · 86 tests · 46s' },
-  { kind: 'tool', name: 'Bash', summary: 'Bash: tirith plan report --status done --files 4 --tests 4' },
+  { kind: 'tool', name: 'Bash', summary: 'Bash: neobot plan report --status done --files 4 --tests 4' },
   { kind: 'result', name: 'Bash', summary: 'reported: done' },
 ];
 export const IVREN = [
   { kind: 'tool', name: 'Read', summary: 'Read app/src/main/java/scan/PoseRunner.kt' },
   { kind: 'tool', name: 'Grep', summary: 'Grep "PoseLandmarker" in app/src' },
   { kind: 'tool', name: 'Edit', summary: 'Edit app/src/main/java/scan/PoseRunner.kt', diff: { path: 'app/src/main/java/scan/PoseRunner.kt', rows: [['-', 'val task = PoseLandmarker.create(ctx, opts)   // per photo'], ['+', 'private val task by lazy { PoseLandmarker.create(ctx, opts) }'], ['+', 'fun run(bitmap: Bitmap) = task.detect(bitmap)']], more: 0 } },
-  { kind: 'tool', name: 'Bash', summary: 'Bash: tirith run --project chromasol --stage test' },
+  { kind: 'tool', name: 'Bash', summary: 'Bash: neobot run --project chromasol --stage test' },
 ];
 
 export class Story {
@@ -117,7 +117,7 @@ export class Story {
       status: done ? 'done' : 'working', started_at: iso(started), ended_at: done ? iso(now - 4000) : null, elapsed_s: Math.round(((done ? now - 4000 : now) - started) / 1000),
       summary: extra.summary, log_tail: list.slice(0, n).filter((s) => s.kind !== 'text').map((s) => s.summary).slice(-3),
       files_changed: extra.files, insertions: extra.ins, deletions: extra.del, files: [], tools: [{ name: 'Bash', count: 4 }, { name: 'Edit', count: 2 }, { name: 'Read', count: 2 }],
-      tests: n >= 7 && id === 'wren' ? [{ at: iso(now - 9000), command: 'tirith run --project chromasol --stage test', result: 'passed', failed: 0 }] : [], events: [], log_entries: [],
+      tests: n >= 7 && id === 'wren' ? [{ at: iso(now - 9000), command: 'neobot run --project chromasol --stage test', result: 'passed', failed: 0 }] : [], events: [], log_entries: [],
       session: 'chromasol-today', request_id: 'in-demo-1', turn_requests: [], active: !done, last_activity_at: iso(now - 1500), report: extra.report || null, review: extra.review,
       live: { steps: n, done, error: false, cost_usd: null, duration_s: done ? 83 : null, elapsed_s: Math.round((now - started) / 1000), detail: { path: laneFile, hash: id + n + done } },
     });
@@ -162,7 +162,7 @@ export class Story {
         { name: 'build', status: 'passed', started_at: t(60), ended_at: t(46), duration_s: 14, log_tail: ['BUILD SUCCESSFUL in 14s'] },
         { name: 'test', status: 'passed', started_at: t(46), ended_at: t(14), duration_s: 32, log_tail: ['tests 86 failures 0'] }] });
     }
-    s.violations = o.violation ? [{ ts: iso(now - 6000), rule: 'raw-stage', agent: 'anthropic', lane: 'wren', project: 'chromasol', message: RAW, blocked: 'running the tests raw is not allowed', instead: 'tirith run --project chromasol --stage test' }] : [];
+    s.violations = o.violation ? [{ ts: iso(now - 6000), rule: 'raw-stage', agent: 'anthropic', lane: 'wren', project: 'chromasol', message: RAW, blocked: 'running the tests raw is not allowed', instead: 'neobot run --project chromasol --stage test' }] : [];
     s.rooms = []; s.flows = [];
     // the chat: the owner's request, the manager's live turn, then its answer
     const reqAt = this.askAt || now;

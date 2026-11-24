@@ -26,7 +26,7 @@ fn raw(app: &Shared, headers: &HeaderMap) -> Option<String> {
 fn gone() -> (StatusCode, String) {
     (
         StatusCode::NOT_FOUND,
-        "no such gateway of this run: start tirith mcp again".into(),
+        "no such gateway of this run: start neobot mcp again".into(),
     )
 }
 

@@ -1,9 +1,9 @@
-//! `tirith connector login <id> --bot <bot>`: the owner's, in their own terminal. The daemon gives the sign-in's address, the owner's browser opens it, and this waits until the daemon's callback took the code (ten minutes at most). No token ever comes back here.
+//! `neobot connector login <id> --bot <bot>`: the owner's, in their own terminal. The daemon gives the sign-in's address, the owner's browser opens it, and this waits until the daemon's callback took the code (ten minutes at most). No token ever comes back here.
 use crate::client::{call_json, Flag};
 use serde_json::json;
 use std::time::{Duration, Instant};
 
-const USE: &str = "usage: tirith connector login <id> --bot <bot> (the owner signs a bot in to a remote connector)";
+const USE: &str = "usage: neobot connector login <id> --bot <bot> (the owner signs a bot in to a remote connector)";
 
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     let ["connector", rest @ ..] = pos else {
@@ -13,7 +13,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     Some(match (rest, bot) {
         (["login", id], Some(bot)) if !crate::setup::from_agent() => login(id, &bot),
         (["login", _], Some(_)) => Err(
-            "tirith connector login is the owner's: run it in your own terminal, not from an agent"
+            "neobot connector login is the owner's: run it in your own terminal, not from an agent"
                 .into(),
         ),
         _ => Err(USE.into()),

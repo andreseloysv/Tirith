@@ -65,7 +65,7 @@ fn cannot_move(app: &Shared, t: &Train, done: &[Lane], blocked: &str, e: &str) {
             .map(|l| l.id.as_str())
             .collect::<Vec<_>>()
             .join(", ");
-        let why = format!("main of {} cannot move, so lanes that passed their checks wait ({ids}). Git says: {e}\nOpenBot retries by itself. If files in {} are in the way, commit, move or discard them (ask the owner first when they may be the owner's work).", project.id, project.repo().display());
+        let why = format!("main of {} cannot move, so lanes that passed their checks wait ({ids}). Git says: {e}\nNeoBot retries by itself. If files in {} are in the way, commit, move or discard them (ask the owner first when they may be the owner's work).", project.id, project.repo().display());
         manager::emit_event(app, &project.id, "merge.blocked", &why, None);
     }
     requeue(app, done, false, &format!("main could not move: {e}"))

@@ -4,7 +4,7 @@ use crate::app::Shared;
 use axum::http::StatusCode;
 use axum::{middleware, routing::post, Router};
 
-const WHY: &str = "a command under Codex's sandbox limit has nothing of OpenBot but the rules' hook: say in your answer what is needed";
+const WHY: &str = "a command under Codex's sandbox limit has nothing of NeoBot but the rules' hook: say in your answer what is needed";
 
 pub(super) fn routes(app: Shared) -> Router {
     Router::new()

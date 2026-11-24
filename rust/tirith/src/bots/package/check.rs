@@ -58,10 +58,10 @@ pub(in crate::bots) fn checked(p: &Value) -> Result<Checked, String> {
     let known = p
         .as_object()
         .is_some_and(|o| o.keys().all(|k| FIELDS.contains(&k.as_str())));
-    (known && p["format"] == FORMAT && p["v"] == VERSION)
+    (known && (p["format"] == FORMAT || p["format"] == "openbot-bot") && p["v"] == VERSION)
         .then_some(())
         .ok_or(
-            "not an openbot-bot package, version 1, or it carries fields a package does not have",
+            "not a neobot-bot package, version 1, or it carries fields a package does not have",
         )?;
     let face = &p["bot"]["face"];
     let (name, color) = super::super::card::checked(
@@ -70,7 +70,7 @@ pub(in crate::bots) fn checked(p: &Value) -> Result<Checked, String> {
     SHAPES
         .contains(&s(face, "shape").as_str())
         .then_some(())
-        .ok_or("the face shape is not one OpenBot draws")?;
+        .ok_or("the face shape is not one NeoBot draws")?;
     (s(&p["bot"], "description").len() <= 2_000 && s(&p["bot"], "instructions").len() <= MAX_TEXT)
         .then_some(())
         .ok_or("the description or the instructions are too long")?;

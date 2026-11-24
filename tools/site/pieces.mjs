@@ -26,7 +26,7 @@ export function bar(root) {
   return `<body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top"><div class="wrap">
-  <a class="brand" href="${root}"><img src="${root}img/openbot-icon-180.png" width="30" height="30" alt="">OpenBot</a>
+  <a class="brand" href="${root}"><img src="${root}img/openbot-icon-180.png" width="30" height="30" alt="">NeoBot</a>
   <nav aria-label="Sections">${a('#features', 'Features')}${a('#jobs', 'Jobs')}${a('#pricing', 'Pricing')}${a('#compare', 'Compare')}<a href="${root}marketplace/" aria-current="page">Marketplace</a>${a('#install', 'Install')}${a('#faq', 'FAQ')}</nav>
   <div class="end"><a class="btn small line" href="https://github.com/andreseloysv/Tirith">GitHub</a><a class="btn small dark" href="${root}#install">Install</a></div>
 </div></header>
@@ -35,8 +35,8 @@ export function bar(root) {
 
 export const foot = (root) => `</main>
 <footer><div class="wrap">
-  <div><a class="brand" href="${root}"><img src="${root}img/openbot-icon-180.png" width="28" height="28" alt="">OpenBot</a>
-  <p class="fine">© 2026 OpenBot contributors · MIT license<br>The command, folders and settings are still called <code>tirith</code>.</p></div>
+  <div><a class="brand" href="${root}"><img src="${root}img/openbot-icon-180.png" width="28" height="28" alt="">NeoBot</a>
+  <p class="fine">© 2026 NeoBot contributors · MIT license<br>The command is <code>neobot</code> (<code>tirith</code> still works); the folders and settings are still called <code>tirith</code>.</p></div>
   <div><h4>Product</h4><ul><li><a href="${root}#features">Features</a></li><li><a href="${root}marketplace/">Marketplace</a></li><li><a href="${root}#install">Install</a></li></ul></div>
   <div><h4>Docs</h4><ul><li><a href="https://github.com/andreseloysv/Tirith/blob/main/docs/BOTS.md">Bots</a></li></ul></div>
   <div><h4>Project</h4><ul><li><a href="https://github.com/andreseloysv/Tirith">GitHub</a></li></ul></div>

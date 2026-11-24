@@ -1,12 +1,12 @@
 [package]
 name = "tirith"
 version = "0.2.1"
-description = "OpenBot: one resident process that runs coding agents from a plan, enforces rules and merges verified work"
+description = "NeoBot: one resident process that runs coding agents from a plan, enforces rules and merges verified work"
 edition = "2021"
 license = "MIT"
 
 [[bin]]
-name = "tirith"
+name = "neobot"
 path = "src/main.rs"
 
 [dependencies]

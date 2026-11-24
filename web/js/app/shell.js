@@ -39,7 +39,7 @@ export function App() {
     <${Nav} r=${r} onAdd=${() => setAdding(true)} />
     <div id="content">
       <${Top} r=${r} />
-      ${!s.connected && s.loaded ? html`<div id="stale" class="stale" role="status">OpenBot is not updating — reconnecting…</div>` : null}
+      ${!s.connected && s.loaded ? html`<div id="stale" class="stale" role="status">NeoBot is not updating — reconnecting…</div>` : null}
       <div id="view" class=${`view v-${r.view}`}>${s.loaded ? html`<${View} project=${project} sub=${r.project} />` : null}</div>
     </div>
   </div>${adding ? html`<${AddProject} onClose=${() => setAdding(false)} />` : null}

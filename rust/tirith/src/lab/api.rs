@@ -1,4 +1,4 @@
-//! The lab's commands and routes: `tirith lab start` and `tirith lab list` (the Coach's), POST /api/lab/start and GET /api/lab?bot=<id or key> (the bot's «Mejoras» tab).
+//! The lab's commands and routes: `neobot lab start` and `neobot lab list` (the Coach's), POST /api/lab/start and GET /api/lab?bot=<id or key> (the bot's «Mejoras» tab).
 use crate::app::Shared;
 use crate::client::{call, call_json, Flag};
 use crate::server::s;
@@ -10,9 +10,9 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 const START: &str =
-    "use: tirith lab start <bot> <branch> --routine <id> --mode live|replay|shadow --hypothesis \"<text>\"";
+    "use: neobot lab start <bot> <branch> --routine <id> --mode live|replay|shadow --hypothesis \"<text>\"";
 
-/// `tirith lab start <bot> <branch> --routine <id> --mode live|replay|shadow --hypothesis "<text>"` and `tirith lab list [<bot>]`.
+/// `neobot lab start <bot> <branch> --routine <id> --mode live|replay|shadow --hypothesis "<text>"` and `neobot lab list [<bot>]`.
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     let body = |bot: &str, branch: &str| json!({"bot": bot, "branch": branch, "routine": flag("--routine"), "mode": flag("--mode"), "hypothesis": flag("--hypothesis")});
     match pos {
@@ -25,7 +25,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
         ["lab", "list", bot] => {
             Some(call("GET", &format!("/api/lab?bot={bot}"), None).map(|b| println!("{b}")))
         }
-        ["lab", ..] => Some(Err(format!("{START}\n   or: tirith lab list [<bot>]"))),
+        ["lab", ..] => Some(Err(format!("{START}\n   or: neobot lab list [<bot>]"))),
         _ => None,
     }
 }

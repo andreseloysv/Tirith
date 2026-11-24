@@ -1,4 +1,4 @@
-//! The owner's commands that OpenBot answers itself, with no turn: `/status`, `/models`, `/model`.
+//! The owner's commands that NeoBot answers itself, with no turn: `/status`, `/models`, `/model`.
 use super::deliver::report;
 use crate::app::Shared;
 use crate::{models, status};

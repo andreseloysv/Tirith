@@ -31,7 +31,7 @@ pub(super) fn choose(cx: &Context, known: &Known) -> Result<(), String> {
         return Ok(());
     }
     if changed(kept.as_deref(), &host) && auth::forget(&cx.home, &known.alias, &known.token_env)? {
-        println!("  the token kept was the other host's: it is forgotten (give this one's: tirith connect {} --token)", known.alias);
+        println!("  the token kept was the other host's: it is forgotten (give this one's: neobot connect {} --token)", known.alias);
     }
     auth::keep(&cx.home, &known.alias, &known.host_env, &host)?;
     if host != PUBLIC {

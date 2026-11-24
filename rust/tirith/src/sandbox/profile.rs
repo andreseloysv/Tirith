@@ -27,7 +27,7 @@ pub fn enabled(app: &Shared) -> Result<(), String> {
     Ok(())
 }
 
-/// Whether a process OpenBot starts runs inside the network sandbox: `wrap` puts it there, or the daemon itself already runs in one (they do not nest, so its children stay in the outer one and keep its proxy env). `[network] sandbox = false` means neither.
+/// Whether a process NeoBot starts runs inside the network sandbox: `wrap` puts it there, or the daemon itself already runs in one (they do not nest, so its children stay in the outer one and keep its proxy env). `[network] sandbox = false` means neither.
 pub fn sandboxed(app: &Shared) -> bool {
     config::get::<bool>(&app.cfg().raw, &["network", "sandbox"]).unwrap_or(true)
         && (std::env::var("TIRITH_SANDBOXED").as_deref() == Ok("1")

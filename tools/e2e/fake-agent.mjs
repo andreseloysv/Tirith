@@ -20,7 +20,7 @@ if (args.includes('-p')) {
     let msg;
     try { msg = JSON.parse(line); } catch { return; }
     if (msg.type !== 'user') return;
-    out({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'tirith --version' } }] } });
+    out({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'neobot --version' } }] } });
     out({ type: 'assistant', message: { content: [{ type: 'text', text: 'TIRITH-OK' }] } });
     out({ type: 'result', subtype: 'success', result: 'TIRITH-OK', session_id: 'fake-session' });
   });

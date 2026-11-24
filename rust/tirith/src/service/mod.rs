@@ -39,7 +39,7 @@ pub fn install(u: &Unit, ask: &Ask, boot: bool) -> Result<(Kind, Vec<String>), S
         Kind::Plain => {
             plain::stop(u)?;
             plain::start(u)?;
-            vec!["this system has no systemd user session, so nothing starts OpenBot again after a reboot: run `tirith service start` then".to_string()]
+            vec!["this system has no systemd user session, so nothing starts NeoBot again after a reboot: run `neobot service start` then".to_string()]
         }
     };
     daemon::up(&u.home)?;
@@ -51,7 +51,7 @@ pub fn start(u: &Unit, ask: &Ask) -> Result<Kind, String> {
     let kind = Kind::installed(u);
     if !daemon::answering().is_some_and(|v| daemon::is_of(&v, &u.home)) {
         if daemon::answering().is_some() {
-            return Err("another OpenBot answers on this port: choose another with tirith setup --port <port>".into());
+            return Err("another NeoBot answers on this port: choose another with neobot setup --port <port>".into());
         }
         match kind {
             Kind::Systemd => systemd::act(u, "start")?,

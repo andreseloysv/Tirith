@@ -1,4 +1,4 @@
-//! Adding a project (the page's "+", `tirith project add`): git repository, commit guard, a plan with a first step, then a `[[projects]]` block appended to config.toml.
+//! Adding a project (the page's "+", `neobot project add`): git repository, commit guard, a plan with a first step, then a `[[projects]]` block appended to config.toml.
 
 mod add;
 mod add_plan;

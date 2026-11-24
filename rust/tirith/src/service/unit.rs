@@ -1,4 +1,4 @@
-//! What the service of one OpenBot home is: its names and files.
+//! What the service of one NeoBot home is: its names and files.
 use std::path::PathBuf;
 
 pub struct Unit {
@@ -14,7 +14,7 @@ pub struct Unit {
 
 impl Unit {
     pub fn here() -> Result<Unit, String> {
-        let exe = crate::app::exe().ok_or("cannot tell where the tirith binary is")?;
+        let exe = crate::app::exe().ok_or("cannot tell where the neobot binary is")?;
         let home = crate::config::tirith_home();
         let home = std::path::absolute(&home).unwrap_or(home);
         let user_home = crate::config::home_dir();

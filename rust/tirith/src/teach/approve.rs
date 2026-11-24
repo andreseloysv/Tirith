@@ -49,7 +49,7 @@ pub(super) fn approve_skill(app: &Shared, key: &str, skill: &str) -> Result<(), 
         .then_some(())
         .ok_or(format!("«{skill}» is not a draft"))?;
     rehearsed(app, key, skill).then_some(()).ok_or(format!(
-        "«{skill}» has not been rehearsed: the bot rehearses it in your Edge first (tirith teach rehearse), and at least one of its steps must have worked"
+        "«{skill}» has not been rehearsed: the bot rehearses it in your Edge first (neobot teach rehearse), and at least one of its steps must have worked"
     ))?;
     let file = crate::bots::skill_file(app, key, skill);
     let done = std::fs::create_dir_all(file.parent().unwrap_or(&file))

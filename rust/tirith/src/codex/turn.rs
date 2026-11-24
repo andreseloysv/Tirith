@@ -24,7 +24,7 @@ pub async fn turn(
     let mut line = command_line(app, &setup, model, resume, prompt)?;
     #[cfg(target_os = "macos")]
     if setup.read_only && setting.agent == "codex" && crate::sandbox::sandboxed(app) {
-        crate::sandbox::inside(&mut line.argv); // its own sandbox cannot start inside OpenBot's: one profile keeps the limit
+        crate::sandbox::inside(&mut line.argv); // its own sandbox cannot start inside NeoBot's: one profile keeps the limit
     }
     let (mut child, stdin, stdout) =
         manager::spawn_chat(app, &setup.who, project, line.argv.clone())?;

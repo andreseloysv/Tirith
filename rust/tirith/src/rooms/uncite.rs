@@ -1,4 +1,4 @@
-//! A bot's memory citations (`[m<N>]`, `[s<N>]`) stay off the phones and the rooms: they are for OpenBot's count of the notes that serve (`turns::cited`), noise for the owner. The chat and the turns keep them.
+//! A bot's memory citations (`[m<N>]`, `[s<N>]`) stay off the phones and the rooms: they are for NeoBot's count of the notes that serve (`turns::cited`), noise for the owner. The chat and the turns keep them.
 use regex::Regex;
 use std::sync::LazyLock;
 /// One mark (`[m3]`, `[s12]`) with the spaces before it, or a run of them at the start of a line with the spaces after it (its indent stays).

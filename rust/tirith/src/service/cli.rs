@@ -1,26 +1,26 @@
-//! `tirith service install [--boot] | status | start | stop | restart | uninstall | logs`.
+//! `neobot service install [--boot] | status | start | stop | restart | uninstall | logs`.
 use super::{Kind, Unit};
 use crate::setup::{daemon, Ask, Opts};
 
 const USE: &str =
-    "tirith service install [--boot] | status | start | stop | restart | uninstall | logs";
+    "neobot service install [--boot] | status | start | stop | restart | uninstall | logs";
 
 pub fn cli(opts: &Opts) -> Result<bool, String> {
     let (u, ask) = (Unit::here()?, Ask::new(opts.yes));
     match opts.words.first().map(String::as_str) {
         Some("install") => {
             let (kind, notes) = super::install(&u, &ask, opts.boot)?;
-            println!("OpenBot runs as {}.", kind.said());
+            println!("NeoBot runs as {}.", kind.said());
             notes.iter().for_each(|n| println!("  {n}"));
         }
-        Some("start") => println!("OpenBot runs: {}.", super::start(&u, &ask)?.said()),
+        Some("start") => println!("NeoBot runs: {}.", super::start(&u, &ask)?.said()),
         Some("stop") => {
             super::stop(&u, &ask)?;
-            println!("OpenBot stopped. Lanes already running go on.");
+            println!("NeoBot stopped. Lanes already running go on.");
         }
         Some("restart") => {
             super::stop(&u, &ask)?;
-            println!("OpenBot runs again: {}.", super::start(&u, &ask)?.said());
+            println!("NeoBot runs again: {}.", super::start(&u, &ask)?.said());
         }
         Some("uninstall") => {
             super::uninstall(&u, &ask)?;
@@ -46,7 +46,7 @@ fn status(u: &Unit, ask: &Ask) -> bool {
             v["version"].as_str().unwrap_or("")
         ),
         (None, Some(_)) => {
-            println!("daemon:  not this home's: another OpenBot answers on this port")
+            println!("daemon:  not this home's: another NeoBot answers on this port")
         }
         (None, None) => println!("daemon:  does not answer"),
     }

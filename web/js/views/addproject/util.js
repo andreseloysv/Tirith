@@ -4,5 +4,5 @@ export const base = (p) => String(p || '').replace(/[\\/]+$/, '').split(/[\\/]/)
 /** The daemon's message; an older daemon than the page answers "not found" to the projects API. */
 export const why = (e) => {
   const m = String((e && e.message) || e).trim();
-  return /^not found$/i.test(m) ? 'The running OpenBot daemon is older than this page and cannot add projects: quit OpenBot, stop the daemon (pkill -f "tirith serve"), open OpenBot again.' : m;
+  return /^not found$/i.test(m) ? 'The running NeoBot daemon is older than this page and cannot add projects: quit NeoBot, stop the daemon (pkill -f "neobot serve"), open NeoBot again.' : m;
 };

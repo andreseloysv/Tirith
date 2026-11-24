@@ -23,7 +23,7 @@ impl Context {
                 .map_err(|e| format!("{}: {e}", account.display()))?;
         }
         Ok(Context {
-            exe: crate::app::exe().ok_or("cannot tell where the tirith binary is")?,
+            exe: crate::app::exe().ok_or("cannot tell where the neobot binary is")?,
             home,
             ask: Ask::new(yes),
         })

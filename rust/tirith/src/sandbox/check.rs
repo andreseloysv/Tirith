@@ -1,4 +1,4 @@
-//! The block list for agent sessions NOT started by OpenBot (the owner's own sessions), checked in the hook.
+//! The block list for agent sessions NOT started by NeoBot (the owner's own sessions), checked in the hook.
 use super::blocks::{blocked, none};
 use regex::Regex;
 use serde_json::Value;
@@ -15,20 +15,20 @@ pub fn check_command(tool: &str, input: &Value) -> Option<String> {
     HOSTS.captures_iter(text).find_map(|c| {
         blocked(&c[1]).map(|rule| {
             format!(
-                "{} is blocked by the owner (rule {rule}): OpenBot refuses calls to it. Use another source, or ask the \
-         owner to allow it again (tirith net unblock {rule}, or Desbloquear in the Red section of the page).",
+                "{} is blocked by the owner (rule {rule}): NeoBot refuses calls to it. Use another source, or ask the \
+         owner to allow it again (neobot net unblock {rule}, or Desbloquear in the Red section of the page).",
                 &c[1]
             )
         })
     })
 }
 
-/// The text of a tool call that may name a destination (`tirith net …` commands never count).
+/// The text of a tool call that may name a destination (`neobot net …` commands never count).
 fn named_text<'a>(tool: &str, input: &'a Value) -> Option<&'a str> {
     match tool {
         "Bash" => input["command"]
             .as_str()
-            .filter(|c| !c.contains("tirith net ")),
+            .filter(|c| !c.contains("neobot net ") && !c.contains("tirith net ")),
         "WebFetch" => input["url"].as_str(),
         _ => None,
     }

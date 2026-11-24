@@ -1,4 +1,4 @@
-//! The page is the owner's by the owner's token: `tirith open` gets a link with it that works once (never the token, which a command line or a history would show), and the link leaves the browser a cookie derived from the token.
+//! The page is the owner's by the owner's token: `neobot open` gets a link with it that works once (never the token, which a command line or a history would show), and the link leaves the browser a cookie derived from the token.
 use crate::app::{App, Shared};
 use crate::rooms::sealed::{hex, sha_hex};
 use axum::extract::{Path, State};
@@ -19,12 +19,12 @@ pub(super) fn routes() -> Router<Shared> {
         .route("/auth/{code}", get(enter))
 }
 
-/// A link's row: it is this OpenBot's alone.
+/// A link's row: it is this NeoBot's alone.
 fn row(app: &App, code: &str) -> String {
     sha_hex(format!("{}\n{code}", app.keys.owner).as_bytes())
 }
 
-/// `<name>=<value>` of this OpenBot's cookie. Every port of 127.0.0.1 shares cookies, so the name is this home's.
+/// `<name>=<value>` of this NeoBot's cookie. Every port of 127.0.0.1 shares cookies, so the name is this home's.
 pub(super) fn cookie(app: &App) -> String {
     let of = |what: &str| sha_hex(format!("{what}\n{}", app.keys.owner).as_bytes());
     format!("tirith-{}={}", &of("name")[..8], of("page"))
@@ -76,7 +76,7 @@ async fn enter(State(app): State<Shared>, Path(code): Path<String>) -> Response 
         at.map(|at| links.remove(at)).is_some()
     };
     if !known {
-        let why = "this link was used or is too old: run tirith open again";
+        let why = "this link was used or is too old: run neobot open again";
         return (StatusCode::FORBIDDEN, why).into_response();
     }
     let kept = format!(
@@ -84,6 +84,6 @@ async fn enter(State(app): State<Shared>, Path(code): Path<String>) -> Response 
         cookie(&app)
     );
     // Not a redirect: the code leaves the history with it.
-    let on = "<!doctype html><title>OpenBot</title><script>location.replace('/')</script>";
+    let on = "<!doctype html><title>NeoBot</title><script>location.replace('/')</script>";
     ([("set-cookie", kept)], Html(on)).into_response()
 }

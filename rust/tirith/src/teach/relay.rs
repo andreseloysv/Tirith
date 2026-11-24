@@ -1,4 +1,4 @@
-//! The relay between a bot's `tirith teach do` and the extension: one command at a time per bot, held until the extension asks for it, and its answer handed back to the waiting command.
+//! The relay between a bot's `neobot teach do` and the extension: one command at a time per bot, held until the extension asks for it, and its answer handed back to the waiting command.
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -43,7 +43,7 @@ pub(super) async fn ask(key: &str, mut cmd: Value, wait: Duration) -> Result<Val
     });
     match got {
         Ok(Ok(answer)) => Ok(answer),
-        _ => Err("the extension did not answer: is the owner's Edge open, with OpenBot's extension and this bot's link in it?".into()),
+        _ => Err("the extension did not answer: is the owner's Edge open, with NeoBot's extension and this bot's link in it?".into()),
     }
 }
 /// The command waiting for the extension, if any, waiting up to `wait` for one (each is handed once).

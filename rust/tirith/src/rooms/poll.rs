@@ -67,7 +67,7 @@ fn take_in(r: &mut Room, list: &[Value], here: Vec<String>, seen: &Seen, out: &m
         handle(r, seen, m, out);
     }
     roster(r, out);
-    // Public rooms are only watched: nothing said there reaches the manager (it writes there with `tirith room say`).
+    // Public rooms are only watched: nothing said there reaches the manager (it writes there with `neobot room say`).
     out.deliver.retain(|_| r.private());
     r.owes.owed.extend(out.deliver.iter().cloned()); // saved with the cursor: a restart in between loses nothing
 }
