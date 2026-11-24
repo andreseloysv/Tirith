@@ -3,6 +3,7 @@
 import { html, useState, useEffect, useLayoutEffect, useRef } from '../../../vendor/preact-htm.js';
 import { useFetch, api } from '../../store.js';
 import { offered, effortName, providerName, readable } from '../../model-controls.js';
+import { t } from '../../i18n.js';
 
 /** Closes the menu on a tap outside `wrap` or on Escape while `open`. */
 function useDismiss(open, wrap, close) {
@@ -28,8 +29,8 @@ function fit(box) {
 /** The chip's words: [model, effort, runs]; a model no agent runs says so instead of an effort. */
 function words(choices, v) {
   const m = offered(choices).find(x => x.slug === v.model);
-  if (!v.model) return [`${providerName(v.agent || '')} default`, '', true];
-  return m ? [m.name, effortName(v.effort), true] : [readable(v.model), 'Not available', false];
+  if (!v.model) return [t('{provider} default', { provider: providerName(v.agent || '') }), '', true];
+  return m ? [m.name, effortName(v.effort), true] : [readable(v.model), t('Not available'), false];
 }
 
 export function ModelChip({ role, isProject }) {
@@ -60,14 +61,14 @@ export function ModelChip({ role, isProject }) {
   const toggle = (view) => setOpen(open ? '' : view);
   return html`<span class="mc-pick" ref=${wrap}>
     <span class=${`mc-chip${runs ? '' : ' off'}`}>
-      <button type="button" aria-haspopup="menu" aria-expanded=${!!open} title="Choose the model" onClick=${() => toggle('models')}>${name}</button>
-      ${effort ? html`<button type="button" class="mc-chip-e" title=${runs ? 'Choose the effort' : 'Choose another model'}
+      <button type="button" aria-haspopup="menu" aria-expanded=${!!open} title=${t('Choose the model')} onClick=${() => toggle('models')}>${name}</button>
+      ${effort ? html`<button type="button" class="mc-chip-e" title=${runs ? t('Choose the effort') : t('Choose another model')}
         onClick=${() => toggle(runs ? 'effort' : 'models')}>${effort}</button>` : null}
     </span>
     <div class="mc-mmenu" ref=${box} hidden=${!open}>
       <model-controls ref=${menu}></model-controls>
       ${error ? html`<p class="ierr mc-mmenu-err">${error}</p>` : null}
-      ${isProject ? html`<p class="mc-mmenu-note">Applies to every project.</p>` : null}
+      ${isProject ? html`<p class="mc-mmenu-note">${t('Applies to every project.')}</p>` : null}
     </div>
   </span>`;
 }
