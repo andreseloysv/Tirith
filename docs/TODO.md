@@ -911,7 +911,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Merge the branch market-rules: the marketplace plan records that the owner approved the refuse-on-sight list; change nothing else (check: `grep -q 'approved by the owner, 2026-11-24' docs/MARKETPLACE.md`)
 - [x] Merge the branch windows-checks: the Windows smoke and the Windows install test sign in with tirith open link before reading the page, and the install test makes its demo plan as the daemon needs; change nothing else (check: `grep -q 'open link' scripts/checks/windows-smoke.ps1 && grep -q 'plan step' .github/workflows/windows-install.yml`)
 - [x] Merge the branch windows-app-check: the Windows install test also installs the release's desktop app silently and checks the daemon beside it; change nothing else (check: `grep -q 'desktop app' .github/workflows/windows-install.yml`)
-- [ ] Merge the branch site-windows: the website's Windows parts offer the native installer (0.2.2-rc.1 test build) instead of WSL 2, and every part of an install step sits beside its number instead of a narrow column; change nothing else (check: `grep -q 'Desktop app for Windows' site/index.html && grep -q 'grid-column: 2' site/css/05-install.css`)
+- [x] Merge the branch site-windows: the website's Windows parts offer the native installer (0.2.2-rc.1 test build) instead of WSL 2, and every part of an install step sits beside its number instead of a narrow column; change nothing else (check: `grep -q 'Desktop app for Windows' site/index.html && grep -q 'grid-column: 2' site/css/05-install.css`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
