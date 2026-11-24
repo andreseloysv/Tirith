@@ -56,6 +56,9 @@ function click(all, target) {
   let hit = pick(all, target, CLICKS) || pick(all, target, ['AXGroup', 'AXStaticText', 'AXImage', 'AXCell', 'AXRow']);
   if (!hit) return 'not found: ' + target;
   if (hit.role === 'AXStaticText') hit = { el: get(hit.el, 'AXParent') || hit.el, role: 'AXGroup' };
+  /* a disabled button takes the press and does nothing: say so, never «clicked» */
+  const enabled = get(hit.el, 'AXEnabled');
+  if (enabled && ObjC.unwrap(enabled) === false) return 'ERROR not clicked, it is disabled: ' + shown(hit);
   return press(hit.el) === 0 ? 'clicked ' + shown(hit) : 'could not press ' + shown(hit);
 }
 function type(all, target, text) {
@@ -69,8 +72,13 @@ function type(all, target, text) {
     press(option.el);
     return `chose «${said(option.el)}» in ${shown(hit)}`;
   }
-  $.AXUIElementSetAttributeValue(hit.el, $('AXFocused'), $.kCFBooleanTrue);
-  return $.AXUIElementSetAttributeValue(hit.el, $('AXValue'), $(text)) === 0 ? 'typed into ' + shown(hit) : 'could not type into ' + shown(hit);
+  /* focus first (an NSNumber: $.kCFBooleanTrue is a function here), then the value: WebKit then sends the page
+     beforeinput/input as for typing, so editors like Teams' see the words; without focus nothing changes */
+  $.AXUIElementSetAttributeValue(hit.el, $('AXFocused'), $.NSNumber.numberWithBool(true));
+  delay(0.2);
+  if ($.AXUIElementSetAttributeValue(hit.el, $('AXValue'), $(text)) !== 0) return 'could not type into ' + shown(hit);
+  delay(0.3);
+  return `typed into ${shown(hit)}; it now says «${str(hit.el, 'AXValue').slice(0, 200)}»`;
 }
 function run(argv) {
   const [cmd, target, text, url] = argv;
@@ -79,7 +87,10 @@ function run(argv) {
   }
   const apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.Safari');
   if (!apps.count) return 'ERROR Safari is not open';
-  const all = page($.AXUIElementCreateApplication(apps.objectAtIndex(0).processIdentifier), url || '');
+  const safari = $.AXUIElementCreateApplication(apps.objectAtIndex(0).processIdentifier);
+  let all = page(safari, url || '');
+  /* WebKit builds its page tree on the first Accessibility call it gets: once more after a second */
+  if (!all.length) { delay(1); all = page(safari, url || ''); }
   if (!all.length) return url ? 'ERROR no shown page starts with ' + url : 'ERROR no page in Safari\'s front window';
   return cmd === 'click' ? click(all, target) : type(all, target, text || '');
 }

@@ -136,3 +136,22 @@ fn the_sign_in_window_shares_the_agents_profile_and_keychain() {
         "the page comes last"
     );
 }
+
+#[test]
+fn typing_reaches_webkit_editors_and_a_disabled_button_is_never_clicked() {
+    // Proven by hand in a WebKit window: without a real `true` for AXFocused (JXA's $.kCFBooleanTrue is a
+    // function) WebKit ignores the value; with it, the page gets beforeinput/input as for typing.
+    let script = &act_args("type", "Mensaje", "Hola", "").unwrap()[3];
+    assert!(
+        script.contains("$('AXFocused'), $.NSNumber.numberWithBool(true))"),
+        "focus is set with an NSNumber"
+    );
+    assert!(
+        !script.contains("$.kCFBooleanTrue)"),
+        "never the function in its place"
+    );
+    assert!(
+        script.contains("'AXEnabled'") && script.contains("it is disabled"),
+        "a disabled button is reported, not «clicked»"
+    );
+}
