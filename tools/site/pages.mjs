@@ -9,7 +9,7 @@ export function index(data) {
     + bar(root) + `
 <section class="narrow mhead"><h1>Marketplace</h1>
 <p class="lede">Bots made by the OpenBot team. Each one lists what it does, what it needs and what it asks you before doing.</p>
-<div class="mtabs" role="group" aria-label="Categories"><a class="mtab" href="./" aria-current="true">${esc(data.collection.title)}</a>${tabs}</div></section>
+<div class="mtabs" role="group" aria-label="Categories">${tabs}</div></section>
 <section class="narrow mlist"><h2 class="msub">${esc(data.collection.title)}</h2>
 ${data.bots.map((b) => card(b, root)).join('\n')}</section>
 <section class="narrow mnote"><p>Publishing your own bot is not open yet. When it is, it will be listed here.</p></section>
@@ -28,7 +28,7 @@ export function detail(b) {
 <h2 class="how">Add it today</h2>
 <p>This bot ships inside OpenBot. In the app open <strong>Bots</strong>, choose <strong>Desde plantilla</strong> (from a template) and pick <strong>${esc(b.name)}</strong>. <a href="${root}#install">Install OpenBot</a> first if you have not.</p></div></header>
 ${part('Skills', 'Playbooks it can run', `<ul>${b.skills.map((s) => `<li><code>${esc(s.name)}</code> ${esc(s.text)}</li>`).join('')}</ul>`)}
-${part('Routines', 'Jobs that run on their own', list(b.routines.map((r) => `${r.title}: ${r.when}`)))}
+${part('Routines', 'Jobs that run on their own', list(b.routines.map((r) => `${r.title} (called "${r.app_title}" in the app): ${r.when}`)))}
 ${part('Integrations', 'What it needs', list(b.integrations))}
 ${part('Asks first', 'It stops and asks you before', list(b.asks_first))}
 </div>

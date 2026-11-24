@@ -7,8 +7,7 @@
   display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line);
   background: #fff; color: var(--ink2); font: 500 14px/1 var(--font); text-decoration: none; cursor: pointer;
 }
-.mtab[aria-pressed="true"], .mtab[aria-current] { border-color: var(--lime); background: #f3fae9; color: var(--lime-ink); }
-.mtab[aria-current] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.mtab[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: #fff; }
 .mlist { padding-top: 56px; display: grid; gap: 12px; }
 .msub { font-size: 24px; letter-spacing: -0.01em; margin-bottom: 8px; }
 .mcard { display: grid; grid-template-columns: 56px 1fr auto; gap: 20px; align-items: center; padding: 20px 24px; background: var(--card); border-radius: var(--r-md); }

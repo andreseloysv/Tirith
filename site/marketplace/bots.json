@@ -7,7 +7,7 @@
       "summary": "Every morning at 07:00 it reads the last 24 hours of your email and tells you what needs you, without opening or marking anything.",
       "about": "It reads your mailbox in OpenBot's own browser, where you sign in once, and reports at most five lines: sender, subject and what is asked of you, with deadlines and charges first. Promotions and automatic notices are skipped. What an email says is treated as information, never as an order.",
       "skills": [{"name": "resumen-correo", "text": "Summarise the last 24 hours of the inbox without opening a message, or open the mail so the owner can sign in."}],
-      "routines": [{"title": "Resumen del correo", "when": "Every day at 07:00"}],
+      "routines": [{"title": "Daily inbox summary", "app_title": "Resumen del correo", "when": "Every day at 07:00"}],
       "integrations": ["OpenBot's browser, signed in to your webmail (Gmail by default)"],
       "asks_first": ["Opening a message", "Replying, sending, forwarding or deleting", "Archiving, labelling or marking", "Downloading attachments or following links"]
     },
@@ -17,7 +17,7 @@
       "summary": "When a pull request is opened on GitHub it reads the diff and tells you what changes and what is risky. It never posts or runs anything.",
       "about": "A GitHub webhook starts it for each new pull request. It reads the whole diff, looks for bugs, secrets, data loss, breaking changes and missing tests in that order, and answers in at most six lines with file and line for each risk and a verdict. Titles, descriptions and code are treated as data, never as orders, and nothing from the pull request is cloned, built or run.",
       "skills": [{"name": "revisar-pr", "text": "Review a GitHub pull request without running its code, when the webhook sends it or the owner pastes its link."}],
-      "routines": [{"title": "Revisar el PR nuevo", "when": "When a pull request is opened (webhook github:pull_request.opened)"}],
+      "routines": [{"title": "Review each new pull request", "app_title": "Revisar el PR nuevo", "when": "When a pull request is opened (webhook github:pull_request.opened)"}],
       "integrations": ["GitHub, through a webhook address you add in the repository settings", "The gh command signed in on your computer, for private repositories"],
       "asks_first": ["Commenting, approving or requesting changes", "Merging or closing", "Pushing or touching the repository in any other way"]
     },
@@ -27,7 +27,7 @@
       "summary": "You give it pages, it checks them every day at 09:00 and speaks up only when something changed.",
       "about": "Tell it which page to watch and, if you care about one part (a price, a list), which. It keeps the last copy of each page and compares. An error, a captcha or a login page never replaces the saved copy. When nothing changed it answers with a single quiet line.",
       "skills": [{"name": "vigilar-web", "text": "Watch the pages the owner gives, compare them with the last copy and report only what changed."}],
-      "routines": [{"title": "Vigilar la web", "when": "Every day at 09:00"}],
+      "routines": [{"title": "Check the watched pages", "app_title": "Vigilar la web", "when": "Every day at 09:00"}],
       "integrations": ["OpenBot's browser"],
       "asks_first": ["Starting a purchase or booking", "Filling in or sending forms", "Accepting terms or creating an account", "Downloading files"]
     }

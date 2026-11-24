@@ -38,6 +38,44 @@ Facts are from main at 3bc4f719 and the pages of x.ai (2026-11-24).
 6. The site is static (`site/`, GitHub Pages). The static marketplace on this branch lists only the official
    templates and shows no rating, count or price, because none can exist yet.
 
+## Decisions (owner, 2026-11-24)
+
+- **Selling:** Stripe Connect, the owner is the operator and takes a cut. The fee is decided when paid bots are next.
+- **Safety, limits first:** every bot declares what it needs; the user sees it before adding the bot and OpenBot
+  enforces it. Publishing opens to everyone only when this ships, with the owner's review on top. Until then only
+  the OpenBot team publishes.
+- **Accounts:** the OpenBot's ed25519 key, nothing else for free bots (sellers are reachable through Stripe).
+- **Feedback:** a written review requires a purchase (one per key and version). Any key whose OpenBot added the bot
+  may like or dislike it once. Free bots therefore have likes and dislikes only, never written reviews.
+- **Analytics:** self-hosted and cookie-less on the owner's Mac mini (GoatCounter), at a stats subdomain.
+- **Market service:** a separate small service beside agentsmessenger.
+
+## Declared permissions and how each is proven
+
+A package declares: connectors with tool globs (`bots/grants.rs`), whether it needs the browser, which files it
+writes, which other skills it reads, and which hosts it reaches. A limit counts as enforced only if a test of the
+daemon's own gate proves it. Sandboxes are never attacked or probed, and no limit is proven that way.
+
+| Permission | Gate | Proof | State |
+|---|---|---|---|
+| Connector tools, deny, approval | `bots/connect.rs`, `grants.rs` | unit tests of the grant and the gate | enforced |
+| Files a bot writes | `bots/folder.rs::writable` | unit tests on paths | enforced (own folder, shared skills) |
+| Browser (Safari routes) | the daemon's Safari routes | tests of the route's grant check, to be added | not per bot yet |
+| Other bots' skills | skill link list in `bots/library.rs` | test of what a bot's folder links | not per bot yet |
+| Network hosts | the sandbox proxy | none; the daemon does not mediate per bot | **not enforced**; listings say so |
+
+A permission that is not enforced is shown on the listing as "declared, not enforced" and blocks third-party
+publishing until it is.
+
+## Refuse on sight (draft, for the owner to approve)
+
+- Instructions that tell the agent to ignore OpenBot's approvals, hooks or sandbox, or to hide what it does.
+- Reading or sending secrets, keys, other bots' memory or chats; webhook addresses in the package.
+- Spending money, sending messages or publishing without asking first.
+- Obfuscated text, encoded payloads, or links to downloads that install software.
+- Declared permissions that do not match what the skills do.
+- Anything that targets a person, or impersonates a brand or a person.
+
 ## Architecture
 
 - **Package** (`.openbot-bot`, a zip or a folder): `bot.toml` (name, description, version, face, category,
