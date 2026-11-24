@@ -87,6 +87,7 @@ pub fn routes() -> Router<Shared> {
         .merge(crate::turns::routes())
         .merge(super::hook_api::routes())
         .merge(super::from_template::routes())
+        .merge(super::package::routes())
         .merge(connectors())
         .route("/api/bots/{id}/library", get(|State(app): State<Shared>, Path(id): Path<String>| async move { reply(library(&app, &id)) }).post(lib))
 }

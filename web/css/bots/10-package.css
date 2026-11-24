@@ -1,0 +1,8 @@
+/* A bot package: the import's preview and the export's form */
+.bpkgbody { padding: 16px 22px 22px; gap: 12px; }
+.bpkgbody textarea { width: 100%; min-height: 84px; padding: 10px 12px; color: var(--b-ink); background: var(--b-soft); border: 1px solid var(--b-hair); border-radius: 14px; resize: vertical; font: inherit; }
+.bpkg h4 { margin: 16px 0 4px; font-size: 13px; font-weight: 500; color: var(--b-ink); }
+.bpkg p, .bpkg li { font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.bpkg ul { margin: 0; padding-left: 18px; }
+.bpkgtop { display: flex; align-items: center; gap: 14px; }
+.bpkgtop div { display: flex; flex-direction: column; }

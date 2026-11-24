@@ -16,5 +16,6 @@
 export { Bots } from './bots/view.js';
 export { BotCard } from './bots/card.js';
 export { BotTemplates } from './bots/templates.js';
+export { BotPackage } from './bots/package.js';
 export { keyOf, recall, stateOf } from './bots/state.js';
 export { daysLabel, timeLabel, nextRun } from './bots/when.js';
