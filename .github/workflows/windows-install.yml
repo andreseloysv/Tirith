@@ -116,6 +116,27 @@ jobs:
           }
           $log | Tee-Object "$env:LOGS\lane.log"
           if ($log -notmatch 'fake-agent: committed') { throw 'the lane never ran the fake agent' }
+      # The release's desktop app (OpenBot-<version>-x64-setup.exe), installed silently: its daemon must sit beside it
+      # and say the release's version. Starting the app itself (a window and the guide) is left to a person.
+      - name: The desktop app's installer
+        if: ${{ !cancelled() }}
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          $ver = $env:TAG.TrimStart('v')
+          $setup = Join-Path $env:RUNNER_TEMP 'openbot-setup.exe'
+          Invoke-WebRequest -UseBasicParsing "$env:TIRITH_BASE_URL/OpenBot-$ver-x64-setup.exe" -OutFile $setup
+          $run = Start-Process $setup -ArgumentList '/S' -Wait -PassThru
+          "the installer ended with $($run.ExitCode)" | Tee-Object "$env:LOGS\app-install.log"
+          # per user, in AppData\Local: the known folder's or the throwaway profile's, wherever the installer put it
+          $dirs = ([Environment]::GetFolderPath('LocalApplicationData'), $env:LOCALAPPDATA) | ForEach-Object { Join-Path $_ 'OpenBot' }
+          $dir = $dirs | Where-Object { Test-Path (Join-Path $_ 'tirith.exe') } | Select-Object -First 1
+          if (-not $dir) { $dir = $dirs[0] }
+          Get-ChildItem $dir -ErrorAction Continue | Format-Table Name, Length | Out-String | Tee-Object -Append "$env:LOGS\app-install.log"
+          if (-not (Test-Path "$dir\tirith.exe")) { throw "no tirith.exe beside the app in $dir" }
+          $said = "$(& "$dir\tirith.exe" --version)"
+          $said | Tee-Object -Append "$env:LOGS\app-install.log"
+          if (-not $said.Contains($ver)) { throw "the app's daemon says '$said', not $ver" }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
