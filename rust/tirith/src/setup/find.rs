@@ -18,6 +18,8 @@ fn usual() -> Vec<PathBuf> {
         all.extend(kept.flat_map(|d| [d.join("Git/cmd"), d.join("nodejs")]));
     }
     all.extend(std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("npm")));
+    // Muse's installer puts muse.cmd here and tells only new terminals.
+    all.extend(std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("Programs/muse")));
     all
 }
 
