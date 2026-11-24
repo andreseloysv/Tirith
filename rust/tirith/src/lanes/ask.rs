@@ -4,7 +4,7 @@ use super::stop::kill_agent;
 use crate::app::{alive, Lane, Shared};
 use crate::manager;
 
-/// `tirith ask` from a lane: it waits, and the manager is told how to answer.
+/// `neobot ask` from a lane: it waits, and the manager is told how to answer.
 pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
     (lane.status == "running" && !question.trim().is_empty())
@@ -24,10 +24,10 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
     let (q, owner) = (
         question.trim(),
         format!(
-            "tirith ask-owner --lane {id} --kind <kind> \"<the question, in the owner's words>\""
+            "neobot ask-owner --lane {id} --kind <kind> \"<the question, in the owner's words>\""
         ),
     );
-    let told = format!("lane {id} ({}: {}) asks: {q}\nAnswer with: tirith answer {id} \"<answer>\". When only the owner can answer, ask them with {owner}: their answer goes straight to the lane.", lane.project, lane.item);
+    let told = format!("lane {id} ({}: {}) asks: {q}\nAnswer with: neobot answer {id} \"<answer>\". When only the owner can answer, ask them with {owner}: their answer goes straight to the lane.", lane.project, lane.item);
     manager::emit_event(
         app,
         &lane.project,
@@ -37,7 +37,7 @@ pub fn ask(app: &Shared, id: &str, question: &str) -> Result<Lane, String> {
     );
     updated.ok_or("lane vanished".into())
 }
-/// `tirith answer` from the manager, or the owner's answer (`who`): a live message when the agent still runs, else a resumed run.
+/// `neobot answer` from the manager, or the owner's answer (`who`): a live message when the agent still runs, else a resumed run.
 pub fn answer(app: &Shared, id: &str, text: &str, who: &str) -> Result<Lane, String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
     (lane.status == "waiting")

@@ -32,7 +32,7 @@ pub struct Turn {
     pub began: Map<String, Value>,
     /// Some line of its agent came during it.
     pub seen: bool,
-    /// Its own validation (`tirith turn checks`): passed, total and the names of the checks.
+    /// Its own validation (`neobot turn checks`): passed, total and the names of the checks.
     pub checks: Option<(i64, i64, String)>,
     /// How its looks ended.
     pub looks: super::Looks,

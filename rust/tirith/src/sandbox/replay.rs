@@ -2,7 +2,7 @@
 use super::profile::enabled;
 use crate::app::Shared;
 
-/// Ok when the network sandbox is in force for the processes OpenBot starts, so the proxy that refuses the world to a replay's caller (`lab::closed`, `lab::reaches`) is the only way out; else why not (the replay would read the real network).
+/// Ok when the network sandbox is in force for the processes NeoBot starts, so the proxy that refuses the world to a replay's caller (`lab::closed`, `lab::reaches`) is the only way out; else why not (the replay would read the real network).
 pub fn closes_network(app: &Shared) -> Result<(), String> {
     #[cfg(test)]
     if app.kv("test:network-closed").is_some() {

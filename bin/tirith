@@ -1,7 +1,3 @@
 #!/usr/bin/env bash
-# `tirith` from this checkout: the Rust binary, built on first use.
-set -euo pipefail
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-BIN="$ROOT/target/release/tirith"
-[ -x "$BIN" ] || cargo build -q --release -p tirith --manifest-path "$ROOT/Cargo.toml" >&2
-exec "$BIN" "$@"
+# `tirith` is the old name of `neobot`, kept as an alias.
+exec "$(dirname "$0")/neobot" "$@"

@@ -1,4 +1,4 @@
-//! `tirith connect [<agent>]`: one agent connected, or the list of them.
+//! `neobot connect [<agent>]`: one agent connected, or the list of them.
 use super::connect::{connect, State};
 use super::{catalog, configure, context::Context, find, opts::Opts, signin};
 use crate::service;
@@ -59,5 +59,5 @@ fn list(cx: &Context) {
         };
         println!("{:<10} {:<18} {state}", known.alias, known.name);
     }
-    println!("\nConnect one:  tirith connect <agent>");
+    println!("\nConnect one:  neobot connect <agent>");
 }

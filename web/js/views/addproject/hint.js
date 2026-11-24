@@ -6,7 +6,7 @@ import { html } from '../../../vendor/preact-htm.js';
 function says(r) {
   const todo = [r.git ? '' : 'create a git repository in it', r.plan ? '' : 'start its plan with a first step'].filter(Boolean).join(' and ');
   const held = r.open ? ` Its plan has ${r.open} open ${r.open === 1 ? 'item' : 'items'}: the autopilot stays off until you resume it.` : '';
-  return [todo ? `OpenBot will ${todo}.` : 'Ready to add.', held];
+  return [todo ? `NeoBot will ${todo}.` : 'Ready to add.', held];
 }
 
 function options(d) {

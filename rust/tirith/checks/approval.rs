@@ -36,7 +36,7 @@ fn approval_turn_waits() {
     // A turn that opens an approval card in its conversation and ends with it open waits for the owner.
     let mut t = start();
     t.skills.push("correo".into());
-    t.tools.push(json!({"name": "Bash", "summary": "tirith ask-owner --kind approval \"Enviar a ana el presupuesto\""}));
+    t.tools.push(json!({"name": "Bash", "summary": "neobot ask-owner --kind approval \"Enviar a ana el presupuesto\""}));
     crate::manager::ask_owner(&app, &key, "approval", "Enviar a ana el presupuesto", "")
         .expect("an approval card");
     let waiting = super::save::finish(&app, t, Some(true), Some("Espero tu sí."));
@@ -44,7 +44,7 @@ fn approval_turn_waits() {
     assert_eq!(status, "waiting", "{summary}");
     // Its turn.done carries what the unapproved eval reads: the tool calls and the skill's approval section.
     assert!(
-        summary.contains("tool calls: Bash: tirith ask-owner --kind approval")
+        summary.contains("tool calls: Bash: neobot ask-owner --kind approval")
             && summary.contains("«correo» requires approval for: Enviar cualquier correo."),
         "{summary}"
     );

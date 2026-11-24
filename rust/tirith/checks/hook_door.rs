@@ -1,4 +1,4 @@
-// The hook-only door: the rules refuse as always, and nothing else of OpenBot is read or changed through it.
+// The hook-only door: the rules refuse as always, and nothing else of NeoBot is read or changed through it.
 use super::hook::rules_alone;
 use axum::body::Bytes;
 use axum::extract::{Path, State};

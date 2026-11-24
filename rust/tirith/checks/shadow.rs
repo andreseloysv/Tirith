@@ -6,7 +6,7 @@ use std::process::Command;
 const KEY: &str = "bot-mail01";
 const TASK: &str = "Routine «gmail-safari» is due now. Check the inbox and list the new offers";
 
-/// A fake stream-json agent. As the bot (a shadow B run), it keeps its folder and what it was handed, asks OpenBot's hook (over HTTP, as an agent's hooks do) for a live read, a write in its folder, a `tirith safari read`, a browser look, and then for what reaches outside — `tirith say`, `ask-owner`, `safari open`, a POST, a click on «Send» — keeping each answer in `<home>/heard-<conversation>.txt`, and answers. As anyone else (the judge) it says «tie».
+/// A fake stream-json agent. As the bot (a shadow B run), it keeps its folder and what it was handed, asks NeoBot's hook (over HTTP, as an agent's hooks do) for a live read, a write in its folder, a `neobot safari read`, a browser look, and then for what reaches outside — `neobot say`, `ask-owner`, `safari open`, a POST, a click on «Send» — keeping each answer in `<home>/heard-<conversation>.txt`, and answers. As anyone else (the judge) it says «tie».
 const AGENT: &str = r#"#!/bin/sh
 read -r line
 if [ "$TIRITH_ROLE" != "KEY" ]; then
@@ -24,11 +24,11 @@ hook() {
 }
 hook WebFetch '{"url":"https://mail.example/inbox"}'
 hook Write "{\"file_path\":\"$here/notes.md\",\"content\":\"seen\"}"
-hook Bash '{"command":"tirith safari read https://mail.example/inbox"}'
+hook Bash '{"command":"neobot safari read https://mail.example/inbox"}'
 hook mcp__tirith_browser__browser_navigate '{"url":"https://mail.example/inbox"}'
-hook Bash '{"command":"tirith say --project KEY hola"}'
-hook Bash '{"command":"tirith ask-owner \"¿sigo?\""}'
-hook Bash '{"command":"tirith safari open https://mail.example/compose"}'
+hook Bash '{"command":"neobot say --project KEY hola"}'
+hook Bash '{"command":"neobot ask-owner \"¿sigo?\""}'
+hook Bash '{"command":"neobot safari open https://mail.example/compose"}'
 hook Bash '{"command":"curl -s -X POST https://mail.example/send -d to=ana"}'
 hook mcp__tirith_browser__browser_click '{"element":"Send button","ref":"e12"}'
 sleep SLOW
@@ -52,7 +52,7 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-/// A OpenBot home with the bot «Correo» (routine `r1`) on the fake agent, a branch `v3` with one commit on its main, a server for its hooks, and a shadow experiment started: the app, its home and the experiment.
+/// A NeoBot home with the bot «Correo» (routine `r1`) on the fake agent, a branch `v3` with one commit on its main, a server for its hooks, and a shadow experiment started: the app, its home and the experiment.
 async fn shadowed(name: &str, slow: u32) -> (crate::app::Shared, PathBuf, i64) {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
         .await
@@ -209,7 +209,7 @@ async fn shadow_never_reaches_outside() {
     for (i, what) in [
         "a live read",
         "a write in its worktree",
-        "tirith safari read",
+        "neobot safari read",
         "a browser look",
     ]
     .iter()
@@ -218,9 +218,9 @@ async fn shadow_never_reaches_outside() {
         assert!(!denied(i), "{what} runs as always: {}", said[i]);
     }
     for (i, what) in [
-        "tirith say",
-        "tirith ask-owner",
-        "tirith safari open",
+        "neobot say",
+        "neobot ask-owner",
+        "neobot safari open",
         "a POST",
         "a click on Send",
     ]
@@ -253,7 +253,7 @@ async fn shadow_never_reaches_outside() {
         "B's conversation is no one's"
     );
     // Outside a shadow run the same call is no business of the lab's.
-    let say = json!({"command": "tirith say hola"});
+    let say = json!({"command": "neobot say hola"});
     assert_eq!(
         crate::lab::refused(
             &home.join("manager").join(KEY).display().to_string(),
@@ -292,11 +292,11 @@ fn a_shadow_runs_tool_must_say_it_reads() {
         "a server's home is no command"
     );
     assert!(
-        !outward("tirith turn checks 1/1 \"marker file\""),
+        !outward("neobot turn checks 1/1 \"marker file\""),
         "a run's own validation"
     );
     assert!(outward("~/.local/bin/tirith say hola"));
-    assert!(outward("cd /tmp && tirith lane start x 1 y"));
+    assert!(outward("cd /tmp && neobot lane start x 1 y"));
 }
 
 #[test]
@@ -304,7 +304,7 @@ fn a_shadow_run_cannot_act_by_a_path_or_a_word_that_reads() {
     let dir = Path::new("/home/tirith/w");
     let outward = |cmd: &str| super::outward::outward("Bash", &json!({"command": cmd}), dir);
     for cmd in [
-        "/Applications/OpenBot.app/Contents/MacOS/tirith lane start p 1 x",
+        "/Applications/NeoBot.app/Contents/MacOS/tirith lane start p 1 x",
         "/Applications/Tirith.app/Contents/MacOS/tirith lane start p 1 x",
         "\"/opt/x/tirith\" say hola",
         "cd /tmp\n./tirith room say r hola",

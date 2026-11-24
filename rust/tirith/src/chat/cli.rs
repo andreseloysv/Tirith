@@ -1,16 +1,16 @@
-//! `tirith chat clear|keep`.
+//! `neobot chat clear|keep`.
 use crate::client::{call_json, Flag};
 use crate::server::s;
 use serde_json::{json, Value};
 
-/// `tirith chat clear|keep [<the owner's words>]`: on the conversation of the session that runs it (`TIRITH_PROJECT`), or `--project`'s. A lane never clears a chat: only a bot the owner talks with, on the owner's own words (its prompt says so).
+/// `neobot chat clear|keep [<the owner's words>]`: on the conversation of the session that runs it (`TIRITH_PROJECT`), or `--project`'s. A lane never clears a chat: only a bot the owner talks with, on the owner's own words (its prompt says so).
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     let conv = || conv(&flag);
     match pos {
         ["chat", "clear"] => Some(conv().and_then(|p| call_json("POST", "/api/chat/clear", Some(json!({"project": p})))).map(|v| println!("chat cleared ({})", s(&v, "project")))),
         ["chat", "keep"] => Some(conv().and_then(|p| say(call_json("GET", &format!("/api/chat/keep?project={p}"), None), "the chat lives"))),
         ["chat", "keep", words @ ..] => Some(conv().and_then(|p| say(call_json("POST", "/api/chat/keep", Some(json!({"project": p, "keep": words.join(" ")}))), "the chat now lives"))),
-        ["chat", ..] => Some(Err("use: tirith chat clear | tirith chat keep [<time, as 1h, 24 h, 2 días, una semana, siempre>]".into())),
+        ["chat", ..] => Some(Err("use: neobot chat clear | neobot chat keep [<time, as 1h, 24 h, 2 días, una semana, siempre>]".into())),
         _ => None,
     }
 }

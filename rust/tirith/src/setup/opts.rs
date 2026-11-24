@@ -1,10 +1,10 @@
 //! The options of the guide's commands.
 
 pub const USE: &str =
-    "tirith setup [--server] [--boot] [--port <port>] [--agents <a,b>] [--primary <agent>] [--yes]
-tirith connect [<agent>] [--token] [--yes]
-tirith service install [--boot] | status | start | stop | restart | uninstall | logs
-tirith doctor";
+    "neobot setup [--server] [--boot] [--port <port>] [--agents <a,b>] [--primary <agent>] [--yes]
+neobot connect [<agent>] [--token] [--yes]
+neobot service install [--boot] | status | start | stop | restart | uninstall | logs
+neobot doctor";
 
 #[derive(Default, Debug)]
 pub struct Opts {

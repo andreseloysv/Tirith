@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 type Ends = (Option<i64>, Option<i64>);
 
-/// The pairs with one side ended, by their experiment's worktree (a path, so two OpenBot homes never share one) and pair: A's turn, B's turn.
+/// The pairs with one side ended, by their experiment's worktree (a path, so two NeoBot homes never share one) and pair: A's turn, B's turn.
 static PAIRS: Mutex<BTreeMap<(PathBuf, i64), Ends>> = Mutex::new(BTreeMap::new());
 
 /// One side of pair `pair` of experiment `e` (its worktree `dir`) ended (`ends` holds its turn); with both ended, B is compared with its A.

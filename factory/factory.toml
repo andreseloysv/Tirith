@@ -102,7 +102,7 @@ runs_on = "local"
 # day at 07:00, with no red measure needed. It
 # reads the measures and eval scores by factory version and factory/ itself,
 # and proposes at most one change to factory/ per pass as a step 17 item of
-# the tirith plan with its lane started; a version whose first 10 merged
+# the neobot plan with its lane started; a version whose first 10 merged
 # items (or first 24 h) went worse than the one before it on satisfaction,
 # interruptions or first try is reverted by its next pass. Nothing in the
 # factory needs the owner's yes, and the daemon reloads the factory when
@@ -129,7 +129,7 @@ color = "#f2a93b"
 # (routine.worse), with the "bots" brief (each bot's numbers, routines,
 # skills with the sections they lack and memory sizes), its max_per_day and
 # its answer in its own conversation. It may write only in the bots'
-# folders and in the folders of OpenBot's home `writes` names: <home>/bots
+# folders and in the folders of NeoBot's home `writes` names: <home>/bots
 # and <home>/lab (the hooks' rules refuse the rest).
 [roles.coach]
 name = "Coach"
@@ -168,7 +168,7 @@ show = false
 shape = "hex"
 color = "#8c8c8c"
 
-# The connection check of `tirith setup` and `tirith connect`: one short real
+# The connection check of `neobot setup` and `neobot connect`: one short real
 # turn of the agent being connected, which the daemon names for that turn alone.
 [roles.check]
 name = "Connection check"
@@ -183,7 +183,7 @@ shape = "hex"
 color = "#8c8c8c"
 
 # Who hears each event the code emits. mode: turn wakes the role (gathered over
-# limits.batch_seconds), note waits for its next turn. chat: a OpenBot line in
+# limits.batch_seconds), note waits for its next turn. chat: a NeoBot line in
 # the conversation. phone: that line, and the answer of a turn the event
 # starts, reach the owner's phones. These defaults reproduce the behaviour
 # the daemon had when the calls were fixed in Rust, except merge.landed,
@@ -417,7 +417,7 @@ sample = 1.0
 
 # A live experiment's run of B (the branch) against the run of A (the bot's
 # main) before it: the judge reads the task and the two answers in an order
-# OpenBot draws at random and keeps, and says a, b or tie; OpenBot maps it
+# NeoBot draws at random and keeps, and says a, b or tie; NeoBot maps it
 # back to B winning, losing or tying (the lab's comparisons, never shown).
 [[evals]]
 id = "ab-compare"

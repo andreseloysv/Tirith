@@ -1,13 +1,13 @@
-//! `tirith safari click <target> [<url>]` and `type <target> <text> [<url>]`: the owner lets the chat roles click
+//! `neobot safari click <target> [<url>]` and `type <target> <text> [<url>]`: the owner lets the chat roles click
 //! and type in their Safari without asking (their choice of 2026-11-23), and nobody turns on a Safari setting for
 //! it: the daemon runs its own fixed script (assets/safari-ax.js, JavaScript for Automation) through macOS
 //! Accessibility, the agent's words as the script's arguments, never as code. The first time, macOS asks the
-//! person to let OpenBot use Accessibility. A URL first brings that tab forward with Safari's own scripting, as
+//! person to let NeoBot use Accessibility. A URL first brings that tab forward with Safari's own scripting, as
 //! Accessibility sees only the page a window shows. The script never reads cookies, storage or passwords.
 
 /// How the commands that act are written.
 pub const USAGE: &str =
-    "tirith safari click <target> [<url>] | tirith safari type <target> <text> [<url>]";
+    "neobot safari click <target> [<url>] | neobot safari type <target> <text> [<url>]";
 
 /// The fixed script.
 const AX: &str = include_str!("../../../assets/safari-ax.js");

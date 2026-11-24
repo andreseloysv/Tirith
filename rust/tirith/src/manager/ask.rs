@@ -1,9 +1,9 @@
-//! `tirith ask-owner`: a new card for the owner.
+//! `neobot ask-owner`: a new card for the owner.
 use super::events::emit_event;
 use crate::app::{now_iso, Shared};
 use crate::rooms;
 use serde_json::{json, Value};
-/// `tirith ask-owner`: a card in its project's chat (so on the owner's phones too) and among the open cards of the owner's page, until answered. With `lane` it carries that waiting lane's question: the lane shows it, and the answer goes straight to the lane.
+/// `neobot ask-owner`: a card in its project's chat (so on the owner's phones too) and among the open cards of the owner's page, until answered. With `lane` it carries that waiting lane's question: the lane shows it, and the answer goes straight to the lane.
 pub fn ask_owner(
     app: &Shared,
     project: &str,

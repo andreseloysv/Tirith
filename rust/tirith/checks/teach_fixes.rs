@@ -181,7 +181,7 @@ async fn a_rehearsal_stops_before_what_needs_the_owners_yes() {
             "{target}: {out}"
         );
         assert!(
-            said.contains("tirith teach stop") && said.contains("owner's yes"),
+            said.contains("neobot teach stop") && said.contains("owner's yes"),
             "{said}"
         );
     }
@@ -217,7 +217,7 @@ async fn a_rehearsal_stops_before_what_needs_the_owners_yes() {
         code == 200
             && out["ok"] == false
             && said.starts_with("Refused: the control «Continuar»")
-            && said.contains("tirith teach stop"),
+            && said.contains("neobot teach stop"),
         "{out}"
     );
     // An ordinary click still goes through the extension, and the CLI reports a refused step as a failure.

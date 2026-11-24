@@ -11,7 +11,7 @@ impl Notice {
 
     pub(super) fn say(&mut self, why: &str) {
         if let Some(out) = self.0.as_mut() {
-            let _ = writeln!(out, "tirith: {why}");
+            let _ = writeln!(out, "neobot: {why}");
         }
     }
 }

@@ -1,4 +1,4 @@
-//! Git in a bot's repository, as OpenBot: its own name, no signing.
+//! Git in a bot's repository, as NeoBot: its own name, no signing.
 use std::path::Path;
 use std::process::Stdio;
 
@@ -9,7 +9,7 @@ pub(super) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
         .arg(dir)
         .args([
             "-c",
-            "user.name=OpenBot",
+            "user.name=NeoBot",
             "-c",
             "user.email=tirith@localhost",
         ])

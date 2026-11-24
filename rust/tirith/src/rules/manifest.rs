@@ -1,4 +1,4 @@
-//! The rules a project's tirith.toml brings: its plan is written only by OpenBot, and its own `[[rules]]`.
+//! The rules a project's tirith.toml brings: its plan is written only by NeoBot, and its own `[[rules]]`.
 use super::call::Call;
 use crate::config::{Manifest, Project};
 use regex::Regex;
@@ -11,7 +11,7 @@ pub(super) fn plan_written(call: &Call, p: &Project, m: &Manifest) -> Option<Str
     let edits = call.edit && call.files.iter().any(|f| f.ends_with(&plan));
     (edits || writes).then(|| {
         format!(
-            "The plan is written only by OpenBot. Add an item with: tirith plan add {} <step> \"<text>\"",
+            "The plan is written only by NeoBot. Add an item with: neobot plan add {} <step> \"<text>\"",
             p.id
         )
     })

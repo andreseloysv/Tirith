@@ -31,12 +31,12 @@ pub fn paused_fix(project: &str, why: &str) -> String {
         .find('(')
         .zip(why.rfind(')'))
         .map(|(a, b)| &why[a + 1..b])
-        .filter(|f| f.starts_with("tirith "))
+        .filter(|f| f.starts_with("tirith ") || f.starts_with("neobot "))
         .map(String::from);
     let known = [
         (
             "merge queue",
-            "wait for the merges (tirith status shows them)",
+            "wait for the merges (neobot status shows them)",
         ),
         ("GB free", "free disk space"),
     ]
@@ -44,10 +44,10 @@ pub fn paused_fix(project: &str, why: &str) -> String {
     .find(|(w, _)| why.contains(w))
     .map(|(_, f)| f.to_string());
     said.or(known).unwrap_or_else(|| {
-        if why.contains("core.hooksPath") || why.contains("not OpenBot's") {
-            "fix the git hooks by hand, then tirith guard install ".to_string() + project
+        if why.contains("core.hooksPath") || why.contains("not NeoBot's") {
+            "fix the git hooks by hand, then neobot guard install ".to_string() + project
         } else {
-            format!("tirith guard install {project}")
+            format!("neobot guard install {project}")
         }
     })
 }

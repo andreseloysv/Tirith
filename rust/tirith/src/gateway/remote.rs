@@ -1,4 +1,4 @@
-//! A remote connector: MCP's streamable HTTP (each message a POST, the answer JSON or an event stream), always through OpenBot's proxy with the bot's credentials, so the proxy counts it as the bot's; its secrets in the auth headers alone: the first `Authorization: Bearer` (a signed-in one's access, renewed once on a 401), any other a header of its own name (`_` as `-`).
+//! A remote connector: MCP's streamable HTTP (each message a POST, the answer JSON or an event stream), always through NeoBot's proxy with the bot's credentials, so the proxy counts it as the bot's; its secrets in the auth headers alone: the first `Authorization: Bearer` (a signed-in one's access, renewed once on a 401), any other a header of its own name (`_` as `-`).
 use super::{auth::auth, renew::Renew, rpc};
 use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};

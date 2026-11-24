@@ -31,7 +31,7 @@ export function Bots({ project: wanted }) {
 
   if (!bots) {
     return html`<div class="bview bsolo"><p class="bnote">${err ? (/not found/i.test(err.message)
-      ? 'The running OpenBot daemon is older than this page and has no bots yet: rebuild and restart it (the page updates on its own).'
+      ? 'The running NeoBot daemon is older than this page and has no bots yet: rebuild and restart it (the page updates on its own).'
       : `Could not read the bots: ${err.message}`) : 'Loading…'}</p></div>`;
   }
   if (!bots.length) return html`<div class="bview bsolo"><${Intro} onNew=${() => setUi('botCard', {})} onTemplate=${pickTemplate} onImport=${pickImport} /></div>`;

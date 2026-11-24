@@ -430,7 +430,7 @@ async fn gateway_hides_secrets() {
         .iter()
         .any(|(k, v)| k == "mcp-session-id" && v == "web-session-1")));
 
-    // Nowhere the agent reads or OpenBot keeps.
+    // Nowhere the agent reads or NeoBot keeps.
     let bot = w.token(BOT);
     let (_, opened) = http(
         w.port,
@@ -483,6 +483,7 @@ async fn gateway_hides_secrets() {
 fn files(dir: &std::path::Path) -> Vec<String> {
     let entries = std::fs::read_dir(dir).into_iter().flatten().flatten();
     entries
+        .filter(|e| !e.file_type().is_ok_and(|t| t.is_symlink())) // the links to this binary, which carries the test's secrets as constants
         .flat_map(|e| match e.path().is_dir() {
             true => files(&e.path()),
             false => vec![

@@ -1,4 +1,4 @@
-// The service's files, and what `tirith service status` calls alive.
+// The service's files, and what `neobot service status` calls alive.
 use super::{alive::said, launchctl::printed_pid, Unit};
 use std::path::{Path, PathBuf};
 

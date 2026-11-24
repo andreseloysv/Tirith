@@ -23,13 +23,13 @@ pub(super) async fn sort_out(app: &Shared, t: &Train, batch: Vec<Lane>) -> (Vec<
         } else if let Some(c) = item_check(app, pid, &lane) {
             match run_stage(app, &t.pipe, &t.slot, &format!("check {}", lane.id), &c).await {
                 Ok(()) => ticks.push(lane),
-                Err(e) => lanes::send_back(app, &lane, &format!("nothing to merge, and the item's check fails on main: commit your work, or ask the manager with tirith ask.\n{e}")),
+                Err(e) => lanes::send_back(app, &lane, &format!("nothing to merge, and the item's check fails on main: commit your work, or ask the manager with neobot ask.\n{e}")),
             }
         } else {
             lanes::send_back(
                 app,
                 &lane,
-                "nothing to merge: commit your work, or ask the manager with tirith ask",
+                "nothing to merge: commit your work, or ask the manager with neobot ask",
             );
         }
     }

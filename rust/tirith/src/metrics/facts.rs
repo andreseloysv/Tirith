@@ -34,7 +34,7 @@ pub(super) fn empty_plan_note(empty: &[String]) -> String {
         .iter()
         .map(|p| {
             format!(
-                " [{p} plan empty: nothing startable; fix: tirith plan add {p} <step> \"<text>\"]"
+                " [{p} plan empty: nothing startable; fix: neobot plan add {p} <step> \"<text>\"]"
             )
         })
         .collect()

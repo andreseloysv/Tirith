@@ -1,9 +1,9 @@
-// `tirith safari click|type` through macOS Accessibility, so nobody turns on a Safari setting: the daemon runs
+// `neobot safari click|type` through macOS Accessibility, so nobody turns on a Safari setting: the daemon runs
 // osascript -l JavaScript -e <this> <click|type> <target> <text> <url>, the agent's words only as arguments.
 // The page is the shown one whose URL starts with <url> (the daemon brought that tab forward), else the front
 // window's. A click presses the element labelled with the words (exactly, else the shortest label holding them);
 // typing focuses the field so named and sets its value, which the page sees as typing; a list opens and its
-// option is pressed. The first time, macOS asks the person to let OpenBot use Accessibility.
+// option is pressed. The first time, macOS asks the person to let NeoBot use Accessibility.
 ObjC.import('ApplicationServices');
 ObjC.import('AppKit');
 ObjC.bindFunction('AXUIElementCreateApplication', ['id', ['int']]);
@@ -83,7 +83,7 @@ function type(all, target, text) {
 function run(argv) {
   const [cmd, target, text, url] = argv;
   if (!$.AXIsProcessTrustedWithOptions($({ AXTrustedCheckOptionPrompt: true }))) {
-    return 'ERROR OpenBot may not use Accessibility yet: System Settings › Privacy & Security › Accessibility › turn OpenBot on';
+    return 'ERROR NeoBot may not use Accessibility yet: System Settings › Privacy & Security › Accessibility › turn NeoBot on';
   }
   const apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.Safari');
   if (!apps.count) return 'ERROR Safari is not open';

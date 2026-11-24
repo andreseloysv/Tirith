@@ -1,10 +1,10 @@
-//! `codex` inside OpenBot's sandbox (the wrapper of `<home>/net/bin`): its limit is read and the daemon is asked to apply it.
+//! `codex` inside NeoBot's sandbox (the wrapper of `<home>/net/bin`): its limit is read and the daemon is asked to apply it.
 use super::{ask::ask, asked, other, program, settings, ROLE, WORD};
 use crate::sandbox::mac;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 
-/// `tirith nested-codex <codex> args…`, answered before the command line is read.
+/// `neobot nested-codex <codex> args…`, answered before the command line is read.
 pub fn launcher(args: &[String]) -> Option<i32> {
     if let Some(code) = super::watch::launcher(args) {
         return Some(code);
@@ -15,7 +15,7 @@ pub fn launcher(args: &[String]) -> Option<i32> {
     (word == WORD || word == ROLE).then(|| run(program, rest, word == ROLE))
 }
 
-/// `argv` of a Codex that OpenBot starts for a read-only role inside its sandbox, through this client.
+/// `argv` of a Codex that NeoBot starts for a read-only role inside its sandbox, through this client.
 pub fn inside(argv: &mut Vec<String>) {
     if let Some(exe) = crate::app::exe() {
         argv.splice(0..0, [exe.display().to_string(), ROLE.to_string()]);
@@ -24,12 +24,12 @@ pub fn inside(argv: &mut Vec<String>) {
 
 fn run(program: &str, args: &[String], role: bool) -> i32 {
     let said = |why: String| {
-        eprintln!("tirith: Codex could not be started with its limit: {why}");
+        eprintln!("neobot: Codex could not be started with its limit: {why}");
         71
     };
     let as_it_is = || {
         let e = std::process::Command::new(program).args(args).exec();
-        eprintln!("tirith: cannot start {program}: {e}");
+        eprintln!("neobot: cannot start {program}: {e}");
         71
     };
     // SAFETY: getpid only reads this process's own id.
@@ -40,7 +40,7 @@ fn run(program: &str, args: &[String], role: bool) -> i32 {
     let Some(asked) = asked::read(args) else {
         match other::said(args) {
             Some((why, true)) => return said(why),
-            Some((note, false)) => eprintln!("tirith: {note}"),
+            Some((note, false)) => eprintln!("neobot: {note}"),
             None => {}
         }
         return as_it_is();
@@ -79,6 +79,6 @@ fn run(program: &str, args: &[String], role: bool) -> i32 {
     request.env = std::env::vars_os()
         .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
         .collect();
-    eprintln!("tirith: {note}");
+    eprintln!("neobot: {note}");
     ask(&request).unwrap_or_else(said)
 }

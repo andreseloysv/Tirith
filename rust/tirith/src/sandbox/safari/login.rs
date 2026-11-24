@@ -1,4 +1,4 @@
-//! `tirith browser login <url>`: OpenBot's own browser shown on the owner's screen at that page, with its own
+//! `neobot browser login <url>`: NeoBot's own browser shown on the owner's screen at that page, with its own
 //! profile (`<home>/browser/profile`), so they sign in once and the agents find the session there. It keeps the
 //! keychain and password-store switches of the browser the agents drive (tools/browser/launch.mjs, through
 //! Playwright), or the cookies it saves would not read there. LaunchServices starts it (`open -n`), so it is no
@@ -40,7 +40,7 @@ pub fn open(home: &Path, url: &str) -> Result<String, String> {
     let clean = !url.chars().any(|c| c.is_control() || c.is_whitespace());
     (web && clean)
         .then_some(())
-        .ok_or("tirith browser login <url>: an http(s) address")?;
+        .ok_or("neobot browser login <url>: an http(s) address")?;
     let app = application().ok_or("neither Microsoft Edge nor Google Chrome is installed")?;
     let profile = home.join("browser/profile");
     std::fs::create_dir_all(&profile).map_err(|e| e.to_string())?;
@@ -50,6 +50,6 @@ pub fn open(home: &Path, url: &str) -> Result<String, String> {
         .status()
         .map_err(|e| e.to_string())?;
     done.success()
-        .then(|| format!("shown in OpenBot's browser: {url} — ask the owner to sign in there and to close that window when done; the session stays saved"))
-        .ok_or_else(|| "OpenBot's browser did not open".into())
+        .then(|| format!("shown in NeoBot's browser: {url} — ask the owner to sign in there and to close that window when done; the session stays saved"))
+        .ok_or_else(|| "NeoBot's browser did not open".into())
 }

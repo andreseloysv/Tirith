@@ -17,7 +17,7 @@ async fn room_of(app: &Shared, key: &str) -> Result<Room, String> {
         None => create(app, &label(app, key), key, String::new()).await,
     }
 }
-/// Makes the webhook of `key`'s room, sealed once for this OpenBot's key alone: the platform's `{id, url, from}`, with the room.
+/// Makes the webhook of `key`'s room, sealed once for this NeoBot's key alone: the platform's `{id, url, from}`, with the room.
 pub async fn hook_create(app: &Shared, key: &str) -> Result<Value, String> {
     let r = room_of(app, key).await?;
     let me = sealed::identity(&app.home, &r.me)?;

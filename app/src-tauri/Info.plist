@@ -4,6 +4,6 @@
 <dict>
   <!-- Merged into the bundle's Info.plist by Tauri: a hardened app may ask for Apple events only with this -->
   <key>NSAppleEventsUsageDescription</key>
-  <string>OpenBot uses Safari when one of your agents needs it.</string>
+  <string>NeoBot uses Safari when one of your agents needs it.</string>
 </dict>
 </plist>

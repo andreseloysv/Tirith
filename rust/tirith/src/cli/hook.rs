@@ -1,4 +1,4 @@
-//! `tirith hook`: the command-hook bridge for agents without HTTP hooks.
+//! `neobot hook`: the command-hook bridge for agents without HTTP hooks.
 use crate::client::{call_with, hook_caller};
 use serde_json::{json, Value};
 use std::{io::Read, time::Duration};

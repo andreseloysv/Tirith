@@ -1,13 +1,13 @@
 ---
 name: resumen-correo
-description: Resumir el correo del dueño de las últimas 24 horas con el navegador de OpenBot, o abrirlo para que inicie sesión.
+description: Resumir el correo del dueño de las últimas 24 horas con el navegador de NeoBot, o abrirlo para que inicie sesión.
 ---
 
 ## Cuándo usarla
 En la rutina «Resumen del correo», cuando el dueño pida su resumen y cuando diga «abre el correo». No sirve para responder ni ordenar el correo.
 
 ## Entradas y accesos
-- El navegador de OpenBot (las herramientas de tirith_browser), con la sesión del correo ya iniciada por el dueño.
+- El navegador de NeoBot (las herramientas de tirith_browser), con la sesión del correo ya iniciada por el dueño.
 - La dirección del correo web: la de memory.md; si no hay ninguna, https://mail.google.com. Si el dueño da otra, guárdala allí.
 
 ## Pasos

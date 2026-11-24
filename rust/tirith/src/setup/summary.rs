@@ -1,24 +1,24 @@
-//! The end of the guide: what is connected, what is left, and how to open OpenBot.
+//! The end of the guide: what is connected, what is left, and how to open NeoBot.
 use super::context::Context;
 
 pub(super) fn show(cx: &Context, connected: &[String], pending: &[String]) {
     println!("\n----------------------------------------");
     if connected.is_empty() {
-        println!("OpenBot runs, but no agent is connected yet: it can do no work.");
+        println!("NeoBot runs, but no agent is connected yet: it can do no work.");
     } else {
-        println!("OpenBot is ready. Connected: {}.", connected.join(", "));
+        println!("NeoBot is ready. Connected: {}.", connected.join(", "));
     }
     if !pending.is_empty() {
         println!("\nStill to do:");
         pending.iter().for_each(|p| println!("  - {p}"));
     }
     open(cx.cfg().port);
-    println!("\nThen add a project:  tirith project add <folder>");
-    let on_path = super::find::program("tirith")
+    println!("\nThen add a project:  neobot project add <folder>");
+    let on_path = super::find::program("neobot")
         .is_some_and(|p| std::fs::canonicalize(p).ok() == std::fs::canonicalize(&cx.exe).ok());
     if let Some(dir) = cx.exe.parent().filter(|_| !on_path) {
         println!(
-            "(`tirith` is not on your PATH yet: export PATH=\"{}:$PATH\")",
+            "(`neobot` is not on your PATH yet: export PATH=\"{}:$PATH\")",
             dir.display()
         );
     }
@@ -31,7 +31,7 @@ fn open(port: u16) {
     let remote =
         ssh.is_some() || (cfg!(target_os = "linux") && std::env::var_os("DISPLAY").is_none());
     if !remote {
-        println!("\nOpen it:  tirith open   ({page})");
+        println!("\nOpen it:  neobot open   ({page})");
         return;
     }
     let at = ssh
@@ -47,6 +47,6 @@ fn open(port: u16) {
         .unwrap_or_else(|| "you".into());
     println!("\nOn your own computer (the page never listens on the network):");
     println!("  ssh -N -L {port}:127.0.0.1:{port} {user}@{at}");
-    println!("  then here: tirith open link, and open what it prints in that browser ({page}, once signed in)");
-    println!("  (the port is the same at both ends; taken there, by a OpenBot of that computer say: tirith setup --server --port {})", port.wrapping_add(84).max(1024));
+    println!("  then here: neobot open link, and open what it prints in that browser ({page}, once signed in)");
+    println!("  (the port is the same at both ends; taken there, by a NeoBot of that computer say: neobot setup --server --port {})", port.wrapping_add(84).max(1024));
 }

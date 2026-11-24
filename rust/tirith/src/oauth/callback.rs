@@ -14,7 +14,7 @@ pub fn own_route(method: &Method, path: &str) -> bool {
 }
 
 fn page(code: StatusCode, said: &str) -> Response {
-    let html = format!("<!doctype html><meta charset=\"utf-8\"><title>OpenBot</title><body style=\"font:16px/1.5 system-ui;margin:20vh auto;max-width:28rem;padding:0 1.5rem;color-scheme:light dark\"><h1>OpenBot</h1><p>{said}</p>");
+    let html = format!("<!doctype html><meta charset=\"utf-8\"><title>NeoBot</title><body style=\"font:16px/1.5 system-ui;margin:20vh auto;max-width:28rem;padding:0 1.5rem;color-scheme:light dark\"><h1>NeoBot</h1><p>{said}</p>");
     (code, Html(html)).into_response()
 }
 
@@ -33,7 +33,7 @@ pub(super) async fn callback(
     let Some(p) = pending::take(state).filter(|_| !state.is_empty()) else {
         return page(
             StatusCode::BAD_REQUEST,
-            "This sign-in is unknown or over: run tirith connector login again.",
+            "This sign-in is unknown or over: run neobot connector login again.",
         );
     };
     let done = match (q.get("code"), q.get("error")) {

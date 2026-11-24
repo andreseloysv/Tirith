@@ -1,4 +1,4 @@
-// What a package will do and need, shown before anything is made: the creator, the routines, the skills, the connectors it asks for and what OpenBot enforces.
+// What a package will do and need, shown before anything is made: the creator, the routines, the skills, the connectors it asks for and what NeoBot enforces.
 import { html } from '../../../vendor/preact-htm.js';
 import { Face } from './face.js';
 import { daysLabel, timeLabel } from './when.js';
@@ -16,6 +16,6 @@ export function PackagePreview({ p }) {
     ${p.instructions ? html`<h4>Instructions</h4><p>${p.instructions}</p>` : null}
     <h4>Asks for these connectors</h4>${p.integrations.length ? html`<ul>${p.integrations.map((g) => html`<li key=${g.connector}>${g.connector}: ${tools(g)}</li>`)}</ul>` : html`<p class="bmut">None.</p>`}
     <p class="bmut">${p.grants_nothing}.</p>
-    <h4>Limits</h4><ul>${p.permissions.map((x) => html`<li key=${x.what}><b>${x.what}</b> · ${x.enforced ? 'enforced by OpenBot' : 'declared only'}: ${x.note}</li>`)}</ul>
+    <h4>Limits</h4><ul>${p.permissions.map((x) => html`<li key=${x.what}><b>${x.what}</b> · ${x.enforced ? 'enforced by NeoBot' : 'declared only'}: ${x.note}</li>`)}</ul>
   </div>`;
 }

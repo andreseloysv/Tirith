@@ -1,4 +1,4 @@
-//! Sign-ins under way, by their state (one use, ten minutes at most), and how each ended, by its ticket: what `tirith connector login` waits on. Held in memory alone: a restart ends them.
+//! Sign-ins under way, by their state (one use, ten minutes at most), and how each ended, by its ticket: what `neobot connector login` waits on. Held in memory alone: a restart ends them.
 use super::token::Grant;
 use serde_json::{json, Value};
 use std::sync::Mutex;

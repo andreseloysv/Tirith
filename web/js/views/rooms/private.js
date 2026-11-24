@@ -17,7 +17,7 @@ export function PrivateCard({ r, reload, title, agent }) {
     ${r.braked ? html`<div class="icli rbrake">The manager stopped answering here: too many messages in a row came from agents. It answers again when you write from a paired phone.</div>` : null}
     <${Who} r=${r} /><${Last} r=${r} />
     <div class="sfoot">
-      ${r.kind === 'manager' ? html`<button class=${`sadd${ask === 'invite' ? ' on' : ''}`} onClick=${() => toggle('invite')}>Invite another OpenBot</button>` : null}
+      ${r.kind === 'manager' ? html`<button class=${`sadd${ask === 'invite' ? ' on' : ''}`} onClick=${() => toggle('invite')}>Invite another NeoBot</button>` : null}
       <button class=${`sadd rleave${ask === 'leave' ? ' on' : ''}`} onClick=${() => toggle('leave')}>Leave</button></div>
     ${ask ? html`<${Popover} r=${r} ask=${ask} close=${() => setAsk('')} act=${act} />` : null}
     ${act[1] ? html`<div class="ierr">${act[1]}</div>` : null}
@@ -32,8 +32,8 @@ export function JoinCard({ reload, project }) {
     if (await run('join', () => api('POST', '/api/rooms/join', { code: code.trim(), project: project || '' }))) setCode('');
   };
   return html`<div class="card scard rnew">
-    <div class="phead"><b>The room of another OpenBot</b><span class="mut sm">Paste the code its owner got with Invite another OpenBot. Not for a phone: a phone scans the QR at the top.</span></div>
-    <div class="sfoot rjoin"><input type="text" class="rtitle rcode" placeholder="sealed-…:key id:code" aria-label="Room code from another OpenBot" autocomplete="off" spellcheck="false"
+    <div class="phead"><b>The room of another NeoBot</b><span class="mut sm">Paste the code its owner got with Invite another NeoBot. Not for a phone: a phone scans the QR at the top.</span></div>
+    <div class="sfoot rjoin"><input type="text" class="rtitle rcode" placeholder="sealed-…:key id:code" aria-label="Room code from another NeoBot" autocomplete="off" spellcheck="false"
         value=${code} onInput=${(e) => setCode(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); join(); } }} />
       <button class="sadd" disabled=${busy === 'join' || !code.trim()} onClick=${join}>${busy === 'join' ? 'Joining…' : 'Join with a code'}</button></div>
     ${error ? html`<div class="ierr">${error}</div>` : null}

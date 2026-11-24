@@ -1,5 +1,5 @@
 #!/bin/sh
-# A whole signed release, built on a Mac: the four binaries, their tarballs, SHA256SUMS signed with Tirith's
+# A whole signed release, built on a Mac: the four binaries, their tarballs, SHA256SUMS signed with NeoBot's
 # release key, and the installer that checks both. Nothing is uploaded.
 #   sh scripts/release/release.sh <version> [out-folder]
 # TIRITH_RELEASE_KEY    the P-256 private key (default ~/.config/tirith-release/signing.key)
@@ -34,18 +34,18 @@ for target in aarch64-apple-darwin x86_64-apple-darwin aarch64-unknown-linux-mus
   echo "== $target"
   dir="$work/$target"
   mkdir "$dir"
-  sh "$root/scripts/release/build.sh" "$target" "$dir/tirith" >/dev/null
-  chmod 755 "$dir/tirith"
+  sh "$root/scripts/release/build.sh" "$target" "$dir/neobot" >/dev/null
+  chmod 755 "$dir/neobot"
   cp "$root/LICENSE" "$dir/LICENSE"
-  set -- tirith LICENSE
+  set -- neobot LICENSE
   case "$target" in
-    *-apple-darwin) sh "$root/scripts/release/sign-macos.sh" "$dir/tirith" ;;
+    *-apple-darwin) sh "$root/scripts/release/sign-macos.sh" "$dir/neobot" ;;
     *)
       cp "${TIRITH_RELEASE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/tirith-release}/musl/COPYRIGHT.musl" "$dir/"
       set -- "$@" COPYRIGHT.musl
       ;;
   esac
-  file="tirith-$target.tar.gz"
+  file="neobot-$target.tar.gz"
   # no name of the machine or of who built it in the tarball
   (cd "$dir" && COPYFILE_DISABLE=1 /usr/bin/tar --no-xattrs --uid 0 --gid 0 --uname '' --gname '' \
     -czf "$out/$file" "$@")

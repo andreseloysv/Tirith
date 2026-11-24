@@ -1,4 +1,4 @@
-//! A caller's connection, and whether it comes from inside OpenBot's sandbox as the kernel tells it (`sandbox/caller.rs`): nothing from in there is the owner, whatever it holds.
+//! A caller's connection, and whether it comes from inside NeoBot's sandbox as the kernel tells it (`sandbox/caller.rs`): nothing from in there is the owner, whatever it holds.
 use super::door::Door;
 use axum::extract::{connect_info::Connected, ConnectInfo, Request};
 use axum::serve::IncomingStream;
@@ -25,7 +25,7 @@ impl Connected<IncomingStream<'_, Door>> for Caller {
     }
 }
 
-/// The request's connection; none outside `tirith serve`.
+/// The request's connection; none outside `neobot serve`.
 pub(super) fn of(req: &Request) -> Option<Caller> {
     req.extensions()
         .get::<ConnectInfo<Caller>>()

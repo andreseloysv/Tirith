@@ -70,7 +70,7 @@ fn stop(app: &Shared, run: &Expected, most: u64) {
         let why = format!("no pudo empezar en {most} min: su conversación seguía ocupada o su agente no arrancaba");
         return never(app, run, &why);
     }
-    let why = format!("tardó más de {most} min y OpenBot lo paró");
+    let why = format!("tardó más de {most} min y NeoBot lo paró");
     because(app, run.id, &why); // its turn, ending, is judged by this
     if !crate::manager::stop_run(&run.conv) {
         crate::manager::drop_run(&run.conv, &run.routine); // not even its process: it never starts now

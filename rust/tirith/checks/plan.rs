@@ -69,14 +69,14 @@ fn plan_add_rejects_invalid_checks() {
     let b = super::check::check_problem;
     assert!(
         [
-            "tirith run -s test",
+            "neobot run -s test",
             "tirith check",
             "cd collector && ls",
-            "cargo test && tirith run"
+            "cargo test && neobot run"
         ]
         .iter()
         .all(|c| b(c).is_some())
-            && ["cargo test -q x", "tirith plan show p", "cd collectors"]
+            && ["cargo test -q x", "neobot plan show p", "cd collectors"]
                 .iter()
                 .all(|c| b(c).is_none())
     );
@@ -106,6 +106,8 @@ fn plan_add_accepts_cargo_test_filter() {
         "for i in 1; do tirith comando_inventado; done",
         "if true; then tirith comando_inventado; fi",
         "test -n \"$(tirith comando_inventado)\"",
+        "neobot comando_inventado",
+        "true && neobot comando_inventado",
     ] {
         assert!(b(bad).is_some(), "{bad}");
     }

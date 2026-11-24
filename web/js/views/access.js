@@ -24,7 +24,7 @@ const whoText = (who) => {
 function Guard({ st }) {
   if (!st) return null;
   return html`<p class="sm netline">${st.sandbox
-    ? html`<span class="chip xk api">Network guard on</span><span class="mut">Lanes run in a sandbox: they reach the outside only through OpenBot's proxy (127.0.0.1:${st.proxy_port}), which sees each domain and refuses the blocked ones.</span>`
+    ? html`<span class="chip xk api">Network guard on</span><span class="mut">Lanes run in a sandbox: they reach the outside only through NeoBot's proxy (127.0.0.1:${st.proxy_port}), which sees each domain and refuses the blocked ones.</span>`
     : html`<span class="chip xk blk">Network guard off</span><span class="mut">${st.why || ''}</span>`}
     ${st.proxy && st.proxy !== 'listening' ? html`<span class="chip xk blk" title=${st.proxy}>Proxy: ${st.proxy}</span>` : null}</p>`;
 }

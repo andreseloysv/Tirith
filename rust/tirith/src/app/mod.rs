@@ -1,4 +1,5 @@
 //! The daemon's shared state: config, SQLite, the lanes in memory and the change feed the page listens to.
+mod alias;
 mod config;
 mod conv;
 mod feed;
@@ -18,6 +19,7 @@ mod text;
 mod time;
 mod worktree;
 
+pub use alias::link_names;
 pub use git::git;
 pub use keys::{kept, write as write_key, Keys, OWNER, PAGE};
 pub use lane::Lane;

@@ -1,4 +1,4 @@
-//! What a process OpenBot starts runs as: the program, its arguments and the environment the sandbox adds.
+//! What a process NeoBot starts runs as: the program, its arguments and the environment the sandbox adds.
 use crate::app::Shared;
 
 pub struct Launch {

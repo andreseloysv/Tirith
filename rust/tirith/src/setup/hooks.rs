@@ -1,4 +1,4 @@
-//! An agent's hooks pointed at OpenBot, in its own settings file: everything else there stays, and the first change keeps a copy.
+//! An agent's hooks pointed at NeoBot, in its own settings file: everything else there stays, and the first change keeps a copy.
 use super::catalog::Known;
 use super::hook_lines::{command, others, EVENTS};
 use serde_json::{json, Value};

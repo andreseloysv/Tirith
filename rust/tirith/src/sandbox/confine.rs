@@ -1,4 +1,4 @@
-//! How this system confines what OpenBot starts: `sandbox-exec` on macOS, an empty network namespace on Linux.
+//! How this system confines what NeoBot starts: `sandbox-exec` on macOS, an empty network namespace on Linux.
 use crate::app::Shared;
 
 /// Whether this system can confine, else why not (and what to do).
@@ -47,7 +47,7 @@ pub(super) fn argv(app: &Shared, program: String, args: Vec<String>) -> (String,
     (super::profile::SANDBOX_EXEC.into(), args)
 }
 
-/// `tirith net run …`, the launcher, answered before anything else of the command line runs (it must still have one thread): its exit code.
+/// `neobot net run …`, the launcher, answered before anything else of the command line runs (it must still have one thread): its exit code.
 pub fn launcher(args: &[String]) -> Option<i32> {
     let [net, run, rest @ ..] = args else {
         return None;
@@ -58,16 +58,16 @@ pub fn launcher(args: &[String]) -> Option<i32> {
         #[cfg(not(target_os = "linux"))]
         {
             let _ = rest;
-            eprintln!("tirith net run is Linux's sandbox launcher");
+            eprintln!("neobot net run is Linux's sandbox launcher");
             2
         }
     })
 }
 
-/// `tirith net allow`.
+/// `neobot net allow`.
 pub(super) fn allow() -> Result<(), String> {
     #[cfg(target_os = "linux")]
     return super::linux::allow();
     #[cfg(not(target_os = "linux"))]
-    Err("tirith net allow is for Linux: macOS needs nothing".into())
+    Err("neobot net allow is for Linux: macOS needs nothing".into())
 }

@@ -1,4 +1,4 @@
-//! `tirith lane delete`: a lane thrown away with its branch, its worktree and its open plan item.
+//! `neobot lane delete`: a lane thrown away with its branch, its worktree and its open plan item.
 use super::stop::kill_agent;
 use super::worktree::remove_worktree;
 use crate::app::{git, Lane, Shared};
@@ -31,7 +31,7 @@ async fn drop_folder_and_branch(app: &Shared, repo: &Path, lane: &Lane) {
         drop(git(repo, &["branch", "-D", &lane.branch]).await);
     }
 }
-/// `tirith lane delete`: the lane is thrown away. Its agent stops, its branch and unsaved work go, it leaves every list, and its open item leaves the plan, so nothing starts it again (stopping keeps all that: the autopilot only skips the item).
+/// `neobot lane delete`: the lane is thrown away. Its agent stops, its branch and unsaved work go, it leaves every list, and its open item leaves the plan, so nothing starts it again (stopping keeps all that: the autopilot only skips the item).
 pub async fn delete(app: &Shared, id: &str) -> Result<(), String> {
     let lane = app.lane(id).ok_or(format!("no lane '{id}'"))?;
     (lane.status != "merging")

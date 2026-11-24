@@ -280,7 +280,7 @@ fn roles_extend_and_prompts_resolve() {
     );
     assert!(f
         .prompts_of("manager")
-        .starts_with("You are the manager inside OpenBot"));
+        .starts_with("You are the manager inside NeoBot"));
     assert!(f
         .prompts_of("manager")
         .contains("only about the project {id}"));
@@ -294,7 +294,7 @@ fn roles_extend_and_prompts_resolve() {
         "one change at most:\n{ceo}"
     );
     assert!(
-        ceo.contains("tirith plan add tirith 17") && ceo.contains("tirith lane start tirith 17"),
+        ceo.contains("neobot plan add tirith 17") && ceo.contains("neobot lane start tirith 17"),
         "as a step 17 item with its lane started"
     );
     assert!(

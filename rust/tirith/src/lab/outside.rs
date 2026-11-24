@@ -1,15 +1,15 @@
-//! Which tool calls of a replay read outside (the web, a browser, `tirith safari` or `tirith teach do`, shell commands that use the network) and which would reach the owner (`tirith say`, `ask`, `ask-owner`, `chat`).
+//! Which tool calls of a replay read outside (the web, a browser, `neobot safari` or `neobot teach do`, shell commands that use the network) and which would reach the owner (`neobot say`, `ask`, `ask-owner`, `chat`).
 use regex::Regex;
 use serde_json::Value;
 use std::sync::LazyLock;
 
 /// A command that uses the network, at the start of a command or after a separator.
 static NET: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?:^|[\s;&|(`$/])(?:curl|wget|https?|ssh|scp|sftp|rsync|nc|ncat|telnet|ftp|ping|dig|nslookup|gh|osascript|tirith\s+(?:safari|teach)|git\s+(?:fetch|pull|clone|push|ls-remote|remote\s+update)|open\s+https?:)(?:\s|$|;|\|)").unwrap()
+    Regex::new(r"(?:^|[\s;&|(`$/])(?:curl|wget|https?|ssh|scp|sftp|rsync|nc|ncat|telnet|ftp|ping|dig|nslookup|gh|osascript|(?:tirith|neobot)\s+(?:safari|teach)|git\s+(?:fetch|pull|clone|push|ls-remote|remote\s+update)|open\s+https?:)(?:\s|$|;|\|)").unwrap()
 });
 /// A `tirith` command that speaks to the owner or opens a card.
 static OWNER: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\btirith\s+(?:say|ask|ask-owner|chat)\b").unwrap());
+    LazyLock::new(|| Regex::new(r"\b(?:tirith|neobot)\s+(?:say|ask|ask-owner|chat)\b").unwrap());
 
 /// The command of a shell call.
 fn command(tool: &str, input: &Value) -> Option<String> {

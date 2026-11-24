@@ -19,14 +19,14 @@ pub fn proven(
         .filter(|a| a.bot.starts_with("bot-") && a.lane.is_empty()); // a system bot (a manager, the CEO) holds no grant
     let Some((agent, raw)) = agent.zip(raw) else {
         return Err(no(
-            "tirith mcp is a bot run's alone: no lane, manager or owner opens it".into(),
+            "neobot mcp is a bot run's alone: no lane, manager or owner opens it".into(),
         ));
     };
     let key = crate::bots::key_for(app, bot);
     match key.filter(|k| *k == agent.bot) {
         Some(key) => Ok((key, raw)),
         None => Err(no(format!(
-            "this run is bot '{}', not '{bot}': tirith mcp --bot names its own",
+            "this run is bot '{}', not '{bot}': neobot mcp --bot names its own",
             agent.bot.strip_prefix("bot-").unwrap_or(&agent.bot)
         ))),
     }

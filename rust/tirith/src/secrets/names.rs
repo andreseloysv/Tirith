@@ -34,7 +34,7 @@ pub(super) fn owners(name: &str) -> Result<(), String> {
     (!crate::oauth::reserved(name))
         .then_some(())
         .ok_or_else(|| {
-            "TIRITH_OAUTH_ names are a connector's sign-in: tirith connector login keeps them"
+            "TIRITH_OAUTH_ names are a connector's sign-in: neobot connector login keeps them"
                 .into()
         })
 }

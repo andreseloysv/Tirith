@@ -32,7 +32,7 @@ pub fn send_back(app: &Shared, lane: &Lane, reason: &str) {
     }
     app.update_lane(&lane.id, |l| {
         (l.attempts, l.solo, l.resume, l.note, l.status) =
-            (l.attempts + 1, false, format!("OpenBot sent your work back:\n\n{reason}\n\nFix it on your branch, commit, and end your turn."), format!("sent back: {}", reason.lines().next().unwrap_or("")), "queued".into())
+            (l.attempts + 1, false, format!("NeoBot sent your work back:\n\n{reason}\n\nFix it on your branch, commit, and end your turn."), format!("sent back: {}", reason.lines().next().unwrap_or("")), "queued".into())
     });
     app.sched_wake.notify_one();
 }

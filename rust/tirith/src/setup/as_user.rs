@@ -1,4 +1,4 @@
-//! root on a server whose OpenBot runs as the user `tirith` (install.sh made it): root's `tirith …` is that user's, not a second OpenBot of root's.
+//! root on a server whose NeoBot runs as the user `tirith` (install.sh made it): root's `tirith …` is that user's, not a second NeoBot of root's.
 use std::path::Path;
 
 /// install.sh's service user.
@@ -36,7 +36,7 @@ pub fn in_anothers_terminal() {
     }
 }
 
-/// Goes on as that user when root calls and that user has the OpenBot of this machine; it returns only when it does not.
+/// Goes on as that user when root calls and that user has the NeoBot of this machine; it returns only when it does not.
 pub fn as_service_user(args: &[String]) {
     let root = cfg!(target_os = "linux") && crate::os::is_root();
     if !root || roots_own(args) || std::env::var_os("TIRITH_HOME").is_some() {
@@ -48,7 +48,7 @@ pub fn as_service_user(args: &[String]) {
     };
     let own = crate::config::home_dir().join(".tirith/config.toml");
     if own.exists() || !Path::new(&home).join(".tirith").is_dir() {
-        return; // root has a OpenBot of its own, or that user has none
+        return; // root has a NeoBot of its own, or that user has none
     }
     let Some(exe) = crate::app::exe() else {
         return;
@@ -66,7 +66,7 @@ pub fn as_service_user(args: &[String]) {
         .args(args)
         .current_dir(&home);
     let why = exec(&mut runuser);
-    eprintln!("cannot go on as the user {USER}, whose OpenBot this is: {why}");
+    eprintln!("cannot go on as the user {USER}, whose NeoBot this is: {why}");
     std::process::exit(1);
 }
 

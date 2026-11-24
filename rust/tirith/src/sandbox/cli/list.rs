@@ -1,4 +1,4 @@
-//! `tirith net list`: the destinations seen, then the rules blocking.
+//! `neobot net list`: the destinations seen, then the rules blocking.
 use serde_json::Value;
 
 pub fn list() -> Result<(), String> {

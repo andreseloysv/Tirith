@@ -3,7 +3,7 @@ use super::{list::list, status::status};
 use crate::{client::Flag, sandbox::tunnel::tunnel};
 use serde_json::json;
 
-/// `tirith net …`, `tirith safari …` and `tirith browser …` commands; `None` when `pos` is not one of this module's commands.
+/// `neobot net …`, `neobot safari …` and `neobot browser …` commands; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
     Some(match pos {
         ["net", "status"] => status(),
@@ -13,7 +13,7 @@ pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
         ["net", "tunnel", host, port] => tunnel(host, port),
         ["net", "allow"] => crate::sandbox::confine::allow(),
         ["net", ..] => Err(
-            "tirith net status|list|block <domain|ip|cidr>|unblock <rule>|tunnel <host> <port>|allow"
+            "neobot net status|list|block <domain|ip|cidr>|unblock <rule>|tunnel <host> <port>|allow"
                 .into(),
         ),
         ["safari", cmd @ ("open" | "read"), rest @ ..] => safari(json!({"cmd": cmd, "url": rest.join(" ")})),
@@ -24,14 +24,14 @@ pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
             json!({"cmd": "type", "target": target, "text": text, "url": rest.join(" ")}),
         ),
         ["safari", ..] => Err(
-            "tirith safari open <url> | read [<url>] | click <target> [<url>] | type <target> <text> [<url>]"
+            "neobot safari open <url> | read [<url>] | click <target> [<url>] | type <target> <text> [<url>]"
                 .into(),
         ),
         ["browser"] => safari(json!({"cmd": "browser"})),
         ["browser", "use", which] => safari(json!({"cmd": "use", "target": which})),
         ["browser", "login", rest @ ..] => safari(json!({"cmd": "login", "url": rest.join(" ")})),
         ["browser", ..] => {
-            Err("tirith browser | tirith browser use openbot|safari | tirith browser login <url>".into())
+            Err("neobot browser | neobot browser use neobot|safari | neobot browser login <url>".into())
         }
         _ => return None,
     })

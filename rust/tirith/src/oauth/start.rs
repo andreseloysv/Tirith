@@ -1,4 +1,4 @@
-//! A sign-in begun: the remote connector's server discovered, OpenBot registered at it, and the address the owner's browser goes to, with PKCE, a state and the resource.
+//! A sign-in begun: the remote connector's server discovered, NeoBot registered at it, and the address the owner's browser goes to, with PKCE, a state and the resource.
 use super::pending::{put, Pending};
 use super::token::Grant;
 use super::{discover::discover, pkce, register::register};
@@ -19,7 +19,7 @@ pub(super) async fn start(app: &Shared, id: &str, bot: &str) -> Result<(String, 
     let redirect = format!("http://127.0.0.1:{}/oauth/callback", cfg.port);
     let Some(endpoint) = server.register else {
         return Err(format!(
-            "{} offers no client registration: OpenBot cannot sign in to it",
+            "{} offers no client registration: NeoBot cannot sign in to it",
             c.url
         ));
     };

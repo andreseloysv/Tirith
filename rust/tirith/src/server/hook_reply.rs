@@ -11,7 +11,7 @@ pub(super) fn reply(app: &Shared, event: &str, l: &Lane, p: &Value) -> Json<Valu
         // In a lane the rules (with the network sandbox) are the barrier: an allowed call needs no permission prompt, which a headless agent could never answer.
         "PreToolUse" => Json(
             json!({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
-            "permissionDecisionReason": "allowed by OpenBot's rules"}}),
+            "permissionDecisionReason": "allowed by NeoBot's rules"}}),
         ),
         "Stop" => stop(app, l, p),
         _ => Json(json!({})),
@@ -46,7 +46,7 @@ fn stop(app: &Shared, l: &Lane, p: &Value) -> Json<Value> {
         && last.trim().ends_with('?')
     {
         return Json(json!({"decision": "block", "reason":
-            "Do not end with a question: decide yourself. If you truly need the manager, run: tirith ask \"<question>\" and end your turn."}));
+            "Do not end with a question: decide yourself. If you truly need the manager, run: neobot ask \"<question>\" and end your turn."}));
     }
     Json(json!({}))
 }

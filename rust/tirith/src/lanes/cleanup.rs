@@ -32,7 +32,7 @@ async fn save_uncommitted(app: &Shared, lane: &Lane, ws: &Path) {
     }
     drop(git(ws, &["add", "-A"]).await);
     drop(
-        git(ws, &["commit", "-qm", "Saved by OpenBot"])
+        git(ws, &["commit", "-qm", "Saved by NeoBot"])
             .await
             .map_err(|e| {
                 let why = format!("could not save the work left in {}: {e}", ws.display());

@@ -19,7 +19,7 @@ pub(super) fn why(app: &Shared, id: i64, (missed, heard): (usize, usize)) -> Opt
     let sql = "SELECT COALESCE(steps, 0) FROM turns WHERE id = ?1";
     let steps = app.query(sql, [id], |r| r.get::<_, i64>(0));
     let unheard = heard == 0 && steps.first().is_some_and(|n| *n > 0);
-    unheard.then(|| "its tool calls never reached OpenBot's hook".to_string())
+    unheard.then(|| "its tool calls never reached NeoBot's hook".to_string())
 }
 
 /// Why a pair proves nothing whatever it asked for: two failures are no tie, and two models are no measure of a change that chose neither.

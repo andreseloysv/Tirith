@@ -14,19 +14,19 @@ pub fn intact(app: &Shared, project: &Project) -> Result<(), String> {
         "commit guard: {} is not a git repo",
         project.repo().display()
     ))?;
-    let fix = format!("(tirith guard install {})", project.id);
+    let fix = format!("(neobot guard install {})", project.id);
     for hook in HOOKS {
         hook_intact(&git, hook, &words, &fix)?;
     }
     not_skipped(&git)
 }
 
-/// The hook is there, is OpenBot's, and has config.toml's words.
+/// The hook is there, is NeoBot's, and has config.toml's words.
 fn hook_intact(git: &Path, hook: &str, words: &[String], fix: &str) -> Result<(), String> {
     let text = std::fs::read_to_string(git.join("hooks").join(hook))
         .map_err(|_| format!("commit guard: the {hook} hook is missing {fix}"))?;
     (text.contains(MARKER)).then_some(()).ok_or_else(|| {
-        format!("commit guard: the {hook} hook is not OpenBot's; merge the guard into it by hand")
+        format!("commit guard: the {hook} hook is not NeoBot's; merge the guard into it by hand")
     })?;
     (text == render(hook, words)).then_some(()).ok_or_else(|| {
         format!(
