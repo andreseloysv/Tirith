@@ -1,0 +1,45 @@
+/* The two-column intro, the row of bot faces and the feature cards. */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+.split h2 { max-width: 12em; }
+.split .text { display: grid; gap: 18px; font-size: 19px; color: var(--ink2); padding-top: 6px; }
+
+/* The bots' own faces, as the app draws them, each floating on its own beat. */
+.faces { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 72px; }
+.faces img { width: clamp(52px, 9vw, 120px); height: auto; animation: bob 5s ease-in-out infinite; }
+.faces img:nth-child(2n) { animation-duration: 6.2s; animation-delay: -1.4s; }
+.faces img:nth-child(3n) { animation-duration: 5.6s; animation-delay: -2.9s; }
+.faces img:nth-child(4n+1) { animation-delay: -.7s; }
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(-3deg); }
+}
+
+/* Feature cards: words on top, a piece of the real app below, cut by the card's round edge. */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.fcard {
+  display: flex; flex-direction: column; background: var(--card); border-radius: var(--r-lg);
+  overflow: hidden; padding: 36px 32px 0;
+}
+.fcard p { margin: 10px 0 32px; color: var(--ink2); }
+.fcard .pic {
+  margin-top: auto; border-radius: 14px 14px 0 0; overflow: hidden;
+  background: var(--app); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06), 0 10px 30px -12px rgba(0, 0, 0, .3);
+}
+.fcard .pic img { width: 100%; height: auto; }
+
+/* Smaller points under the cards. */
+.more { display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; margin-top: 56px; }
+.more div { border-top: 1px solid var(--line); padding-top: 20px; }
+.more h3 { font-size: 17px; font-weight: 600; letter-spacing: 0; }
+.more p { margin-top: 8px; color: var(--muted); font-size: 15px; }
+
+@media (max-width: 900px) {
+  .split, .grid2 { grid-template-columns: 1fr; gap: 24px; }
+  .more { grid-template-columns: 1fr 1fr; }
+  .fcard { padding: 28px 22px 0; }
+}
+@media (max-width: 520px) {
+  .faces { flex-wrap: wrap; justify-content: center; }
+  .faces img { width: 64px; }
+  .more { grid-template-columns: 1fr; }
+}

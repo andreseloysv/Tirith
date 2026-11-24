@@ -3,334 +3,346 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenBot: Agents that finish the work, your code and your office tasks, on your own machine.</title>
-<meta name="description" content="Agents that finish the work, your code and your office tasks, on your own machine. Code is checked before it merges. Bots are told to ask before they send or buy.">
-<meta name="color-scheme" content="light dark">
-<meta property="og:title" content="OpenBot: Agents that finish the work, your code and your office tasks, on your own machine.">
-<meta property="og:description" content="Code is checked before it merges. Bots are told to ask before they send or buy.">
-<link rel="icon" href="img/tirith-logo-64.png" type="image/png">
+<title>OpenBot: AI helpers that work on your own computer</title>
+<meta name="description" content="Bots with a face, a schedule and a memory, and a manager that finishes your code plan. OpenBot runs on your Mac or Linux server with the agents you already use. Free and open source.">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="website">
+<meta property="og:title" content="OpenBot: AI helpers that work on your own computer">
+<meta property="og:description" content="Give each bot a job and a schedule. It runs on your computer, with the agents you already pay for. Free and open source.">
 <meta property="og:image" content="https://andreseloysv.github.io/Tirith/img/social-preview.png">
-<link rel="stylesheet" href="style.css">
-<script src="scroll.js"></script>
+<meta property="og:url" content="https://andreseloysv.github.io/Tirith/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="img/tirith-logo-64.png" type="image/png">
+<link rel="apple-touch-icon" href="img/openbot-icon-180.png">
+<link rel="stylesheet" href="css/01-base.css">
+<link rel="stylesheet" href="css/02-nav-hero.css">
+<link rel="stylesheet" href="css/03-intro-features.css">
+<link rel="stylesheet" href="css/04-jobs-pricing.css">
+<link rel="stylesheet" href="css/05-install.css">
+<link rel="stylesheet" href="css/06-faq-footer.css">
+<script src="js/page.js"></script>
+<script src="js/tabs.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="#top"><img src="img/tirith-logo-64.png" width="32" height="32" alt="">OpenBot</a>
+    <a class="brand" href="#top"><img src="img/openbot-icon-180.png" width="30" height="30" alt="">OpenBot</a>
     <nav aria-label="Sections">
-      <a class="opt" href="#bots">Bots</a>
-      <a class="opt" href="#compare">Compare</a>
-      <a class="opt" href="#features">What it does</a>
-      <a class="opt" href="#meta">Meta models</a>
-      <a class="opt" href="#how">How it works</a>
-      <a href="#try">Try it</a>
+      <a href="#features">Features</a>
+      <a href="#jobs">Jobs</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#compare">Compare</a>
+      <a href="#install">Install</a>
+      <a href="#faq">FAQ</a>
     </nav>
+    <div class="end">
+      <a class="btn small line" href="https://github.com/andreseloysv/Tirith">GitHub</a>
+      <a class="btn small dark" href="#install">Install</a>
+    </div>
   </div>
 </header>
 
 <main id="main">
 <div class="hero wrap" id="top">
-  <div class="logo">
-    <img src="img/tirith-logo.png" width="220" height="220" alt="The OpenBot logo: a large orange star-shaped luminous bot in front, with many smaller glowing bots streaming out from behind it with trails of light against a starry sky.">
-  </div>
-  <span class="eyebrow">Meta Global AI Developer Hackathon · Build for Your World</span>
-  <h1>Agents that finish the work, your code and your office tasks, on your own machine. <span class="promise">Code is checked before it merges. Bots are told to ask before they send or buy.</span></h1>
-  <p class="lede">OpenBot manages the agents you already run. For code, it keeps a plan, starts an agent per item and merges what passes. For office tasks, it gives you bots that learn how you want them done.</p>
+  <a class="note" href="https://github.com/andreseloysv/Tirith/releases/tag/v0.2.1"><span><strong>OpenBot 0.2.1 is out.</strong> See what is new</span><span class="go"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 8.5l5-5M4.5 3.5h4v4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+  <h1>Meet <img src="img/openbot-icon-256.png" width="256" height="256" alt="the OpenBot icon, a round lime-green bot with two drawn eyes"> OpenBot</h1>
+  <p class="lede">AI helpers that work on your own computer. Give each bot a job and a schedule, and it comes back with the work done, using the agents you already pay for.</p>
   <div class="cta">
-    <a class="btn primary" href="https://github.com/andreseloysv/Tirith">View on GitHub</a>
-    <a class="btn" href="https://github.com/andreseloysv/Tirith/releases/latest">Download for macOS</a>
+    <a class="btn dark" href="#install">Install OpenBot</a>
+    <a class="btn" href="https://github.com/andreseloysv/Tirith">View on GitHub</a>
   </div>
-  <p class="note">The desktop app is signed and notarized for macOS.</p>
-  <figure class="shot">
-    <div class="crop"><img src="img/one-manager.webp" width="1400" height="962" alt="The OpenBot app: the plan with progress per step on the left, and on the right the manager's chat showing its work live like a CLI: plan steps, file reads, diffs and commands."></div>
-    <figcaption>The manager works live in the chat, in the style of a CLI. Demo data.</figcaption>
+  <figure class="window" aria-label="The OpenBot app">
+    <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>OpenBot</span></div>
+    <img src="img/app-bot-chat.webp" width="1952" height="1374" alt="The OpenBot app: on the left the bots' faces and the projects; in the middle the Inbox bot's chat, where it reports at 7:01 that three emails need the owner today and drafts a reply for them to approve.">
   </figure>
+  <p class="caption">The OpenBot app, with demo data.</p>
 </div>
 
-<section class="wrap" id="problem">
-  <h2>Running several agents is a full-time job</h2>
-  <p class="sub">You ask "what is everyone doing?" all day, you re-explain the rules the agents ignore, and they ask you things they could settle themselves. OpenBot takes that job.</p>
-  <div class="three">
-    <div class="card"><span class="num">1</span><h3>Plan-driven autonomy</h3><p>An agent starts only from an open plan item and must report an outcome. Items are ticked when the work is on <code>main</code>.</p></div>
-    <div class="card"><span class="num">2</span><h3>Rules enforced in code</h3><p>A hook blocks the agent's tool call and names the exact command to use instead. Not text the agent may ignore.</p></div>
-    <div class="card"><span class="num">3</span><h3>Everything visible</h3><p>Chat, plan, agents and pipelines in one app. You are asked only for a password, a payment or a choice that is yours.</p></div>
-  </div>
-  <figure class="render"><picture><source type="image/webp" srcset="img/render-agents.webp"><img loading="lazy" src="img/render-agents.png" width="1000" height="625" alt="A stone castle tower at dusk, its window glowing amber and joined by arcs of light to six floating blue crystals: agents working under one manager."></picture></figure>
-</section>
-
-<section class="wrap" id="bots">
-  <h2>Bots that learn</h2>
-  <p class="sub">For the office half of your work: inboxes, websites, reports, the things you do again every week. Each bot has its own chat, memory and skills.</p>
-  <div class="three">
-    <div class="card"><h3>Bots</h3><p>A bot saves your corrections in its memory and writes down a procedure it will repeat as a skill. You can read and edit both.</p></div>
-    <div class="card"><h3>Routines</h3><p>Ask for "every weekday at 7" and it becomes a routine. When there is nothing new, your phone stays quiet.</p></div>
-    <div class="card"><h3>Webhooks</h3><p>GitHub, a mail script or any service can start a routine through agentsmessenger.com. The bot is told that what arrives is data, never instructions.</p></div>
-    <div class="card"><h3>Teach</h3><p>Do a task once in Edge with OpenBot's extension. The bot drafts a skill, asks you questions and rehearses it. It is a draft until you approve it.</p></div>
-    <div class="card"><h3>The Coach</h3><p>Every week, and when a routine gets worse, it reads how the bots' runs went and proposes one change to test.</p></div>
-    <div class="card"><h3>The lab</h3><p>It compares the change with the current version. A change stays only if it is no worse, adds no failure or thumbs-down and saves at least 15% of cost or time.</p></div>
-  </div>
-  <p class="note">Asking before sending, buying, deleting or publishing is an instruction to each bot, not a technical block. A judge model reviews their turns afterwards and flags what had no approval.</p>
-</section>
-
-<section class="wrap" id="agents">
-  <h2>Bring your own agents</h2>
-  <p class="sub">OpenBot runs the command-line agents installed on your computer, signed in with the accounts you already have. Their plans and limits apply.</p>
-  <div class="three">
-    <div class="card"><h3>The anthropic agent</h3><p>Anthropic's command-line agent, with the account it is signed in to. It is the default for managers and workers.</p></div>
-    <div class="card"><h3>Codex</h3><p>OpenAI's agent, after <code>codex login</code>. OpenBot offers the models and efforts in its local catalog.</p></div>
-    <div class="card"><h3>Muse</h3><p>Meta's agent, with the account it is signed in to. It is the default judge of the bots' work.</p></div>
-  </div>
-  <p class="note">Choose agent and model per role, and a fallback for when a worker runs out of credits. Replays in the lab need the anthropic agent or Muse.</p>
-</section>
-
-<section class="wrap" id="compare">
-  <h2>OpenBot and Grok Bot</h2>
-  <p class="sub">Both give you bots with routines. These are the differences to know before you choose.</p>
-  <table class="compare">
-    <caption>Checked on <time datetime="2026-11-22">22 November 2026</time> against <a href="https://cursor.com/docs/grok-bot">Grok Bot's official documentation</a> (cursor.com/docs/grok-bot, which redirects to docs.x.ai) and its terms. Each Grok Bot cell links to its source.</caption>
-    <thead>
-      <tr><td></td><th scope="col">OpenBot</th><th scope="col">Grok Bot</th></tr>
-    </thead>
-    <tbody>
-        <tr>
-          <th scope="row">Plan it needs</th>
-          <td>None of its own. You pay for the agent accounts you use.</td>
-          <td><a href="https://docs.x.ai/grok-bot/faq#do-i-need-a-separate-grok-bot-subscription">Premium, Super or Ultra on The X Subscription, or an eligible Cursor, SuperGrok, X Premium+ or Grok Business plan.</a> <a href="https://docs.x.ai/grok-bot/faq#is-there-a-free-trial">Some accounts get a trial.</a></td>
-        </tr>
-        <tr>
-          <th scope="row">Where it runs</th>
-          <td>The daemon and the agents run on your computer. Their models run at each provider.</td>
-          <td><a href="https://docs.x.ai/grok-bot/security-faq#can-we-run-grok-bot-on-premises-or-from-our-own-image">On cloud computers hosted by Cursor, with no on-premises option.</a> <a href="https://docs.x.ai/grok-bot/approvals-security-and-privacy#control-access-to-your-local-computer">With your permission, Bots can also run commands on your computer.</a></td>
-        </tr>
-        <tr>
-          <th scope="row">Can you choose the model?</th>
-          <td>Yes: agent and model per role. Your bots use the manager's.</td>
-          <td><a href="https://docs.x.ai/grok-bot/faq#can-i-pick-the-model">No. Grok Bot picks the model for each task.</a></td>
-        </tr>
-        <tr>
-          <th scope="row">Agents it uses</th>
-          <td>The anthropic agent, Codex and Muse, through their own command lines.</td>
-          <td><a href="https://docs.x.ai/grok-bot/how-grok-bot-works">Its own Bots, which can hand coding work to Cursor Cloud Agents.</a></td>
-        </tr>
-        <tr>
-          <th scope="row">Open source?</th>
-          <td><a href="https://github.com/andreseloysv/Tirith/blob/main/LICENSE">Yes, MIT license.</a></td>
-          <td><a href="https://cursor.com/terms-of-service">No. The terms of service forbid trying to get at its source code</a> (<a href="https://cursor.com/terms/grok-bot">Grok Bot is part of that service</a>).</td>
-        </tr>
-    </tbody>
-  </table>
-</section>
-
-<div id="features"></div>
-
-<section class="wrap">
-  <div class="feature">
+<section class="wrap" id="intro">
+  <div class="split">
+    <h2>Bots that work like a good assistant</h2>
     <div class="text">
-      <h2>The plan drives the agents</h2>
-      <p class="sub">A progress bar per step, a deadline countdown, and "Start an agent now" on each open step.</p>
-      <ul>
-        <li><strong>No item, no agent.</strong> <code>tirith lane run</code> refuses to start without an open plan item.</li>
-        <li><strong>OpenBot is the only plan writer.</strong> Agents ask with <code>tirith plan add</code>.</li>
-        <li><strong>No duplicate agents</strong> on the same item.</li>
-      </ul>
-      <p class="cites">Contracts: CONTRACT-roadmap, CONTRACT-launch</p>
+      <p>Tell a bot what you need in plain words. "Every weekday at 7" becomes a routine, and when nothing needs you, it stays quiet.</p>
+      <p>Each bot keeps its own memory and skills, which you can read and edit. Your corrections stick, so it gets better at doing things your way.</p>
     </div>
-    <figure class="shot"><img loading="lazy" src="img/overview-plan.webp" width="1400" height="875" alt="The Overview of ChromaSol: a plan with a progress bar, ticked steps and an agent working on the open one, and the manager chat with its answer on the right."></figure>
+  </div>
+  <div class="faces" aria-hidden="true">
+    <img src="img/faces/round.webp" width="240" height="240" alt="">
+    <img src="img/faces/tile.webp" width="240" height="240" alt="">
+    <img src="img/faces/drop.webp" width="240" height="240" alt="">
+    <img src="img/faces/dome.webp" width="240" height="240" alt="">
+    <img src="img/faces/pill.webp" width="240" height="240" alt="">
+    <img src="img/faces/clover.webp" width="240" height="240" alt="">
+    <img src="img/faces/blob.webp" width="240" height="240" alt="">
+    <img src="img/faces/cloud.webp" width="240" height="240" alt="">
+    <img src="img/faces/flower.webp" width="240" height="240" alt="">
   </div>
 </section>
 
-<section class="wrap">
-  <div class="feature flip">
-    <div class="text">
-      <h2>Rules that block, in plain words</h2>
-      <p class="sub">Each rule runs in a hook before the agent's tool call. The refusal says what to do instead.</p>
-      <ul>
-        <li>Tests and builds run through OpenBot, so they show in Pipelines.</li>
-        <li>No helpers started behind its back; no skipping commit checks.</li>
-        <li>Agents cannot edit the plan, their settings or OpenBot's config.</li>
-        <li><strong>Claim check:</strong> before a merge, the report is compared with the real change. A false claim blocks the merge. Regexes and git, no model.</li>
-      </ul>
-      <figure class="render"><picture><source type="image/webp" srcset="img/render-gate.webp"><img loading="lazy" src="img/render-gate.png" width="1000" height="625" alt="A stone gate at dusk between two round towers, with bars of amber light across its arch and a blue crystal stopped in front of them: rules that stop an agent."></picture></figure>
-      <p class="cites">Contracts: CONTRACT-gates, CONTRACT-launch</p>
+<section class="wrap" id="features">
+  <div class="head">
+    <h2>Everything a helper should do</h2>
+    <p>One app for your errands and your code. It runs on your computer, so your files, logins and history stay with you.</p>
+  </div>
+  <div class="grid2">
+    <article class="fcard">
+      <h3>Bots start on their own</h3>
+      <p>Routines run on their schedule and report back only when something needs you.</p>
+      <div class="pic"><img loading="lazy" src="img/feature-routine.webp" width="1144" height="440" alt="The Inbox bot's routine message: three emails need you today, from the dentist, the landlord and a studio's invoice; the rest is filed."></div>
+    </article>
+    <article class="fcard">
+      <h3>Only real questions reach you</h3>
+      <p>Bots and managers settle what they can. You are asked for a choice, a password or a payment, not for busywork.</p>
+      <div class="pic"><img loading="lazy" src="img/feature-question.webp" width="1200" height="389" alt="Waiting for you: the Recipe app's Project Manager asks whether the recipe photos should come from the owner's camera roll or a free stock library, with a box for the answer."></div>
+    </article>
+    <article class="fcard">
+      <h3>Code that lands only when checks pass</h3>
+      <p>A manager keeps each project's plan, starts one agent per item and merges the work after the checks pass.</p>
+      <div class="pic"><img loading="lazy" src="img/feature-working.webp" width="1200" height="534" alt="Working now: the Shop website's Project Manager with two helpers below it, one finishing faster product pages and one on the checkout."></div>
+    </article>
+    <article class="fcard">
+      <h3>Bring the agents you already pay for</h3>
+      <p>The Anthropic CLI, OpenAI Codex, GitHub Copilot or Meta's Muse Code. Choose agent, model and effort for each role.</p>
+      <div class="pic"><img loading="lazy" src="img/feature-models.webp" width="1200" height="375" alt="The model menu above the message box: Muse's models with the chosen one checked and its effort, High."></div>
+    </article>
+  </div>
+  <div class="more">
+    <div><h3>On your phone</h3><p>Scan one QR code and your phone gets a chat with every bot and project, end-to-end encrypted.</p></div>
+    <div><h3>Teach by doing</h3><p>Do a task once in Edge. The bot drafts a skill, asks its questions and rehearses before it runs alone.</p></div>
+    <div><h3>Webhooks</h3><p>GitHub, a mail script or any service can start a routine. What arrives is read as data, never as orders.</p></div>
+    <div><h3>Rules in code</h3><p>Every tool call of every agent passes OpenBot's rules first, in a few milliseconds.</p></div>
+  </div>
+</section>
+
+<section class="narrow" id="jobs">
+  <div class="jobs">
+    <div class="lead">
+      <h2>Give each bot a job</h2>
+      <div class="chips" role="tablist" aria-label="Jobs for a bot">
+        <button class="chip" role="tab" id="job-inbox" aria-controls="p-inbox" aria-selected="true"><img src="img/faces/round.webp" width="24" height="24" alt="">Inbox summary</button>
+        <button class="chip" role="tab" id="job-price" aria-controls="p-price" aria-selected="false" tabindex="-1"><img src="img/faces/pill.webp" width="24" height="24" alt="">Price watch</button>
+        <button class="chip" role="tab" id="job-review" aria-controls="p-review" aria-selected="false" tabindex="-1"><img src="img/faces/clover.webp" width="24" height="24" alt="">Code review</button>
+        <button class="chip" role="tab" id="job-jobs" aria-controls="p-jobs" aria-selected="false" tabindex="-1"><img src="img/faces/flower.webp" width="24" height="24" alt="">Job scout</button>
+      </div>
     </div>
-    <figure class="shot"><img loading="lazy" src="img/rules.webp" width="708" height="313" alt="A list of rules that blocked agents today, in plain words, such as 'Tests and builds must run through OpenBot', with the agent and the time of each refusal."></figure>
+      <div role="tabpanel" id="p-inbox" aria-labelledby="job-inbox">
+        <div class="chat-frame"><img loading="lazy" src="img/job-inbox.webp" width="1100" height="1195" alt="The Inbox bot's chat: the owner asks for a weekday summary at 7, the bot makes it a routine, reports three emails that need the owner and drafts a reply."></div>
+        <p class="job-text"><strong>Your inbox, read for you.</strong> Every weekday at 7 it reads your email and tells you only what needs you today. Everything else is filed.</p>
+      </div>
+      <div role="tabpanel" id="p-price" aria-labelledby="job-price" hidden>
+        <div class="chat-frame"><img loading="lazy" src="img/job-price.webp" width="1100" height="1195" alt="The Price Watch bot's chat: it reports that a bike dropped to 2,249 euros at one of three shops and puts it in the cart when the owner says yes."></div>
+        <p class="job-text"><strong>Buy at the right price.</strong> It checks the shops every morning and writes only when the price drops below your limit.</p>
+      </div>
+      <div role="tabpanel" id="p-review" aria-labelledby="job-review" hidden>
+        <div class="chat-frame"><img loading="lazy" src="img/job-review.webp" width="1100" height="1195" alt="The Code Review bot's chat: a GitHub webhook announces pull request 128, and the bot lists two things to fix before it merges."></div>
+        <p class="job-text"><strong>A second pair of eyes.</strong> When a pull request opens on GitHub, it reads the change and tells you what to fix before it merges.</p>
+      </div>
+      <div role="tabpanel" id="p-jobs" aria-labelledby="job-jobs" hidden>
+        <div class="chat-frame"><img loading="lazy" src="img/job-jobs.webp" width="1100" height="1195" alt="The Job Scout bot's chat: twice a week it lists new iOS jobs that fit the owner's profile and offers cover letters for the best two."></div>
+        <p class="job-text"><strong>New jobs, twice a week.</strong> It searches for roles that fit your profile and drafts a cover letter for the best ones.</p>
+      </div>
+    <a class="btn link" href="https://github.com/andreseloysv/Tirith/tree/main/factory/bots">See the bot templates</a>
   </div>
 </section>
 
-<section class="wrap">
-  <div class="feature">
-    <div class="text">
-      <h2>You get only real decisions</h2>
-      <p class="sub">The owner gate: nothing reaches you unless only you can do it. Credentials, payment, a personal account, a physical device, your decision.</p>
+<section class="narrow" id="pricing">
+  <div class="head">
+    <h2>Free and open source</h2>
+    <p>OpenBot costs nothing. You pay only for the agent accounts you choose, the same ones you may already have.</p>
+  </div>
+  <div class="plans">
+    <div class="plan">
+      <span class="kind">OpenBot</span>
+      <span class="price">$0</span>
+      <span class="per">MIT license, forever</span>
+      <a class="btn dark" href="#install">Install</a>
       <ul>
-        <li>"Your turn" has buttons, not questions.</li>
-        <li>Everything else goes to the on-call manager.</li>
-        <li>Merging is never an owner question.</li>
+        <li>Bots with routines, memory and skills</li>
+        <li>A manager per project and a merge queue that checks</li>
+        <li>A phone chat, end-to-end encrypted</li>
+        <li>Rules on every tool call</li>
       </ul>
-      <p class="cites">Contract: CONTRACT-inbox</p>
     </div>
-    <figure class="shot"><img loading="lazy" src="img/your-turn.webp" width="1400" height="875" alt="Your turn: three cards in the manager chat with one-click answers such as Publish, Ship in v1.2 and Done, next to the plan."></figure>
-  </div>
-</section>
-
-<section class="wrap">
-  <div class="feature flip">
-    <div class="text">
-      <h2>An on-call manager, and it checks itself</h2>
-      <p class="sub">One persistent manager session answers in the chat, delegates to sub-agents and keeps notes. Attach photos and files.</p>
+    <div class="plan">
+      <span class="kind">Your agents</span>
+      <span class="price">Your plans</span>
+      <span class="per">Signed in with your own accounts</span>
+      <a class="btn" href="#install">How they connect</a>
       <ul>
-        <li><strong>Self-check:</strong> every pass OpenBot checks the collector, manager, autopilot, disk and reviews, fixes what it safely can, and raises one item when it cannot. A health dot sits in the header.</li>
-        <li><strong>Auto-merge</strong> of finished lanes after tests and claim check.</li>
-        <li>A timeout on every command, and a disk guard.</li>
+        <li>The Anthropic CLI</li>
+        <li>OpenAI Codex</li>
+        <li>GitHub Copilot</li>
+        <li>Meta's Muse Code</li>
+        <li>A fallback when one runs out of credits</li>
       </ul>
-      <p class="cites">Contracts: CONTRACT-selfcheck, CONTRACT-timeouts</p>
     </div>
-    <figure class="shot"><img loading="lazy" src="img/chat-photos.webp" width="1400" height="875" alt="The manager chat with two attached photos in the message box, next to the cards that wait for the owner."></figure>
+    <div class="plan">
+      <span class="kind">Your computer</span>
+      <span class="price">Mac or Linux</span>
+      <span class="per">Windows through WSL 2</span>
+      <a class="btn" href="https://github.com/andreseloysv/Tirith/blob/main/docs/ALWAYS-ON.md">Keep it always on</a>
+      <ul>
+        <li>Starts by itself as a service</li>
+        <li>On a Mac, also with nobody logged in</li>
+        <li>A Linux server in a few minutes</li>
+        <li>Its page never listens on the network</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="compare" id="compare">
+    <h3>How OpenBot compares</h3>
+    <p class="sub">Grok Bot, Muse, Dots and Duet also give you bots that work in the background. Here is where they differ.</p>
+    <div class="table" tabindex="0" role="region" aria-label="Comparison table, scrolls sideways on small screens">
+      <table>
+        <caption>Checked on <time datetime="2026-11-24">24 November 2026</time> against each maker's own page; Duet's facts from <a href="https://every.to/personal-agents-comparison">Every's comparison</a>, and Dots' countries from <a href="https://fortune.com/2026/09/29/openai-takes-on-metas-muse-with-new-dot-agents-and-unveils-a-potential-google-workspace-competitor/">Fortune</a>. Plans and countries change often.</caption>
+        <thead>
+          <tr>
+            <td></td>
+            <th scope="col" class="us">OpenBot</th>
+            <th scope="col"><a href="https://docs.x.ai/grok-bot/faq">Grok Bot</a></th>
+            <th scope="col"><a href="https://about.fb.com/news/2026/09/introducing-muse-personal-ai-agent/">Muse</a></th>
+            <th scope="col"><a href="https://openai.com/index/introducing-dots/">Dots</a></th>
+            <th scope="col"><a href="https://every.to/personal-agents-comparison">Duet</a></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Made by</th><td class="us">Open source</td><td>SpaceXAI with Cursor</td><td>Meta</td><td>OpenAI</td><td>Anthropic</td></tr>
+          <tr><th scope="row">Where bots work</th><td class="us">On your Mac or Linux server</td><td>On a cloud computer; on your desktop only if you allow it</td><td>On Meta's cloud computer</td><td>On OpenAI's cloud computer; on your laptop only if you allow it</td><td>On Anthropic's cloud computer</td></tr>
+          <tr><th scope="row">Choose the model</th><td class="us">Yes: agent, model and effort per role</td><td>No: it picks the model for each task</td><td>Muse Spark</td><td>GPT-6 Astra; OpenAI may mix models</td><td>One Anthropic model</td></tr>
+          <tr><th scope="row">Cost</th><td class="us">Free; you pay for the agents you use</td><td>Included in X Premium, Super and Ultra, SuperGrok and Cursor plans</td><td>A free tier and paid plans</td><td>First dot included in ChatGPT Pro and Business Premium</td><td>Included in Anthropic's Pro, Max and Ultra plans</td></tr>
+          <tr><th scope="row">Where you get it</th><td class="us">macOS and Linux; Windows through WSL 2</td><td>macOS, Windows, Linux, iOS, Android, X and Slack</td><td>iOS, Android, the web and WhatsApp, in a few countries</td><td>ChatGPT apps, Slack and Teams; Pro not in the EEA, UK or Switzerland</td><td>iOS, Android and the web; US only, with a waitlist</td></tr>
+          <tr><th scope="row">Before it sends or buys</th><td class="us">Every tool call passes OpenBot's rules; bots are told to ask you</td><td>Sensitive actions stop for your approval</td><td>A separate agent, Sentinel, approves what goes out</td><td>Your rules: allow, ask or block</td><td>Asks before messages and payments</td></tr>
+          <tr><th scope="row">Open source</th><td class="us">Yes, MIT</td><td>No</td><td>No</td><td>No</td><td>No</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 
-<section class="wrap">
-  <div class="feature">
-    <div class="text">
-      <h2>Agents and pipelines you can follow</h2>
-      <p class="sub">Every lane has a summary, a log, a review state and "Claims verified". Pipelines look like GitLab's: runs, stages, durations, logs, retry.</p>
-      <ul>
-        <li>Each lane is an agent in its own git worktree and branch.</li>
-        <li>Out of credits? Work continues with the next agent in your fallback list.</li>
-      </ul>
-      <p class="cites">Contracts: CONTRACT-agents, CONTRACT-manifest, CONTRACT-models</p>
+<section class="narrow" id="install">
+  <div class="install">
+    <div>
+      <h2>Install OpenBot</h2>
+      <p class="lede">One line in a terminal. The installer checks the release's signature and each file's checksum before it puts anything on your computer.</p>
+      <div class="rows">
+        <a class="row" href="https://github.com/andreseloysv/Tirith/releases/download/v0.2.1/Tirith_0.2.1_aarch64.dmg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5V16H4zM2 18h20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Desktop app for macOS</b><small>0.2.1 for Apple silicon (.dmg). This version still shows the old name, Tirith.</small></span><svg class="dl" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <a class="row" href="https://github.com/andreseloysv/Tirith/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM7.5 9.5 10 12l-2.5 2.5M12.5 15H16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>All releases</b><small>Signed builds for macOS and Linux, x86_64 and arm64</small></span></a>
+        <a class="row" href="https://github.com/andreseloysv/Tirith"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M15 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Source code</b><small>MIT license, on GitHub</small></span></a>
+      </div>
     </div>
     <div>
-      <figure class="shot"><img loading="lazy" src="img/pipelines-gitlab.webp" width="1400" height="875" alt="Pipelines view: a running release and the day's runs with their stages, with a failed test stage expanded to show its log."></figure>
-      <figure class="shot" style="margin-top:16px"><img loading="lazy" src="img/demo-agents.webp" width="1400" height="875" alt="Agents as a kanban board with columns Working, Stalled, Done and Failed."></figure>
+      <div class="tabs" role="tablist" aria-label="Your computer" id="systems">
+        <button role="tab" id="tab-mac" aria-controls="guide-mac" aria-selected="true">macOS</button>
+        <button role="tab" id="tab-linux" aria-controls="guide-linux" aria-selected="false" tabindex="-1">Linux</button>
+        <button role="tab" id="tab-windows" aria-controls="guide-windows" aria-selected="false" tabindex="-1">Windows</button>
+      </div>
+      <div role="tabpanel" id="guide-mac" aria-labelledby="tab-mac">
+        <ol class="steps">
+          <li><h3>Open Terminal</h3><p>Press <code>⌘ Space</code>, type Terminal and press Return.</p></li>
+          <li><h3>Run the installer</h3>
+            <div class="cmd"><code>curl -fsSL https://github.com/andreseloysv/Tirith/releases/latest/download/install.sh | sh</code><button type="button">Copy</button></div>
+            <p>It puts <code>tirith</code> in <code>~/.local/bin</code> and starts a short guide.</p></li>
+          <li><h3>Connect your agents</h3><p>Pick the agents you use: the Anthropic CLI, OpenAI Codex, GitHub Copilot or Muse Code. For each, the guide runs its maker's installer, opens its sign-in and checks that it answers.</p></li>
+          <li><h3>Open OpenBot</h3><p>Go to <a href="http://127.0.0.1:7717/">127.0.0.1:7717</a> in your browser. The <strong>+</strong> under the faces makes your first bot. If the page says this browser is not signed in, run:</p>
+            <div class="cmd"><code>~/.local/bin/tirith open</code><button type="button">Copy</button></div></li>
+          <li><h3>Keep it on (optional)</h3><p>Answer yes when the guide asks to run OpenBot as a service, so your routines run while you are away. <a href="https://github.com/andreseloysv/Tirith/blob/main/docs/ALWAYS-ON.md">Always on, step by step</a>.</p></li>
+        </ol>
+      </div>
+      <div role="tabpanel" id="guide-linux" aria-labelledby="tab-linux" hidden>
+        <ol class="steps">
+          <li><h3>Run the installer on your server</h3>
+            <div class="cmd"><code>curl -fsSL https://github.com/andreseloysv/Tirith/releases/latest/download/install.sh | sudo sh -s -- --server</code><button type="button">Copy</button></div>
+            <p>With sudo, OpenBot runs as its own user, <code>tirith</code>, never as root, and starts at boot with systemd. On a desktop, run it without <code>sudo</code> and <code>--server</code>.</p></li>
+          <li><h3>Connect your agents</h3><p>Each sign-in shows a link and a code, so it works over SSH. The guide installs each agent from its maker and checks that it answers.</p></li>
+          <li><h3>Reach the page from your computer</h3>
+            <div class="cmd"><code>ssh -N -L 7717:127.0.0.1:7717 you@your-server</code><button type="button">Copy</button></div>
+            <p>Leave that running and open <code>http://127.0.0.1:7717/</code> in your browser. If the page says this browser is not signed in, run this on the server and open the link it prints within 10 minutes:</p>
+            <div class="cmd"><code>tirith open link</code><button type="button">Copy</button></div></li>
+          <li><h3>Check everything</h3>
+            <div class="cmd"><code>tirith doctor</code><button type="button">Copy</button></div>
+            <p>It lists every part and how to fix what is missing.</p></li>
+        </ol>
+      </div>
+      <div role="tabpanel" id="guide-windows" aria-labelledby="tab-windows" hidden>
+        <ol class="steps">
+          <li><h3>Install WSL with Ubuntu</h3><p>Open PowerShell as administrator and run:</p>
+            <div class="cmd"><code>wsl --install -d Ubuntu</code><button type="button">Copy</button></div>
+            <p>Restart when asked, then open Ubuntu from the Start menu and choose a user name and password.</p></li>
+          <li><h3>Run the installer in Ubuntu</h3>
+            <div class="cmd"><code>curl -fsSL https://github.com/andreseloysv/Tirith/releases/latest/download/install.sh | sh</code><button type="button">Copy</button></div>
+            <p>It installs <code>tirith</code> in <code>~/.local/bin</code> and starts the guide.</p></li>
+          <li><h3>Connect your agents</h3><p>Answer the guide as on Linux. Each sign-in shows a link and a code to open in your Windows browser.</p></li>
+          <li><h3>Open OpenBot in Windows</h3><p>Go to <code>http://127.0.0.1:7717/</code> in Edge or Chrome: WSL 2 passes it through to Windows. If the page says this browser is not signed in, run this in Ubuntu and open the link it prints:</p>
+            <div class="cmd"><code>~/.local/bin/tirith open link</code><button type="button">Copy</button></div></li>
+        </ol>
+        <p class="aside">There is no native Windows version yet: OpenBot runs inside WSL 2, Microsoft's Linux for Windows, and needs it running while your bots work.</p>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="wrap">
-  <div class="feature flip">
-    <div class="text">
-      <h2>A desktop app, signed and notarized</h2>
-      <p class="sub">A Tauri app for macOS that keeps the collector running, so closing the terminal never kills your lanes.</p>
-      <ul>
-        <li>Environment variables per project.</li>
-        <li>Model and effort for the manager and for workers, per project or per step, with a fallback chain.</li>
-        <li>No servers and no ports: the app and the page talk through local files and Tauri IPC.</li>
-      </ul>
-      <p class="cites">Contracts: CONTRACT-projenv, CONTRACT-models</p>
-    </div>
-    <figure class="shot"><img loading="lazy" src="img/settings-models.webp" width="1400" height="875" alt="Settings: agent, model and effort for the manager and for workers, a fallback list, and overrides per project and step."></figure>
+<section class="narrow" id="guides">
+  <div class="head">
+    <h2>Learn more</h2>
+    <p>How to keep it running, how the bots learn, and how it works inside.</p>
+  </div>
+  <div class="guides">
+    <a class="guide" href="https://github.com/andreseloysv/Tirith/blob/main/docs/ALWAYS-ON.md" style="--c1:#e3f3d1;--c2:#2f5d0c">
+      <span class="art"><span><img src="img/faces/round.webp" width="240" height="240" alt=""></span><b>Always on</b></span>
+      <span class="words"><small>Setup</small><p>Keep OpenBot running on a Mac mini or a server, so your bots work while you sleep.</p></span>
+    </a>
+    <a class="guide" href="https://github.com/andreseloysv/Tirith/blob/main/docs/BOTS.md" style="--c1:#fbdbe7;--c2:#5c1830">
+      <span class="art"><span><img src="img/faces/flower.webp" width="240" height="240" alt=""></span><b>How bots learn</b></span>
+      <span class="words"><small>Bots</small><p>Memory, skills, Teach, the weekly Coach and the lab that keeps only what is better.</p></span>
+    </a>
+    <a class="guide" href="https://github.com/andreseloysv/Tirith/blob/main/docs/DAEMON.md" style="--c1:#dbe7fd;--c2:#12305f">
+      <span class="art"><span><img src="img/faces/blob.webp" width="240" height="240" alt=""></span><b>Under the hood</b></span>
+      <span class="words"><small>Inside</small><p>One small daemon on your computer: plans, lanes, the merge queue, rules and the network sandbox.</p></span>
+    </a>
   </div>
 </section>
 
-<section class="wrap" id="meta">
-  <h2>How Meta's models power OpenBot</h2>
-  <div class="two">
-    <div class="card">
-      <h3>Muse Spark is the brain</h3>
-      <p><code>muse-spark-1.3</code> through the Meta Model API, in <code>collector/tirith/brain.py</code>. Six jobs, each cached by input hash:</p>
-      <ol>
-        <li>a one-sentence summary of each agent's recent log</li>
-        <li>a detector for things that need the owner</li>
-        <li>an architecture map of a project</li>
-        <li>a lasting epithet for each agent</li>
-        <li>a one-line summary of each chat room</li>
-        <li>a "needs the owner" check on room messages</li>
-      </ol>
-      <p style="margin-top:10px">The key is read only from the environment and never logged or stored. Without a key everything still works, with plain log lines.</p>
-    </div>
-    <div class="card">
-      <h3>Muse Code is an agent</h3>
-      <p>A first-class alias, <code>muse</code>. <code>tirith lane run --agent muse</code> builds its headless <code>exec --json</code> command, reads its real output stream (captured from a real run, covered by a test), shows its steps live and takes its final answer as the lane's report.</p>
-      <p style="margin-top:10px">Its hooks install with <code>tirith hook install --agent muse</code>, and every rule applies to it. It can be the fallback when another agent is out of credits.</p>
-      <p style="margin-top:10px">Muse Code agents built part of OpenBot; the rest was built with other coding agents after the Muse Code quota ran out. The commit history shows it.</p>
+<section class="narrow" id="faq">
+  <div class="faq">
+    <h2>FAQs</h2>
+    <div>
+      <details open><summary>How is OpenBot different from Grok Bot, Muse, Dots and Duet?</summary><p>They run your bots on their maker's computers, with their maker's models, inside their maker's subscription. OpenBot runs on your own computer, lets you choose the agent and model for each job, and is open source. The table above has the details.</p></details>
+      <details><summary>Which agents does it work with?</summary><p>The Anthropic CLI, OpenAI Codex, GitHub Copilot and Meta's Muse Code, each with the account you sign in with. You choose agent, model and effort per role, with a fallback for when one runs out of credits.</p></details>
+      <details><summary>Does my computer have to stay on?</summary><p>Yes: your bots work where OpenBot runs. It can run as a service that starts by itself, on a Mac even with nobody logged in. A Mac mini or a small Linux server works well.</p></details>
+      <details><summary>Can I use it from my phone?</summary><p>Yes. Scan the QR code on the Rooms page and your phone gets a chat with every bot and project, end-to-end encrypted through agentsmessenger.com, with nothing to install.</p></details>
+      <details><summary>Will a bot buy or send things without me?</summary><p>Every bot is told to ask before it sends, buys, deletes or publishes, and a judge model reviews its turns afterwards and flags anything that had no approval. That is an instruction, not a lock, so give each bot only the accounts it needs.</p></details>
+      <details><summary>Where does my data go?</summary><p>OpenBot keeps its state on your computer, and its page never listens on the network. What your agents send to their models follows each provider's terms. Everything OpenBot starts reaches the network through its own proxy, which records every destination.</p></details>
+      <details><summary>Does it work on Windows?</summary><p>Through WSL 2, as on Linux; see the Windows steps above. There is no native Windows version yet.</p></details>
     </div>
   </div>
 </section>
 
-<section class="wrap" id="how">
-  <h2>How it works</h2>
-  <p class="sub">A local collector writes one state file. The page and the app follow it. Nothing listens on a port.</p>
-  <div class="card diagram">
-    <svg class="wide" viewBox="0 0 900 330" role="img" aria-labelledby="dt dd">
-      <title id="dt">Architecture diagram</title>
-      <desc id="dd">Agents in git worktrees send hook events to the collector. The collector, with gates, plan, claim check and self-check, writes a state file. The web page and the desktop app read that file. You write to the collector through the inbox file.</desc>
-      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="head"/></marker></defs>
-      <rect class="box" x="20" y="40" width="210" height="110" rx="14"/>
-      <text x="125" y="72" text-anchor="middle" font-weight="600">Agents</text>
-      <text class="dim" x="125" y="96" text-anchor="middle">one git worktree each</text>
-      <text class="dim" x="125" y="116" text-anchor="middle">hooks block bad calls</text>
-      <rect class="box hot" x="345" y="40" width="210" height="110" rx="14"/>
-      <text x="450" y="72" text-anchor="middle" font-weight="600">Collector</text>
-      <text class="dim" x="450" y="96" text-anchor="middle">gates · plan · claim check</text>
-      <text class="dim" x="450" y="116" text-anchor="middle">self-check · auto-merge</text>
-      <rect class="box" x="670" y="40" width="210" height="110" rx="14"/>
-      <text x="775" y="72" text-anchor="middle" font-weight="600">Web page / desktop app</text>
-      <text class="dim" x="775" y="96" text-anchor="middle">read-only view</text>
-      <text class="dim" x="775" y="116" text-anchor="middle">no server, no port</text>
-      <path class="arrow" d="M230 95 H343" marker-end="url(#ah)"/>
-      <text class="dim" x="287" y="86" text-anchor="middle">events.jsonl</text>
-      <path class="arrow" d="M555 95 H668" marker-end="url(#ah)"/>
-      <text class="dim" x="612" y="86" text-anchor="middle">state.json</text>
-      <rect class="box" x="345" y="230" width="210" height="64" rx="14"/>
-      <text x="450" y="258" text-anchor="middle" font-weight="600">You</text>
-      <text class="dim" x="450" y="278" text-anchor="middle">chat · buttons · inbox.jsonl</text>
-      <path class="arrow" d="M450 230 V152" marker-end="url(#ah)"/>
-      <path class="arrow" d="M345 120 C290 175 200 190 150 152" marker-end="url(#ah)"/>
-      <text class="dim" x="215" y="212" text-anchor="middle">starts lanes from plan items</text>
-    </svg>
-    <svg class="tall" viewBox="0 0 300 520" role="img" aria-labelledby="dt2 dd2">
-      <title id="dt2">Architecture diagram</title>
-      <desc id="dd2">Agents in git worktrees send hook events to the collector. The collector writes a state file that the web page and the desktop app read. You write to the collector through the inbox file.</desc>
-      <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="head"/></marker></defs>
-      <rect class="box" x="30" y="10" width="240" height="84" rx="14"/>
-      <text x="150" y="40" text-anchor="middle" font-weight="600">Agents</text>
-      <text class="dim" x="150" y="62" text-anchor="middle">one git worktree each</text>
-      <text class="dim" x="150" y="80" text-anchor="middle">hooks block bad calls</text>
-      <path class="arrow" d="M150 94 V150" marker-end="url(#ah2)"/>
-      <text class="dim" x="160" y="127">events.jsonl</text>
-      <rect class="box hot" x="30" y="152" width="240" height="84" rx="14"/>
-      <text x="150" y="182" text-anchor="middle" font-weight="600">Collector</text>
-      <text class="dim" x="150" y="204" text-anchor="middle">gates · plan · claim check</text>
-      <text class="dim" x="150" y="222" text-anchor="middle">self-check · auto-merge</text>
-      <path class="arrow" d="M150 236 V292" marker-end="url(#ah2)"/>
-      <text class="dim" x="160" y="269">state.json</text>
-      <rect class="box" x="30" y="294" width="240" height="84" rx="14"/>
-      <text x="150" y="324" text-anchor="middle" font-weight="600">Web page / desktop app</text>
-      <text class="dim" x="150" y="346" text-anchor="middle">read-only view</text>
-      <text class="dim" x="150" y="364" text-anchor="middle">no server, no port</text>
-      <rect class="box" x="30" y="436" width="240" height="74" rx="14"/>
-      <text x="150" y="466" text-anchor="middle" font-weight="600">You</text>
-      <text class="dim" x="150" y="488" text-anchor="middle">chat · buttons · inbox.jsonl</text>
-      <path class="arrow" d="M286 473 H292 V194 H272" marker-end="url(#ah2)"/>
-    </svg>
+<section class="last" id="start">
+  <h2>Make your first bot</h2>
+  <p>Free, open source, and on your own computer.</p>
+  <div class="cta">
+    <a class="btn dark" href="#install">Install OpenBot</a>
+    <a class="btn" href="https://github.com/andreseloysv/Tirith">View on GitHub</a>
   </div>
-  <ul class="bullets" style="margin-top:16px">
-    <li><strong>Collector</strong> (Python with uv) reads events, lanes, pipelines and the plan, and writes one state file.</li>
-    <li><strong>Hooks</strong> are the barrier, not the agent's good will: the commit guard and tool-call hooks refuse what the rules forbid.</li>
-    <li><strong>Data contracts</strong> are <code>docs/CONTRACT-*.md</code> in the repository.</li>
-  </ul>
-</section>
-
-<section class="wrap" id="try">
-  <h2>Try it</h2>
-  <p class="sub">On a Mac: download the app, open it, install <a href="https://docs.astral.sh/uv/">uv</a> if it asks (one button), then add a project. The app carries everything else.</p>
-  <p class="sub" style="margin-top:16px">From source, no agents needed: the page on demo data.</p>
-  <pre><code>git clone https://github.com/andreseloysv/Tirith &amp;&amp; cd Tirith
-./run --demo     # the page on demo data, no collector</code></pre>
-  <p class="sub" style="margin-top:16px">With your own agents:</p>
-  <pre><code>export META_SI_API_KEY=...   # optional: switches the Muse Spark brain on
-./run            # collector in the background + OpenBot in your browser</code></pre>
-  <p class="note">Requirements: <a href="https://docs.astral.sh/uv/">uv</a> and a browser. The desktop app is built from <code>app/</code> (<code>npm run tauri dev</code>).</p>
-  <p class="note"><strong>Status:</strong> what this page describes runs today on <code>main</code>, including the merge queue: OpenBot merges a lane only after the full tests pass, merges in trains, and keeps at most three lanes in flight. Still in progress: chat with Muse Code over <code>muse serve</code>, and agents that never ask for permission prompts (in review).</p>
+  <svg class="outline" viewBox="0 0 1000 470" aria-hidden="true">
+    <circle cx="500" cy="560" r="470"/>
+    <path d="M372 318c-26 4-44 30-41 66 4 44 28 86 58 92 30 6 52-18 54-52 2-40-16-82-42-98-9-6-19-9-29-8z"/>
+    <path d="M598 262c-30 2-50 28-47 64 3 46 28 88 60 92 31 4 53-22 54-58 1-42-19-84-46-96-7-2-14-3-21-2z"/>
+  </svg>
 </section>
 </main>
 
 <footer>
   <div class="wrap">
-    <span>Built during the Meta Global AI Developer Hackathon, from 2026-10-28. MIT license.</span>
-    <a href="https://github.com/andreseloysv/Tirith">github.com/andreseloysv/Tirith</a>
+    <div>
+      <a class="brand" href="#top"><img src="img/openbot-icon-180.png" width="28" height="28" alt="">OpenBot</a>
+      <p class="fine">© 2026 OpenBot contributors · MIT license<br>Built for the Meta Global AI Developer Hackathon.<br>The command, folders and settings are still called <code>tirith</code>.</p>
+    </div>
+    <div><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#jobs">Jobs</a></li><li><a href="#compare">Compare</a></li><li><a href="#install">Install</a></li><li><a href="#faq">FAQ</a></li></ul></div>
+    <div><h4>Docs</h4><ul><li><a href="https://github.com/andreseloysv/Tirith#readme">README</a></li><li><a href="https://github.com/andreseloysv/Tirith/blob/main/docs/ALWAYS-ON.md">Always on</a></li><li><a href="https://github.com/andreseloysv/Tirith/blob/main/docs/BOTS.md">Bots</a></li><li><a href="https://github.com/andreseloysv/Tirith/blob/main/docs/DAEMON.md">Daemon</a></li></ul></div>
+    <div><h4>Project</h4><ul><li><a href="https://github.com/andreseloysv/Tirith">GitHub</a></li><li><a href="https://github.com/andreseloysv/Tirith/releases">Releases</a></li><li><a href="https://github.com/andreseloysv/Tirith/blob/main/CONTRIBUTING.md">Contributing</a></li><li><a href="https://github.com/andreseloysv/Tirith/blob/main/LICENSE">License</a></li></ul></div>
   </div>
 </footer>
 </body>

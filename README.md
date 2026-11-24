@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="site/img/tirith-logo.png" alt="The OpenBot logo: a large orange star-shaped luminous bot in front, with many smaller glowing bots streaming out from behind it with trails of light against a starry sky." width="220">
+<img src="site/img/tirith-logo.png" alt="The OpenBot icon: a round lime-green bot with two hand-drawn eyes, on a dark rounded square." width="220">
 
 # OpenBot
 

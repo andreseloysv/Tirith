@@ -1,0 +1,56 @@
+/* The bar on top and the hero: a short note, the name with the app icon inside it, two buttons and the app. */
+header.top {
+  position: sticky; top: 0; z-index: 20; background: rgba(255, 255, 255, .86);
+  backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  border-bottom: 1px solid transparent; transition: border-color .2s;
+}
+header.top.scrolled { border-bottom-color: var(--line); }
+header.top .wrap { display: flex; align-items: center; gap: 40px; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; letter-spacing: -0.01em; text-decoration: none; }
+.brand img { width: 30px; height: 30px; }
+header.top nav { display: flex; gap: 28px; font-size: 14px; font-weight: 500; }
+header.top nav a { text-decoration: none; color: var(--ink2); }
+header.top nav a:hover { color: var(--ink); }
+header.top .end { margin-left: auto; display: flex; gap: 8px; }
+
+.hero { text-align: center; padding-top: 88px; }
+.note {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink2);
+  text-decoration: none; padding: 6px 8px 6px 14px; border-radius: 999px;
+}
+.note strong { font-weight: 600; color: var(--ink); }
+.note .go { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--chip); }
+.note:hover .go { background: var(--chip-h); }
+.note .go svg { width: 12px; height: 12px; }
+.hero h1 {
+  margin: 28px 0 0; font-size: clamp(44px, 7vw, 76px); letter-spacing: -0.035em; line-height: 1;
+  display: flex; align-items: center; justify-content: center; gap: .22em; flex-wrap: wrap;
+}
+.hero h1 img { width: 1.05em; height: 1.05em; }
+.hero .lede { max-width: 690px; margin: 26px auto 0; }
+.cta { display: flex; justify-content: center; gap: 12px; margin-top: 36px; flex-wrap: wrap; }
+
+/* The app in a window of its own (macOS style): the real page, with demo data. */
+.window {
+  margin: 64px auto 0; max-width: var(--narrow); border-radius: 16px; overflow: hidden; background: var(--app);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 30px 80px -20px rgba(0, 0, 0, .35), 0 12px 24px -12px rgba(0, 0, 0, .2);
+}
+.window .bar { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: #1b1b1b; border-bottom: 1px solid #262626; }
+.window .bar i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+.window .bar i:nth-child(2) { background: #febc2e; }
+.window .bar i:nth-child(3) { background: #28c840; }
+.window .bar span { margin: 0 auto; padding-right: 52px; color: #8b8b8b; font-size: 13px; }
+.window img { width: 100%; height: auto; }
+.caption { margin-top: 14px; color: var(--soft); font-size: 13px; text-align: center; }
+
+@media (max-width: 900px) {
+  header.top nav { display: none; }
+  header.top .end .btn.line { display: none; }
+  .hero { padding-top: 56px; }
+}
+@media (max-width: 520px) {
+  .window { border-radius: 10px; margin-top: 44px; }
+  .window .bar { height: 26px; padding: 0 10px; gap: 6px; }
+  .window .bar i { width: 9px; height: 9px; }
+  .window .bar span { display: none; }
+}

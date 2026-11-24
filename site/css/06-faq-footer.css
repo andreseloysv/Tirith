@@ -1,0 +1,42 @@
+/* Guides, questions, the last call and the footer. */
+.guides { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.guide { display: flex; flex-direction: column; border-radius: var(--r-lg); overflow: hidden; background: var(--card); text-decoration: none; }
+.guide .art { display: grid; grid-template-columns: 2fr 3fr; height: 168px; }
+.guide .art span { display: grid; place-items: center; background: var(--c1); }
+.guide .art img { width: 112px; height: 112px; }
+.guide .art b { display: flex; align-items: center; padding: 0 22px; background: var(--c2); color: #fff; font-weight: 500; font-size: 21px; line-height: 1.2; }
+.guide .words { padding: 20px 22px 26px; }
+.guide small { color: var(--muted); font-size: 14px; }
+.guide p { margin-top: 6px; color: var(--ink2); }
+.guide:hover .art b { text-decoration: underline; text-underline-offset: 4px; }
+
+.faq { display: grid; grid-template-columns: 5fr 7fr; gap: 64px; }
+details { border-bottom: 1px solid var(--line); }
+details:first-of-type { border-top: 1px solid var(--line); }
+summary { list-style: none; display: flex; justify-content: space-between; gap: 24px; padding: 22px 0; font-size: 18px; cursor: pointer; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--muted); font-size: 24px; line-height: 1; transition: transform .2s; }
+details[open] summary::after { transform: rotate(45deg); }
+details p { padding: 0 40px 24px 0; color: var(--ink2); line-height: 1.65; }
+
+/* The last call, over a big outline of the bot. */
+.last { text-align: center; padding-top: 128px; overflow: hidden; }
+.last p { margin-top: 12px; color: var(--ink2); font-size: 18px; }
+.last .outline { width: min(1000px, 100%); margin: 56px auto 0; height: auto; }
+.last .outline path, .last .outline circle { fill: none; stroke: #dedbd4; stroke-width: 2; vector-effect: non-scaling-stroke; }
+
+footer { border-top: 1px solid var(--line); padding: 48px 0 64px; font-size: 14px; }
+footer .wrap { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 32px; }
+footer .brand { font-size: 16px; }
+footer .fine { margin-top: 12px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+footer h4 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+footer ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+footer ul a { color: var(--ink2); text-decoration: none; }
+footer ul a:hover { color: var(--ink); text-decoration: underline; }
+
+@media (max-width: 900px) {
+  .guides { grid-template-columns: 1fr; }
+  .faq { grid-template-columns: 1fr; gap: 24px; }
+  footer .wrap { grid-template-columns: 1fr 1fr; }
+  footer .wrap > div:first-child { grid-column: 1 / -1; }
+}
