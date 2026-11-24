@@ -125,7 +125,15 @@ jobs:
             if ($log -match 'fake-agent: committed') { break }; Start-Sleep 2
           }
           $log | Tee-Object "$env:LOGS\lane.log"
-          if ($log -notmatch 'fake-agent: committed') { throw 'the lane never ran the fake agent' }
+          if ($log -notmatch 'fake-agent: committed') {
+            # why: the lanes as the daemon sees them, and its latest events (a paused project says so there)
+            neobot status
+            $tok = (Get-Content "$env:TIRITH_HOME\owner.token" -Raw).Trim()
+            $st = Invoke-RestMethod 'http://127.0.0.1:7717/api/state' -Headers @{ 'X-Tirith-Token' = $tok }
+            $st.lanes | Format-List id, status, note, workspace | Out-String -Width 300
+            $st.events | Select-Object -Last 30 | ForEach-Object { "$($_.at) $($_.kind) [$($_.lane)] $($_.summary)" }
+            throw 'the lane never ran the fake agent'
+          }
       # The release's desktop app (NeoBot-<version>-x64-setup.exe), installed silently: its daemon must sit beside it
       # and say the release's version. Starting the app itself (a window and the guide) is left to a person.
       - name: The desktop app's installer
