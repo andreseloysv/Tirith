@@ -910,6 +910,7 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Merge the branch windows-build: OpenBot runs natively on Windows (Unix-only calls behind rust/tirith/src/os, setup with PowerShell installers, winget and Windows hook lines, the desktop app carrying its daemon, putting tirith on PATH and opening the guide, scripts/install.ps1, Windows jobs in CI); change nothing else (check: `test -f rust/tirith/src/os/mod.rs && test -f scripts/install.ps1 && test -f app/src-tauri/src/guide.rs && grep -q windows-latest .github/workflows/tirith.yml`)
 - [x] Merge the branch market-rules: the marketplace plan records that the owner approved the refuse-on-sight list; change nothing else (check: `grep -q 'approved by the owner, 2026-11-24' docs/MARKETPLACE.md`)
 - [x] Merge the branch windows-checks: the Windows smoke and the Windows install test sign in with tirith open link before reading the page, and the install test makes its demo plan as the daemon needs; change nothing else (check: `grep -q 'open link' scripts/checks/windows-smoke.ps1 && grep -q 'plan step' .github/workflows/windows-install.yml`)
+- [ ] Merge the branch windows-app-check: the Windows install test also installs the release's desktop app silently and checks the daemon beside it; change nothing else (check: `grep -q 'desktop app' .github/workflows/windows-install.yml`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 
