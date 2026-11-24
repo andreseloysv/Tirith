@@ -11,17 +11,17 @@ use crate::{bots, rooms};
 use serde_json::json;
 pub(super) fn report(app: &Shared, project: &str, text: &str) {
     app.chat("tirith", text, project);
-    rooms::to_phones(app, app.conv(project), &format!("OpenBot: {text}"));
+    rooms::to_phones(app, app.conv(project), &format!("NeoBot: {text}"));
 }
-/// A line of OpenBot's own that must reach the owner, with no agent: in the conversation, and kept until its phones (with none, those of the conversation of no project) have it.
+/// A line of NeoBot's own that must reach the owner, with no agent: in the conversation, and kept until its phones (with none, those of the conversation of no project) have it.
 pub fn notify(app: &Shared, project: &str, text: &str) {
     app.chat("tirith", text, project);
     let conv = app.conv(project);
     let none = rooms::phone_rooms(app, conv).is_empty();
     let to = if none { app.conv("") } else { conv };
-    rooms::to_phones_surely(app, to, &format!("OpenBot: {text}"));
+    rooms::to_phones_surely(app, to, &format!("NeoBot: {text}"));
 }
-/// A line of OpenBot's that its agent must know: in the conversation, and with that agent's next message, also after a restart (it starts no turn and goes to no phone).
+/// A line of NeoBot's that its agent must know: in the conversation, and with that agent's next message, also after a restart (it starts no turn and goes to no phone).
 pub fn noted(app: &Shared, project: &str, text: &str) {
     app.chat("tirith", text, project);
     let conv = app.conv(project);

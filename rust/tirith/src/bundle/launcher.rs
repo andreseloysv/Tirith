@@ -1,4 +1,4 @@
-//! The browser MCP's launcher: the checkout's, else the one the binary carries, written into OpenBot's home.
+//! The browser MCP's launcher: the checkout's, else the one the binary carries, written into NeoBot's home.
 use std::path::{Path, PathBuf};
 
 const PATH: &str = "tools/browser/launch.mjs";

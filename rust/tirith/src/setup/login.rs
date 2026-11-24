@@ -18,10 +18,10 @@ pub(super) fn login(cx: &Context, known: &Known, path: &Path) -> bool {
 /// How the owner signs it in later.
 pub(super) fn how(known: &Known) -> String {
     let alias = &known.alias;
-    let mut text = format!("run tirith connect {alias} in a terminal");
+    let mut text = format!("run neobot connect {alias} in a terminal");
     if !known.token_env.is_empty() {
         text += &format!(
-            ", or give it {} on stdin: tirith connect {alias} --token",
+            ", or give it {} on stdin: neobot connect {alias} --token",
             known.token_hint
         );
     }

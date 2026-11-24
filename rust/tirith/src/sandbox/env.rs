@@ -45,7 +45,7 @@ fn proxy_vars(url: &str) -> Vec<(String, String)> {
     env
 }
 
-/// ssh ignores proxy variables: git over ssh goes through the proxy with `tirith net tunnel`.
+/// ssh ignores proxy variables: git over ssh goes through the proxy with `neobot net tunnel`.
 fn ssh_command() -> Option<(String, String)> {
     crate::app::exe()
         .filter(|_| std::env::var_os("GIT_SSH_COMMAND").is_none())

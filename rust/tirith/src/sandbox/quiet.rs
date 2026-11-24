@@ -1,4 +1,4 @@
-//! `tirith quiet`: an agent that was given private values (a token, an enterprise's host) starts through it, and they are hidden in all it writes before that reaches a log, a chat or an event.
+//! `neobot quiet`: an agent that was given private values (a token, an enterprise's host) starts through it, and they are hidden in all it writes before that reaches a log, a chat or an event.
 use crate::setup::Hidden;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
@@ -25,7 +25,7 @@ pub(super) fn argv(
     (exe.display().to_string(), all)
 }
 
-/// The launchers of what OpenBot starts, answered before the command line is read: this one, then the sandbox's.
+/// The launchers of what NeoBot starts, answered before the command line is read: this one, then the sandbox's.
 pub fn launcher(args: &[String]) -> Option<i32> {
     match args {
         [word, names, dashes, program, rest @ ..] if word == WORD && dashes == "--" => {
@@ -53,7 +53,7 @@ fn run(names: &str, program: &str, args: &[String]) -> i32 {
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(e) => {
-            eprintln!("tirith: cannot start {program}: {e}");
+            eprintln!("neobot: cannot start {program}: {e}");
             return 127;
         }
     };

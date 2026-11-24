@@ -7,7 +7,7 @@ import { titleOf, crew } from './crew.js';
 test('a title is the first sentence of an item, without its check and its parentheses', () => {
   assert.equal(titleOf('Add the double jump to the hero and a sound when it lands (check: `test -f x`)'), 'Add the double jump to the hero and a sound when it lands');
   assert.equal(titleOf('Mezclar la rama home-concept (la portada nueva: lo que espera)'), 'Mezclar la rama home-concept');
-  assert.equal(titleOf('A per-bot secret store only the daemon can use. Add `tirith secret set`'), 'A per-bot secret store only the daemon can use');
+  assert.equal(titleOf('A per-bot secret store only the daemon can use. Add `neobot secret set`'), 'A per-bot secret store only the daemon can use');
   assert.equal(titleOf('Make level 3 harder: more enemies near the end'), 'Make level 3 harder');
   assert.ok(titleOf('x'.repeat(200)).length <= 91);
   assert.equal(titleOf(''), '');

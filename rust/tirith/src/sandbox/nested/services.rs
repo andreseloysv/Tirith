@@ -1,4 +1,4 @@
-//! The system services a command may look up: those of Codex's own macOS policy. Codex's process keeps what OpenBot's profile lets it.
+//! The system services a command may look up: those of Codex's own macOS policy. Codex's process keeps what NeoBot's profile lets it.
 use super::sb::Sb;
 
 const SERVICES: [&str; 24] = [

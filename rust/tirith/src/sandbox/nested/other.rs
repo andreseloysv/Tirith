@@ -1,15 +1,15 @@
-//! The other `codex` subcommands that run commands: their sandbox does not nest in OpenBot's on macOS, and the caller is told.
+//! The other `codex` subcommands that run commands: their sandbox does not nest in NeoBot's on macOS, and the caller is told.
 use super::flags::{option, valued};
 
 /// What is said of `args`, and whether Codex is not started at all.
 pub(super) fn said(args: &[String]) -> Option<(String, bool)> {
     match word(args)? {
         "sandbox" => Some((
-            "`codex sandbox` has none to give inside OpenBot's on macOS (sandboxes do not nest): run the command itself, or use codex exec".into(),
+            "`codex sandbox` has none to give inside NeoBot's on macOS (sandboxes do not nest): run the command itself, or use codex exec".into(),
             true,
         )),
         word @ ("app-server" | "exec-server" | "mcp-server" | "resume" | "fork" | "cloud" | "queue") => Some((
-            format!("macOS keeps one sandbox, so `codex {word}` runs no command inside OpenBot's: use codex exec or codex review for that"),
+            format!("macOS keeps one sandbox, so `codex {word}` runs no command inside NeoBot's: use codex exec or codex review for that"),
             false,
         )),
         _ => None,

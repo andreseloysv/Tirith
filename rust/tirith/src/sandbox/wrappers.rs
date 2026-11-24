@@ -7,6 +7,7 @@ const XCODE_FLAGS: &str = "-IDEPackageSupportDisableManifestSandbox=YES -IDEPack
 pub fn write_wrappers(app: &Shared) {
     let dir = app.home.join("net/bin");
     let _ = std::fs::create_dir_all(&dir);
+    crate::app::link_names(&dir);
     write_tools(app, &dir);
     write_zdot(app, &dir);
 }

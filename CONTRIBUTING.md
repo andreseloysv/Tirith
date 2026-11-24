@@ -8,7 +8,7 @@ cargo check -p tirith-app   # the desktop app (app/)
 ```
 
 Try changes against a throwaway home so your real one is untouched:
-`TIRITH_HOME=/tmp/th TIRITH_PORT=7799 target/debug/tirith serve`, with a `config.toml` in `/tmp/th`
+`TIRITH_HOME=/tmp/th TIRITH_PORT=7799 target/debug/neobot serve`, with a `config.toml` in `/tmp/th`
 that lists a scratch git repo as a project.
 
 Rules of the codebase:
@@ -32,4 +32,4 @@ with temporary state and does not call a model. Screenshots are left in its prin
 
 After browser setup, `python3 scripts/checks/browser.py` exercises the real MCP in a disposable profile. It checks
 tool discovery, persistence across browser restarts and an authenticated proxy including a blocked destination.
-On macOS it runs inside the same loopback-only network sandbox as OpenBot; no real account or model is used.
+On macOS it runs inside the same loopback-only network sandbox as NeoBot; no real account or model is used.

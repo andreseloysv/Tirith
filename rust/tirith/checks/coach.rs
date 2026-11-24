@@ -80,7 +80,7 @@ fn coach_writes_only_in_the_bots_folders_and_the_lab() {
     ] {
         assert!(write("coach", refused).is_some(), "{refused}");
     }
-    // Another role is not confined by the Coach's folders: the lab stays OpenBot's for it.
+    // Another role is not confined by the Coach's folders: the lab stays NeoBot's for it.
     assert!(write("manager", "lab/exp-1/notes.md").is_some());
     drop(app);
     let _ = std::fs::remove_dir_all(&home);

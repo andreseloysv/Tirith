@@ -8,12 +8,12 @@ pub const NO_CALLER: &str = "no valid caller token";
 /// 403 for a caller nobody knows. A browser is shown how the owner's page opens.
 pub(super) fn nobody(path: &str) -> Response {
     if path.starts_with("/api/") || path.starts_with("/hook/") {
-        let said = format!("{NO_CALLER}: the owner's terminal has <home>/owner.token, an agent gets its own from OpenBot as it starts");
+        let said = format!("{NO_CALLER}: the owner's terminal has <home>/owner.token, an agent gets its own from NeoBot as it starts");
         return (StatusCode::FORBIDDEN, said).into_response();
     }
-    let page = "<!doctype html><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>OpenBot</title>\
+    let page = "<!doctype html><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>NeoBot</title>\
 <body style=\"font:16px/1.5 system-ui;margin:20vh auto;max-width:28rem;padding:0 1.5rem;color-scheme:light dark\">\
-<h1>OpenBot</h1><p>This browser is not signed in as the owner. Open the OpenBot app, or run:</p><p><code>tirith open</code></p>";
+<h1>NeoBot</h1><p>This browser is not signed in as the owner. Open the NeoBot app, or run:</p><p><code>neobot open</code></p>";
     (StatusCode::FORBIDDEN, Html(page)).into_response()
 }
 

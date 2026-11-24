@@ -56,7 +56,7 @@ enabled = false
 url = ${JSON.stringify(phoneBase)}
 `);
 const log = await open(join(home, 'daemon.log'), 'w');
-const daemon = spawn(join(root, 'target/debug/tirith'), ['serve'], { cwd: root, env: { ...process.env, TIRITH_HOME: home, TIRITH_PORT: String(port), CODEX_HOME: join(home, 'catalog') }, stdio: ['ignore', log.fd, log.fd] });
+const daemon = spawn(join(root, 'target/debug/neobot'), ['serve'], { cwd: root, env: { ...process.env, TIRITH_HOME: home, TIRITH_PORT: String(port), CODEX_HOME: join(home, 'catalog') }, stdio: ['ignore', log.fd, log.fd] });
 let browser;
 try {
   await wait(() => api('/api/models'));

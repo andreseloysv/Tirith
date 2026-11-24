@@ -43,7 +43,7 @@ pub fn call_on(
 ) -> Result<String, String> {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2))
-        .map_err(|_| "tirith is not running: start it with `tirith serve`".to_string())?;
+        .map_err(|_| "neobot is not running: start it with `neobot serve`".to_string())?;
     s.set_read_timeout(Some(timeout)).ok();
     let extra: String = headers
         .iter()

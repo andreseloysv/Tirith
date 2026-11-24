@@ -3,7 +3,7 @@ use crate::client::{call, print, Flag};
 use serde_json::json;
 
 pub(super) fn ask(question: &str) -> Result<(), String> {
-    let lane = std::env::var("TIRITH_LANE").map_err(|_| "tirith ask works inside a lane (TIRITH_LANE); the manager asks the owner with tirith ask-owner".to_string());
+    let lane = std::env::var("TIRITH_LANE").map_err(|_| "neobot ask works inside a lane (TIRITH_LANE); the manager asks the owner with neobot ask-owner".to_string());
     lane.and_then(|l| {
         call(
             "POST",
@@ -34,7 +34,7 @@ pub(super) fn answer(id: &str, answer: &str) -> Result<(), String> {
 pub(super) fn ask_owner(question: &str, project: &str, flag: Flag) -> Result<(), String> {
     if std::env::var("TIRITH_LANE").is_ok_and(|l| !l.is_empty()) {
         Err(
-            "a lane does not ask the owner: ask the manager with tirith ask \"<question>\""
+            "a lane does not ask the owner: ask the manager with neobot ask \"<question>\""
                 .to_string(),
         )
     } else {

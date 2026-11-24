@@ -1,10 +1,10 @@
-//! `sudo tirith net allow`: the AppArmor profile that lets this binary make user namespaces (Ubuntu 23.10 and later).
+//! `sudo neobot net allow`: the AppArmor profile that lets this binary make user namespaces (Ubuntu 23.10 and later).
 
 const FILE: &str = "/etc/apparmor.d/tirith";
 
 /// The profile for the binary at `exe`.
 fn profile(exe: &str) -> String {
-    format!("abi <abi/4.0>,\ninclude <tunables/global>\n\n# OpenBot's network sandbox needs user namespaces.\nprofile tirith \"{exe}\" flags=(unconfined) {{\n  userns,\n}}\n")
+    format!("abi <abi/4.0>,\ninclude <tunables/global>\n\n# NeoBot's network sandbox needs user namespaces.\nprofile tirith \"{exe}\" flags=(unconfined) {{\n  userns,\n}}\n")
 }
 
 pub(in crate::sandbox) fn allow() -> Result<(), String> {

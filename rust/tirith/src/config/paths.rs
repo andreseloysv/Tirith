@@ -1,4 +1,4 @@
-//! The owner's home, OpenBot's home, and paths written with `~/`.
+//! The owner's home, NeoBot's home, and paths written with `~/`.
 use std::path::PathBuf;
 
 /// A path from a config file, with a leading `~/` read as the owner's home.

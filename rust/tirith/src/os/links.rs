@@ -32,8 +32,13 @@ pub fn link_dir(target: &Path, link: &Path) -> std::io::Result<()> {
 
 #[cfg(windows)]
 pub fn link_dir(target: &Path, link: &Path) -> std::io::Result<()> {
-    let full = beside(target, link);
-    std::os::windows::fs::symlink_dir(&full, link).or_else(|_| junction(&full, link))
+    // Absolute, with `\` and no `..`: a junction needs it, and `cmd` takes a `/` for the start of a switch
+    // (`…/.agents/skills` failed with «Invalid switch - ".agents"»).
+    let (full, link) = (
+        std::path::absolute(beside(target, link))?,
+        std::path::absolute(link)?,
+    );
+    std::os::windows::fs::symlink_dir(&full, &link).or_else(|_| junction(&full, &link))
 }
 
 /// A link at `link` to `target`, a file or a folder.
@@ -44,7 +49,7 @@ pub fn link_any(target: &Path, link: &Path) -> std::io::Result<()> {
 
 #[cfg(windows)]
 pub fn link_any(target: &Path, link: &Path) -> std::io::Result<()> {
-    let full = beside(target, link);
+    let full = std::path::absolute(beside(target, link))?;
     if full.is_dir() {
         return link_dir(&full, link);
     }

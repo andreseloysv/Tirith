@@ -4,8 +4,8 @@ use axum::http::Method;
 
 const OWNERS: &str =
     "that is the owner's, from the page or their own terminal, never an agent's: say in your chat what you need and end your turn";
-const ASKS: &str = "tirith ask is a lane's own question: no one asks in a lane's name";
-const MANAGERS: &str = "a lane does not do that: ask the manager with tirith ask \"<question>\"";
+const ASKS: &str = "neobot ask is a lane's own question: no one asks in a lane's name";
+const MANAGERS: &str = "a lane does not do that: ask the manager with neobot ask \"<question>\"";
 
 /// Why `agent` may not make this call.
 pub(super) fn refused(agent: &Agent, method: &Method, path: &str) -> Option<&'static str> {

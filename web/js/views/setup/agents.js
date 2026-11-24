@@ -1,4 +1,4 @@
-// The agents OpenBot works through, set up from the page with one tap each (no terminal, no window): the daemon
+// The agents NeoBot works through, set up from the page with one tap each (no terminal, no window): the daemon
 // installs one with its maker's installer, signs it in through the browser, points its hooks here and checks it with
 // one short real turn (/api/setup/agents). Shown on the Home while none is connected, and always in Settings.
 import { html, useState, useEffect } from '../../../vendor/preact-htm.js';
@@ -35,6 +35,6 @@ export function AgentList({ list, reload }) {
 /** Settings: every agent, connected or not. */
 export function AgentsCard() {
   const [list, reload] = useAgents();
-  return html`<div class="card scard"><div class="phead"><b>Agents</b><span class="mut sm">The AI helpers OpenBot works through. Set one up here: it installs and signs in on this computer.</span></div>
+  return html`<div class="card scard"><div class="phead"><b>Agents</b><span class="mut sm">The AI helpers NeoBot works through. Set one up here: it installs and signs in on this computer.</span></div>
     ${list ? html`<${AgentList} list=${list} reload=${reload} />` : null}</div>`;
 }

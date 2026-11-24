@@ -1,10 +1,10 @@
-//! OpenBot's hook in an agent's hooks: its command, and telling it from everyone else's.
+//! NeoBot's hook in an agent's hooks: its command, and telling it from everyone else's.
 use regex::Regex;
 use serde_json::{json, Value};
 use std::path::Path;
 use std::sync::LazyLock;
 
-/// The events OpenBot hears.
+/// The events NeoBot hears.
 pub const EVENTS: [&str; 6] = [
     "SessionStart",
     "UserPromptSubmit",
@@ -15,7 +15,7 @@ pub const EVENTS: [&str; 6] = [
 ];
 
 static OURS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"^(?:'[^']*[/\\]tirith(?:\.exe)?'|(?:\S*[/\\])?tirith(?:\.exe)?)\s+hook(?:\s|$)"#)
+    Regex::new(r#"^(?:'[^']*[/\\](?:tirith|neobot)(?:\.exe)?'|(?:\S*[/\\])?(?:tirith|neobot)(?:\.exe)?)\s+hook(?:\s|$)"#)
         .unwrap()
 });
 
@@ -49,7 +49,7 @@ pub fn command(exe: &Path, home: Option<&Path>, alias: &str, event: &str) -> Str
     line
 }
 
-/// True for one hook of OpenBot's, as a command or over HTTP.
+/// True for one hook of NeoBot's, as a command or over HTTP.
 pub fn ours(hook: &Value) -> bool {
     let line = hook["command"].as_str().or(hook["bash"].as_str());
     let url = hook["url"].as_str().unwrap_or("");
@@ -57,7 +57,7 @@ pub fn ours(hook: &Value) -> bool {
         || (url.starts_with("http://127.0.0.1:") && url.contains("/hook/"))
 }
 
-/// An event's hook groups without OpenBot's own hooks; a group left empty goes.
+/// An event's hook groups without NeoBot's own hooks; a group left empty goes.
 pub fn others(groups: &Value) -> Vec<Value> {
     let groups = groups.as_array().cloned().unwrap_or_default();
     groups
@@ -79,7 +79,7 @@ pub fn others(groups: &Value) -> Vec<Value> {
         .collect()
 }
 
-/// Whether a settings file's text has OpenBot's hook before tool calls, the one the rules need.
+/// Whether a settings file's text has NeoBot's hook before tool calls, the one the rules need.
 pub fn heard(settings: &str) -> bool {
     let all: Value = serde_json::from_str(settings).unwrap_or_default();
     let groups = all["hooks"]["PreToolUse"].as_array();
@@ -92,7 +92,7 @@ pub fn heard(settings: &str) -> bool {
         })
 }
 
-/// True when the agent's settings file holds OpenBot's hook.
+/// True when the agent's settings file holds NeoBot's hook.
 pub(super) fn hooked(cx: &super::context::Context, known: &super::catalog::Known) -> bool {
     cx.settings(known)
         .and_then(|f| std::fs::read_to_string(f).ok())

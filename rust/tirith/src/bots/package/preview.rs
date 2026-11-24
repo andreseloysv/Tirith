@@ -4,12 +4,12 @@ use super::sign::{creator, hash};
 use crate::server::s;
 use serde_json::{json, Value};
 
-/// What OpenBot itself holds a bot to, and what a package only declares.
+/// What NeoBot itself holds a bot to, and what a package only declares.
 fn enforced(p: &Value) -> Value {
     json!([
         {"what": "Connectors", "enforced": true, "note": "a bot reaches only the connectors and tools you grant it, and you grant them yourself"},
         {"what": "Files", "enforced": true, "note": "a bot writes only in its own folder and the shared skills"},
-        {"what": "Browser", "enforced": false, "declared": p["permissions"]["browser"], "note": if p["permissions"]["browser"] == true { "the package uses OpenBot's browser; it is not limited per bot yet" } else { "the package says it does not use the browser; it is not limited per bot yet" }},
+        {"what": "Browser", "enforced": false, "declared": p["permissions"]["browser"], "note": if p["permissions"]["browser"] == true { "the package uses NeoBot's browser; it is not limited per bot yet" } else { "the package says it does not use the browser; it is not limited per bot yet" }},
         {"what": "Network", "enforced": false, "note": "not limited per bot yet"},
     ])
 }

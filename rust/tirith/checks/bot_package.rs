@@ -118,7 +118,7 @@ async fn a_changed_or_unseen_package_is_refused() {
 #[test]
 fn a_package_must_be_well_formed() {
     let bad = |f: &dyn Fn(&mut Value)| {
-        let mut p = json!({"format": "openbot-bot", "v": 1, "bot": {"name": "A", "face": {"shape": "pill", "color": "#112233"}}, "routines": [], "skills": []});
+        let mut p = json!({"format": "neobot-bot", "v": 1, "bot": {"name": "A", "face": {"shape": "pill", "color": "#112233"}}, "routines": [], "skills": []});
         assert!(super::package::checked_for_test(&p).is_ok());
         f(&mut p);
         assert!(super::package::checked_for_test(&p).is_err(), "{p}");
@@ -132,6 +132,15 @@ fn a_package_must_be_well_formed() {
     });
     bad(&|p| p["bot"]["face"]["color"] = json!("red"));
     bad(&|p| p["v"] = json!(2));
+}
+
+/// A package exported before the rename says "openbot-bot" and still imports.
+#[test]
+fn a_package_from_the_old_name_still_imports() {
+    let mut p = json!({"format": "openbot-bot", "v": 1, "bot": {"name": "A", "face": {"shape": "pill", "color": "#112233"}}, "routines": [], "skills": []});
+    assert!(super::package::checked_for_test(&p).is_ok());
+    p["format"] = json!("other-bot");
+    assert!(super::package::checked_for_test(&p).is_err());
 }
 
 /// The routes, behind a gate that names the caller from a header, as the server's does from the token.

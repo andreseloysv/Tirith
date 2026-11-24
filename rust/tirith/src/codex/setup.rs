@@ -26,7 +26,7 @@ impl Agent {
     fn of(app: &Shared, kind: Exec) -> Result<Agent, String> {
         let command = app.cfg().factory.command(kind.alias()).ok_or_else(|| {
             format!(
-                "no agent alias '{}' in config.toml: connect it with tirith connect {}",
+                "no agent alias '{}' in config.toml: connect it with neobot connect {}",
                 kind.alias(),
                 kind.alias()
             )

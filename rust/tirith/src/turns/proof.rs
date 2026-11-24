@@ -10,7 +10,7 @@ static OUTSIDE: LazyLock<Regex> = LazyLock::new(|| {
 });
 /// A call that only keeps books: it undoes no failure.
 static BOOKS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^((bash|shell|exec_command): )?(tirith (turn|say|note)|echo|printf|cat|ls|pwd|date|true|head|tail|wc|which|command -v|mkdir|touch|sleep|codex (--version|--help|login status))\b|^(edit|write|todowrite|write_file|edit_file|add_memory|edit_memory|write_todos)\b").unwrap()
+    Regex::new(r"(?i)^((bash|shell|exec_command): )?((?:tirith|neobot) (turn|say|note)|echo|printf|cat|ls|pwd|date|true|head|tail|wc|which|command -v|mkdir|touch|sleep|codex (--version|--help|login status))\b|^(edit|write|todowrite|write_file|edit_file|add_memory|edit_memory|write_todos)\b").unwrap()
 });
 /// A tool that reads what is kept: what it shows is content, whatever it says.
 static READS: LazyLock<Regex> = LazyLock::new(|| {
@@ -25,9 +25,10 @@ static NESTED: LazyLock<Regex> = LazyLock::new(|| {
 pub(super) fn outside(what: &str) -> bool {
     OUTSIDE.is_match(what)
 }
-/// An error that proves itself whoever printed it: macOS's and Linux's refusal of a sandbox, and OpenBot's own.
-static ITSELF: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(sandbox-exec: sandbox_apply|bwrap: |tirith: )").unwrap());
+/// An error that proves itself whoever printed it: macOS's and Linux's refusal of a sandbox, and NeoBot's own.
+static ITSELF: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(sandbox-exec: sandbox_apply|bwrap: |tirith: |neobot: )").unwrap()
+});
 
 fn books(what: &str) -> bool {
     BOOKS.is_match(what) || READS.is_match(what)

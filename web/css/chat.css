@@ -28,7 +28,7 @@ a.mc-file { text-decoration: none; }
   .mc-name { min-width: 0; overflow-wrap: anywhere; }
   .mc-state { display: block; color: var(--mut); }
 }
-/* a card the manager sent (tirith ask-owner): the card itself, with its answer box while it waits for the owner */
+/* a card the manager sent (neobot ask-owner): the card itself, with its answer box while it waits for the owner */
 .mc-m.mc-card .nlist { width: 100%; }
 /* the chat's own menu (clear it, how long it lives), at the head next to Stop */
 .mc-tools { display: flex; align-items: center; gap: 6px; flex: none; }

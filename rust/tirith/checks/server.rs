@@ -214,9 +214,9 @@ async fn chat_roles_may_not_wait() {
             .to_string()
     };
     // A manager (a chat role, named by its token and no lane) waiting inside its turn is refused, with the reason that says what to do instead.
-    let long = pre_bash(&app, "manager", "", "sleep 30; tirith status").await;
+    let long = pre_bash(&app, "manager", "", "sleep 30; neobot status").await;
     assert!(deny(&long), "a manager's sleep 30 is refused: {long}");
-    assert_eq!(reason(&long), "no esperes dentro del turno: contesta y termina; OpenBot te avisa cuando una lane entre, falle o pregunte");
+    assert_eq!(reason(&long), "no esperes dentro del turno: contesta y termina; NeoBot te avisa cuando una lane entre, falle o pregunte");
     // Five seconds is already a wait; a loop's short sleep is one too (it adds up behind the owner's messages).
     assert!(
         deny(&pre_bash(&app, "manager", "", "sleep 5").await),
@@ -226,7 +226,7 @@ async fn chat_roles_may_not_wait() {
         &app,
         "manager",
         "",
-        "for i in 1 2 3 4 5; do tirith status; sleep 2; done",
+        "for i in 1 2 3 4 5; do neobot status; sleep 2; done",
     )
     .await;
     assert!(
@@ -292,7 +292,7 @@ async fn chat_roles_may_not_wait() {
         "tail -n 50 /tmp/x.log",
         "git log --follow src/lib.rs",
         "echo \"watch this\"",
-        "tirith say \"please wait; watch this\"",
+        "neobot say \"please wait; watch this\"",
         "echo watch",
     ] {
         assert!(
@@ -309,8 +309,8 @@ async fn chat_roles_may_not_wait() {
         ..Default::default()
     });
     for cmd in [
-        "sleep 30; tirith status",
-        "for i in 1 2 3 4 5; do tirith status; sleep 2; done",
+        "sleep 30; neobot status",
+        "for i in 1 2 3 4 5; do neobot status; sleep 2; done",
     ]
     .into_iter()
     .chain(watching)
@@ -335,7 +335,7 @@ async fn every_agent_obeys_the_rules() {
             .to_string()
     };
     let repo = app.cfg().project("p1").unwrap().repo.clone();
-    let wait = "no esperes dentro del turno: contesta y termina; OpenBot te avisa cuando una lane entre, falle o pregunte";
+    let wait = "no esperes dentro del turno: contesta y termina; NeoBot te avisa cuando una lane entre, falle o pregunte";
     let cmd = |c: &str| serde_json::json!({"command": c});
     // The muse names for a shell: `bash` (its command in `command`) and `monitor`. A manager waiting in either is refused, as with `clocksleep`, its tool for waiting outright.
     let looped = pre(
@@ -344,7 +344,7 @@ async fn every_agent_obeys_the_rules() {
         "",
         &repo,
         "bash",
-        cmd("for i in 1 2 3 4 5; do tirith status; sleep 30; done"),
+        cmd("for i in 1 2 3 4 5; do neobot status; sleep 30; done"),
     )
     .await;
     assert!(
@@ -358,7 +358,7 @@ async fn every_agent_obeys_the_rules() {
         "",
         &repo,
         "monitor",
-        cmd("while true; do tirith status; sleep 30; done"),
+        cmd("while true; do neobot status; sleep 30; done"),
     )
     .await;
     assert!(
@@ -396,7 +396,7 @@ async fn every_agent_obeys_the_rules() {
         !deny(&pre(&app, "manager", "", &repo, "bash", cmd("sleep 2")).await),
         "a manager's bash sleep 2 passes"
     );
-    // From a lane, the muse names obey the other rules too: no skipping the commit checks, no writing the plan or OpenBot's own files, by `edit_file` (the file in `path`) or by `apply_patch` (its files on the patch's `*** … File:` lines, relative to its folder).
+    // From a lane, the muse names obey the other rules too: no skipping the commit checks, no writing the plan or NeoBot's own files, by `edit_file` (the file in `path`) or by `apply_patch` (its files on the patch's `*** … File:` lines, relative to its folder).
     let ws = "/tmp/ws-lane-agents";
     app.save_lane(&crate::app::Lane {
         id: "lane-agents".into(),
@@ -465,7 +465,7 @@ async fn every_agent_obeys_the_rules() {
         "lane-agents",
         ws,
         "bash",
-        cmd("for i in 1 2 3 4 5; do tirith status; sleep 30; done"),
+        cmd("for i in 1 2 3 4 5; do neobot status; sleep 30; done"),
     )
     .await;
     assert!(
@@ -484,7 +484,7 @@ async fn every_agent_obeys_the_rules() {
         "",
         &mgr_dir,
         "bash",
-        cmd("for i in 1 2 3; do tirith status; sleep 30; done"),
+        cmd("for i in 1 2 3; do neobot status; sleep 30; done"),
     )
     .await;
     assert!(

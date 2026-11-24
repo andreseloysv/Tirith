@@ -34,14 +34,15 @@ jobs:
             "LOCALAPPDATA=$p\AppData\Local", "LOGS=$p\logs") | Add-Content $env:GITHUB_ENV
           # the identity goes in the throwaway profile, where the later steps' HOME looks
           git config --file "$p\.gitconfig" user.name ci; git config --file "$p\.gitconfig" user.email ci@localhost
-      - name: Install OpenBot
+      - name: Install NeoBot
         run: |
           & ([scriptblock]::Create((irm "$env:TIRITH_BASE_URL/install.ps1"))) -NoSetup 2>&1 | Tee-Object "$env:LOGS\install.log"
           "$env:USERPROFILE\.local\bin" | Add-Content $env:GITHUB_PATH
       - name: Version and doctor
         run: |
-          tirith --version | Tee-Object "$env:LOGS\version.log"
-          tirith doctor *>&1 | Tee-Object "$env:LOGS\doctor.log"
+          neobot --version | Tee-Object "$env:LOGS\version.log"
+          tirith --version | Tee-Object -Append "$env:LOGS\version.log"
+          neobot doctor *>&1 | Tee-Object "$env:LOGS\doctor.log"
         continue-on-error: true
       - name: Install the agents their makers' way
         continue-on-error: true
@@ -56,23 +57,23 @@ jobs:
           $all = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
           "PATH=$all;$env:APPDATA\npm;$env:LOCALAPPDATA\Programs\muse" | Add-Content $env:GITHUB_ENV
           Get-Command $n, codex, muse, copilot -ErrorAction Continue | Format-Table Name, Source | Out-String | Tee-Object "$env:LOGS\agents.log"
-      - name: tirith setup finds them
+      - name: neobot setup finds them
         run: |
           # Into a file, not a pipe: the daemon setup starts inherits its parent's handles on Windows and would keep a
           # pipe open, so the step would never end.
-          $exe = (Get-Command tirith).Source
+          $exe = (Get-Command neobot).Source
           $setup = Start-Process $exe -ArgumentList 'setup', '--yes', '--agents', 'anthropic,codex,copilot,muse' -NoNewWindow -PassThru `
             -RedirectStandardOutput "$env:LOGS\setup.log" -RedirectStandardError "$env:LOGS\setup.err"
           $ended = $setup.WaitForExit(600000)
           Get-Content "$env:LOGS\setup.log", "$env:LOGS\setup.err" -ErrorAction SilentlyContinue
           # the daemon it started goes: the next step starts one with the fake agent
-          Get-Process tirith -ErrorAction SilentlyContinue | Stop-Process -Force
-          if (-not $ended) { throw 'tirith setup did not end within 10 minutes' }
+          Get-Process neobot,tirith -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $ended) { throw 'neobot setup did not end within 10 minutes' }
           $text = Get-Content "$env:LOGS\setup.log" -Raw
           $bad = 'codex', 'copilot', 'muse' | Where-Object { $text -notmatch "(?s)==[^\n]*\n\s*found .*$_" }
           if ($bad) { throw "setup did not find: $bad" }
           foreach ($f in "$env:USERPROFILE\.codex\hooks.json", "$env:USERPROFILE\.copilot\hooks\tirith.json") {
-            if (-not (Select-String -Path $f -Pattern 'tirith' -Quiet)) { throw "no OpenBot hook in $f" }
+            if (-not (Select-String -Path $f -Pattern 'neobot|tirith' -Quiet)) { throw "no NeoBot hook in $f" }
           }
       - name: Serve, and one lane with the fake agent
         run: |
@@ -92,7 +93,7 @@ jobs:
           [messenger]
           url = "http://127.0.0.1:9"
           "@ | Add-Content "$env:TIRITH_HOME\config.toml"
-          Start-Process tirith -ArgumentList serve -RedirectStandardOutput "$env:LOGS\serve.out" -RedirectStandardError "$env:LOGS\serve.err" -WindowStyle Hidden
+          Start-Process neobot -ArgumentList serve -RedirectStandardOutput "$env:LOGS\serve.out" -RedirectStandardError "$env:LOGS\serve.err" -WindowStyle Hidden
           # up when it answers at all: before a sign-in the page says 403
           $up = $false
           foreach ($i in 1..120) {
@@ -100,11 +101,11 @@ jobs:
             catch { Start-Sleep -Milliseconds 500 }
           }
           if (-not $up) { throw 'the daemon did not answer on 7717' }
-          tirith status
-          $link = "$(tirith open link | Select-Object -Last 1)".Trim()
+          neobot status
+          $link = "$(neobot open link | Select-Object -Last 1)".Trim()
           Invoke-WebRequest -UseBasicParsing $link -SessionVariable signedIn | Out-Null
           $page = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:7717/" -WebSession $signedIn
-          if ($page.Content -notmatch '<title>OpenBot</title>') { throw 'the sign-in link did not open the page' }
+          if ($page.Content -notmatch '<title>NeoBot</title>') { throw 'the sign-in link did not open the page' }
           # one lane, in this same step: GitHub ends what a step started when the step ends
           $repo = Join-Path $env:RUNNER_TEMP 'demo'
           git init -q -b main $repo; Set-Location $repo
@@ -112,20 +113,28 @@ jobs:
           New-Item -ItemType Directory docs | Out-Null
           "# Plan`n" | Set-Content docs/TODO.md
           'hello' | Set-Content a.txt; git add .; git commit -q -m first
-          $out = tirith project add $repo; $out
+          $out = neobot project add $repo; $out
           $id = ("$($out | Select-Object -First 1)" -split ':')[0]
-          tirith plan step $id 1 'Windows check'
-          tirith plan add $id 1 'let the fake agent commit a file'
+          neobot plan step $id 1 'Windows check'
+          neobot plan add $id 1 'let the fake agent commit a file'
           # it prints "<lane> <status> — <item>"
-          $started = "$(tirith lane start $id 1 'let the fake agent commit a file' --agent fake)"; $started
+          $started = "$(neobot lane start $id 1 'let the fake agent commit a file' --agent fake)"; $started
           $lane = ($started -split ' ')[0]
           foreach ($i in 1..60) {
-            $log = tirith lane log $lane | Out-String
+            $log = neobot lane log $lane | Out-String
             if ($log -match 'fake-agent: committed') { break }; Start-Sleep 2
           }
           $log | Tee-Object "$env:LOGS\lane.log"
-          if ($log -notmatch 'fake-agent: committed') { throw 'the lane never ran the fake agent' }
-      # The release's desktop app (OpenBot-<version>-x64-setup.exe), installed silently: its daemon must sit beside it
+          if ($log -notmatch 'fake-agent: committed') {
+            # why: the lanes as the daemon sees them, and its latest events (a paused project says so there)
+            neobot status
+            $tok = (Get-Content "$env:TIRITH_HOME\owner.token" -Raw).Trim()
+            $st = Invoke-RestMethod 'http://127.0.0.1:7717/api/state' -Headers @{ 'X-Tirith-Token' = $tok }
+            $st.lanes | Format-List id, status, note, workspace | Out-String -Width 300
+            $st.events | Select-Object -Last 30 | ForEach-Object { "$($_.at) $($_.kind) [$($_.lane)] $($_.summary)" }
+            throw 'the lane never ran the fake agent'
+          }
+      # The release's desktop app (NeoBot-<version>-x64-setup.exe), installed silently: its daemon must sit beside it
       # and say the release's version. Starting the app itself (a window and the guide) is left to a person.
       - name: The desktop app's installer
         if: ${{ !cancelled() }}
@@ -133,17 +142,17 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           $ver = $env:TAG.TrimStart('v')
-          $setup = Join-Path $env:RUNNER_TEMP 'openbot-setup.exe'
-          Invoke-WebRequest -UseBasicParsing "$env:TIRITH_BASE_URL/OpenBot-$ver-x64-setup.exe" -OutFile $setup
+          $setup = Join-Path $env:RUNNER_TEMP 'neobot-setup.exe'
+          Invoke-WebRequest -UseBasicParsing "$env:TIRITH_BASE_URL/NeoBot-$ver-x64-setup.exe" -OutFile $setup
           $run = Start-Process $setup -ArgumentList '/S' -Wait -PassThru
           "the installer ended with $($run.ExitCode)" | Tee-Object "$env:LOGS\app-install.log"
           # per user, in AppData\Local: the known folder's or the throwaway profile's, wherever the installer put it
-          $dirs = ([Environment]::GetFolderPath('LocalApplicationData'), $env:LOCALAPPDATA) | ForEach-Object { Join-Path $_ 'OpenBot' }
-          $dir = $dirs | Where-Object { Test-Path (Join-Path $_ 'tirith.exe') } | Select-Object -First 1
+          $dirs = ([Environment]::GetFolderPath('LocalApplicationData'), $env:LOCALAPPDATA) | ForEach-Object { Join-Path $_ 'NeoBot' }
+          $dir = $dirs | Where-Object { Test-Path (Join-Path $_ 'neobot.exe') } | Select-Object -First 1
           if (-not $dir) { $dir = $dirs[0] }
           Get-ChildItem $dir -ErrorAction Continue | Format-Table Name, Length | Out-String | Tee-Object -Append "$env:LOGS\app-install.log"
-          if (-not (Test-Path "$dir\tirith.exe")) { throw "no tirith.exe beside the app in $dir" }
-          $said = "$(& "$dir\tirith.exe" --version)"
+          if (-not (Test-Path "$dir\neobot.exe")) { throw "no neobot.exe beside the app in $dir" }
+          $said = "$(& "$dir\neobot.exe" --version)"
           $said | Tee-Object -Append "$env:LOGS\app-install.log"
           if (-not $said.Contains($ver)) { throw "the app's daemon says '$said', not $ver" }
       - uses: actions/upload-artifact@v4

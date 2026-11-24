@@ -1,4 +1,4 @@
-//! Opening the shared state at a OpenBot home: its folders, its database and the lanes it kept.
+//! Opening the shared state at a NeoBot home: its folders, its database and the lanes it kept.
 use super::{migrate::migrate, state::Seen, App, Keys, Lane, Shared};
 use crate::config::Config;
 use rusqlite::Connection;

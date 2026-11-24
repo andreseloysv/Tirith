@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 /// The factory's hidden turn role the check runs as.
 pub const ROLE: &str = "check";
 const WORD: &str = "TIRITH-OK";
-const ASK: &str = "This is OpenBot's connection check. Run this shell command exactly once: `tirith --version`. Then answer with the single word TIRITH-OK and nothing else.";
+const ASK: &str = "This is NeoBot's connection check. Run this shell command exactly once: `neobot --version`. Then answer with the single word TIRITH-OK and nothing else.";
 static ONE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// `{ok, answered, hooks, said, model}`: it answered, and its hook reached this daemon.
@@ -16,7 +16,7 @@ pub async fn prove(app: &Shared, alias: &str) -> Result<Value, String> {
     let cfg = app.cfg();
     cfg.factory
         .command(alias)
-        .ok_or(format!("{alias} is not connected: tirith connect {alias}"))?;
+        .ok_or(format!("{alias} is not connected: neobot connect {alias}"))?;
     let known = catalog::known(alias).unwrap_or_default();
     let set = |s: &str| (!s.is_empty()).then(|| s.to_string());
     let setting = json!({"agent": alias, "model": set(&known.check_model), "effort": set(&known.check_effort), "fallback": []});
@@ -41,7 +41,7 @@ pub async fn prove(app: &Shared, alias: &str) -> Result<Value, String> {
     app.set_kv(&format!("models:{ROLE}"), None);
     let hooks = app
         .query(
-            "SELECT COUNT(*) FROM events WHERE id > ?1 AND kind = 'PreToolUse' AND summary LIKE '%tirith --version%'",
+            "SELECT COUNT(*) FROM events WHERE id > ?1 AND kind = 'PreToolUse' AND summary LIKE '%neobot --version%'",
             [before],
             |r| r.get::<_, i64>(0),
         )

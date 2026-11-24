@@ -1,4 +1,4 @@
-//! `tirith doctor`: every part this machine needs, each with its fix.
+//! `neobot doctor`: every part this machine needs, each with its fix.
 use super::{context::Context, daemon, find, needs, signin};
 
 pub(super) fn doctor() -> Result<bool, String> {
@@ -26,7 +26,7 @@ pub(super) fn doctor() -> Result<bool, String> {
         "git config --global user.name / user.email",
     );
     let up = daemon::answering().is_some_and(|v| daemon::is_of(&v, &cx.home));
-    line(up, "the daemon answers", "tirith service start");
+    line(up, "the daemon answers", "neobot service start");
     if up {
         let off = needs::sandbox_off();
         line(
@@ -51,17 +51,17 @@ pub(super) fn doctor() -> Result<bool, String> {
                 line(
                     false,
                     &known.name,
-                    &format!("{command} does not run: tirith connect {}", known.alias),
+                    &format!("{command} does not run: neobot connect {}", known.alias),
                 );
             }
             continue;
         };
         any = true;
-        let fix = format!("tirith connect {}", known.alias);
+        let fix = format!("neobot connect {}", known.alias);
         let signed = signin::signed_in(&cx, &known, &path);
         let what = match signed {
             Some(_) => "is signed in",
-            None => "is installed (only a real turn tells its sign-in: tirith connect)",
+            None => "is installed (only a real turn tells its sign-in: neobot connect)",
         };
         line(
             signed != Some(false),
@@ -69,13 +69,9 @@ pub(super) fn doctor() -> Result<bool, String> {
             &fix,
         );
         let hooked = super::hook_lines::hooked(&cx, &known);
-        line(
-            hooked,
-            &format!("{}'s hooks call OpenBot", known.name),
-            &fix,
-        );
+        line(hooked, &format!("{}'s hooks call NeoBot", known.name), &fix);
     }
-    line(any, "an agent is connected", "tirith setup");
+    line(any, "an agent is connected", "neobot setup");
     for role in cfg.factory.roles() {
         let Some(agent) = cfg.factory.role::<String>(&role, "agent") else {
             continue;
@@ -90,7 +86,7 @@ pub(super) fn doctor() -> Result<bool, String> {
             line(
                 runs,
                 &format!("role {role} runs on {agent}"),
-                "tirith setup",
+                "neobot setup",
             );
         }
     }

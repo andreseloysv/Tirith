@@ -917,6 +917,8 @@ sub-agentes fuera de `lane run` (7), los logs legibles (8) y el plan en el Overv
 - [x] Merge the branch windows-carried: the files a release carries are named with / on every system, so a Windows build finds its page, with a test of the names and CI's Windows smoke on a build made as a release is; change nothing else (check: `grep -q 'parts.join' rust/tirith/build.rs && grep -q 'TIRITH_DIST' .github/workflows/tirith.yml`)
 - [x] Merge the branch site-rc2: the website's Windows links point at the 0.2.2-rc.2 test build instead of rc.1; change nothing else (check: `grep -q 'v0.2.2-rc.2/OpenBot-0.2.2-rc.2-x64-setup.exe' site/index.html`)
 - [x] Merge the branch windows-lane-step: the Windows install test runs its lane in the step whose daemon serves it; change nothing else (check: `grep -q 'Serve, and one lane with the fake agent' .github/workflows/windows-install.yml`)
+- [x] Merge the branch windows-lanes: Windows folder links are made from absolute paths so cmd's mklink never reads a path as a switch, and the Windows install test says why a lane waits; change nothing else (check: `grep -q 'std::path::absolute' rust/tirith/src/os/links.rs`)
+- [x] Merge the branch neobot: the product is called NeoBot wherever people or agents read it, and the command is neobot with tirith kept as an alias that still works; change nothing else (check: `test -f bin/neobot && grep -q "neobot-bot" rust/tirith/src/bots/package/mod.rs && grep -q "<title>NeoBot</title>" web/index.html && grep -q "neobot" rust/tirith/Cargo.toml`)
 
 ## 18. Salas privadas: hablar con el manager desde el móvil
 

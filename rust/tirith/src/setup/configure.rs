@@ -16,7 +16,7 @@ pub fn agent(home: &Path, alias: &str, command: &Path, settings: &str) -> Result
     })
 }
 
-/// The daemon's port, with a proxy port beside it when it is not the usual one (two OpenBots on one machine).
+/// The daemon's port, with a proxy port beside it when it is not the usual one (two NeoBots on one machine).
 pub fn port(home: &Path, port: u16) -> Result<(), String> {
     let proxy = match port {
         7717 => 47812,

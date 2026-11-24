@@ -17,7 +17,7 @@ pub(super) fn words(r: &Room, me: &sealed::Me, e: &Value) -> Option<String> {
             }),
     )
 }
-/// True for the controls the phones and OpenBot exchange: none of them is a line for people. A paired phone's `tirith-models` request is answered.
+/// True for the controls the phones and NeoBot exchange: none of them is a line for people. A paired phone's `tirith-models` request is answered.
 pub(super) fn not_for_people(r: &Room, who: &Who, text: &str, out: &mut Out) -> bool {
     let models = text.strip_prefix("tirith-models ");
     models.into_iter().for_each(|body| {

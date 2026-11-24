@@ -3,7 +3,7 @@ use crate::app::App;
 use std::path::{Path as FsPath, PathBuf};
 /// A bot's skills, in its folder: the agents read skills there (or, through a link, in their own .<command>/skills).
 pub const SKILLS: &str = ".agents/skills";
-/// The memory of every bot, in OpenBot's home: what holds for all of them (the owner's name, time zone, language).
+/// The memory of every bot, in NeoBot's home: what holds for all of them (the owner's name, time zone, language).
 pub(super) const SHARED: &str = "bots/memory.md";
 /// A bot's folder, where its sessions run: memory.md, its working files and its skills (during a B run of a live experiment, the branch's worktree in the lab).
 pub fn folder(app: &App, key: &str) -> PathBuf {
@@ -13,7 +13,7 @@ pub fn folder(app: &App, key: &str) -> PathBuf {
 pub fn skill_file(app: &App, key: &str, name: &str) -> PathBuf {
     folder(app, key).join(SKILLS).join(name).join("SKILL.md")
 }
-/// The one part of OpenBot's home besides the lanes where agents write: the bots' folders and the shared skills. In a bot's folder a hidden folder is written only as a skills folder: an agent's settings there could turn OpenBot's hooks off.
+/// The one part of NeoBot's home besides the lanes where agents write: the bots' folders and the shared skills. In a bot's folder a hidden folder is written only as a skills folder: an agent's settings there could turn NeoBot's hooks off.
 pub fn writable(home: &FsPath, path: &FsPath) -> bool {
     let its_own = crate::lab::stands_for(path); // a live B run's worktree is its bot's folder for that turn
     let path = its_own.as_deref().unwrap_or(path);

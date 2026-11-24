@@ -1,4 +1,4 @@
-//! A bot's own validation: `tirith turn checks <passed>/<total> "<names>"`, kept on the open turn of its conversation, or on the last one when it just closed.
+//! A bot's own validation: `neobot turn checks <passed>/<total> "<names>"`, kept on the open turn of its conversation, or on the last one when it just closed.
 use super::live::with;
 use super::signals::last;
 use crate::app::Shared;
@@ -10,14 +10,14 @@ use axum::{Json, Router};
 use rusqlite::params;
 use serde_json::{json, Value};
 
-/// `tirith turn checks <passed>/<total> ["<names>"]`, on the conversation of the session that runs it (`TIRITH_PROJECT`). A lane has no turn of its own.
+/// `neobot turn checks <passed>/<total> ["<names>"]`, on the conversation of the session that runs it (`TIRITH_PROJECT`). A lane has no turn of its own.
 pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     let (count, names) = match pos {
         ["turn", "checks", count] => (*count, ""),
         ["turn", "checks", count, names] => (*count, *names),
         ["turn", ..] => {
             return Some(Err(
-                "use: tirith turn checks <passed>/<total> \"<names>\"".into()
+                "use: neobot turn checks <passed>/<total> \"<names>\"".into()
             ))
         }
         _ => return None,
@@ -25,7 +25,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     let lane = std::env::var("TIRITH_LANE").is_ok_and(|l| !l.is_empty());
     let conv = flag("--project").or_else(|| std::env::var("TIRITH_PROJECT").ok());
     let body = match (lane, conv) {
-        (true, _) => Err("a lane has no turn: tirith turn checks is for a bot's session".into()),
+        (true, _) => Err("a lane has no turn: neobot turn checks is for a bot's session".into()),
         (_, None) => Err("no conversation: run it in a bot's session (TIRITH_PROJECT)".into()),
         (_, Some(conv)) => request(count, names, &conv),
     };
@@ -38,7 +38,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     Some(sent.map(|v| println!("checks kept on {}", on(v))))
 }
 
-/// The request of `tirith turn checks`: `3/4` read as passed and total.
+/// The request of `neobot turn checks`: `3/4` read as passed and total.
 pub fn request(count: &str, names: &str, conv: &str) -> Result<Value, String> {
     let bad = || format!("'{count}' is not <passed>/<total>, as 3/4");
     let (passed, total) = count.split_once('/').ok_or_else(bad)?;

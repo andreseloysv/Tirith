@@ -1,12 +1,12 @@
-# OpenBot — the citadel and its people
+# NeoBot — the citadel and its people
 
-OpenBot is a white stone citadel on a hill, built in rings. From its tower you can watch everything
+NeoBot is a white stone citadel on a hill, built in rings. From its tower you can watch everything
 that happens in the lands below: every project is a district, every coding agent is a hero at work,
 every build or deployment is a caravan moving along a road of checkpoints. The look is stylized,
 heroic and readable, in the spirit of hero games (chunky silhouettes, strong class colours,
 expressive idle animations), with warm sunlight on white stone and silver.
 
-All names, emblems and designs here are original to OpenBot. Nothing is copied from any book, film or
+All names, emblems and designs here are original to NeoBot. Nothing is copied from any book, film or
 game: the citadel's emblem is a **seven-pointed star above a watchtower**, never a tree.
 
 ## Classes (what each agent does)
@@ -39,7 +39,7 @@ Agents earn **renown** (XP) for finished lanes, green gates and merged work; fai
 Every agent gets a hero name the first time it appears: a given name plus an epithet earned from its
 first job, then its rank and class, for example **"Halvard Stonehand, Sergeant Stonewright"**,
 **"Ivren of the Seventh Gate, Captain Loremaster"**, **"Marrow Quickstep, Recruit Swiftrider"**.
-Names come from OpenBot's own syllable tables (original, not from any book) and are kept stable per
+Names come from NeoBot's own syllable tables (original, not from any book) and are kept stable per
 agent; the Muse model may propose the epithet from what the agent actually did.
 
 ## The world (what you see)

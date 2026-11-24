@@ -22,7 +22,7 @@ pub(super) fn card_done(app: &Shared, id: &str, status: &str, answer: &str) {
         json!({"id": id, "status": status, "answer": answer}),
     );
 }
-/// `tirith card close` (`by` the manager) or the card's Close (`by` the owner): an open card that is no longer needed is closed with its reason, said in its project's chat and on the phones, so nobody is told to ignore it.
+/// `neobot card close` (`by` the manager) or the card's Close (`by` the owner): an open card that is no longer needed is closed with its reason, said in its project's chat and on the phones, so nobody is told to ignore it.
 pub fn close_card(app: &Shared, id: &str, by: &str, why: &str) -> Result<Value, String> {
     let sql = "SELECT project, kind FROM owner_items WHERE id = ?1 AND status = 'open'";
     let (project, kind): (String, String) = app

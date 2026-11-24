@@ -1,9 +1,9 @@
-//! `tirith teach rehearse|do|stop`: a bot rehearses a draft in the owner's Edge, from its session (`TIRITH_PROJECT` is its conversation).
+//! `neobot teach rehearse|do|stop`: a bot rehearses a draft in the owner's Edge, from its session (`TIRITH_PROJECT` is its conversation).
 use crate::client::{call_with, Flag};
 use serde_json::{json, Value};
 use std::time::Duration;
-const USE: &str = "use: tirith teach rehearse \"<skill>\" | tirith teach do open \"<url>\" | do click \"<selector or text>\" | do type \"<field>\" \"<value>\" | tirith teach stop";
-/// The request a `tirith teach` command makes: its path under the bot's teach API and its body.
+const USE: &str = "use: neobot teach rehearse \"<skill>\" | neobot teach do open \"<url>\" | do click \"<selector or text>\" | do type \"<field>\" \"<value>\" | neobot teach stop";
+/// The request a `neobot teach` command makes: its path under the bot's teach API and its body.
 pub(super) fn request(pos: &[&str]) -> Result<(&'static str, Value), String> {
     Ok(match pos {
         ["rehearse", skill] => ("rehearse", json!({"skill": skill})),

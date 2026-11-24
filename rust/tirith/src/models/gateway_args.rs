@@ -2,7 +2,7 @@
 use crate::app::Shared;
 use serde_json::json;
 
-/// `tirith mcp --bot <id>` as the MCP server `tirith_connectors`. Its env names only `TIRITH_HOME` and the run's own `TIRITH_TOKEN`, forwarded by name (Muse and anthropic as a whole-value `${VAR}`, Codex through `env_vars`): no secret is in it, nor in its arguments. Muse's is optional, like the browser's; anthropic's tools are allowed by `--allowedTools=mcp__tirith_connectors__*`, the gateway refusing what the verdict refuses.
+/// `neobot mcp --bot <id>` as the MCP server `tirith_connectors`. Its env names only `TIRITH_HOME` and the run's own `TIRITH_TOKEN`, forwarded by name (Muse and anthropic as a whole-value `${VAR}`, Codex through `env_vars`): no secret is in it, nor in its arguments. Muse's is optional, like the browser's; anthropic's tools are allowed by `--allowedTools=mcp__tirith_connectors__*`, the gateway refusing what the verdict refuses.
 pub fn gateway_args_for(app: &Shared, alias: &str, role: &str) -> Vec<String> {
     let Some(bot) = role.strip_prefix("bot-") else {
         return vec![];

@@ -20,7 +20,7 @@ pub(super) fn ready(cx: &Context, known: &Known) -> Result<PathBuf, String> {
         );
         return find::program(&said).ok_or_else(|| {
             format!(
-                "{} is not known here: install it, put `command = \"<it>\"` under [agents.{}] in {}/config.toml, then run tirith connect {}",
+                "{} is not known here: install it, put `command = \"<it>\"` under [agents.{}] in {}/config.toml, then run neobot connect {}",
                 known.name,
                 known.alias,
                 cx.home.display(),
@@ -37,7 +37,7 @@ pub(super) fn ready(cx: &Context, known: &Known) -> Result<PathBuf, String> {
             &known.install
         }
     );
-    let again = format!("install it, then run tirith connect {}", known.alias);
+    let again = format!("install it, then run neobot connect {}", known.alias);
     if !cx.ask.yes_no(&question, true) {
         return Err(format!("{} is not installed: {again}", known.name));
     }

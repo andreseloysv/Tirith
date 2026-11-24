@@ -1,4 +1,4 @@
-//! One agent set up from the page, in the guide's order: what the machine needs, its program (installed when missing), its hooks at OpenBot, its sign-in, then one real turn as the proof.
+//! One agent set up from the page, in the guide's order: what the machine needs, its program (installed when missing), its hooks at NeoBot, its sign-in, then one real turn as the proof.
 use super::job;
 use super::steps::{ready, roles, sign_in};
 use crate::app::Shared;
@@ -43,7 +43,7 @@ async fn steps(app: &Shared, alias: &str) -> Result<(), String> {
             break;
         }
         if got["answered"] == true {
-            return Err("it answered, but OpenBot's rules did not hear it use a tool".into());
+            return Err("it answered, but NeoBot's rules did not hear it use a tool".into());
         }
         let said = got["said"].as_str().unwrap_or("no answer").to_string();
         if signed || known.signin.is_empty() {

@@ -1,4 +1,4 @@
-# The agents `tirith setup` and `tirith connect` can guide: how each is found, installed (its maker's own
+# The agents `neobot setup` and `neobot connect` can guide: how each is found, installed (its maker's own
 # installer), signed in over SSH and checked, and where its hooks live. A release build may lay a file of its
 # own over this one (build.rs, TIRITH_AGENTS_FILE).
 #   install_ps1  its installer on Windows (a PowerShell script; Copilot uses npm there)

@@ -21,7 +21,7 @@ pub async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
             &mut c,
             "407 Proxy Authentication Required",
             "Proxy-Authenticate: Basic realm=\"tirith\"\r\n",
-            "OpenBot's proxy needs the credentials of HTTPS_PROXY.\n",
+            "NeoBot's proxy needs the credentials of HTTPS_PROXY.\n",
         )
         .await;
     };
@@ -30,7 +30,7 @@ pub async fn handle(app: Shared, mut c: TcpStream) -> Result<(), String> {
             &mut c,
             "400 Bad Request",
             "",
-            "Only CONNECT and http:// requests go through OpenBot's proxy.\n",
+            "Only CONNECT and http:// requests go through NeoBot's proxy.\n",
         )
         .await;
     };

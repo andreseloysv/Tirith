@@ -1,7 +1,7 @@
-//! What OpenBot needs of the system on Windows, installed with winget when the owner says so.
+//! What NeoBot needs of the system on Windows, installed with winget when the owner says so.
 use super::{ask::Ask, find, run};
 
-/// winget's package for a program OpenBot needs.
+/// winget's package for a program NeoBot needs.
 pub(super) fn id(program: &str) -> Option<&'static str> {
     match program {
         "git" => Some("Git.Git"),

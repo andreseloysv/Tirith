@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "OpenBot",
+  "productName": "NeoBot",
   "version": "0.2.1",
   "identifier": "app.tirith.desktop",
   "build": {
@@ -14,7 +14,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["binaries/tirith"],
+    "externalBin": ["binaries/neobot"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -22,10 +22,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "OpenBot",
+    "publisher": "NeoBot",
     "category": "DeveloperTool",
-    "shortDescription": "OpenBot desktop app",
-    "longDescription": "A window on the local tirith daemon: plan, agents, rules and the manager chat.",
+    "shortDescription": "NeoBot desktop app",
+    "longDescription": "A window on the local NeoBot daemon: plan, agents, rules and the manager chat.",
     "macOS": {
       "minimumSystemVersion": "10.15",
       "signingIdentity": null,

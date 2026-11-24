@@ -1,4 +1,4 @@
-//! `tirith lab start`: an experiment of the Coach begins on one routine of a bot, its branch checked out in a worktree of the lab.
+//! `neobot lab start`: an experiment of the Coach begins on one routine of a bot, its branch checked out in a worktree of the lab.
 use super::git::{git, one_commit};
 use super::store::{running, running_one, tree};
 use crate::app::{now_iso, App, Shared};
@@ -17,7 +17,7 @@ fn bot_of(app: &App, who: &str) -> Result<(String, Vec<Value>), String> {
     Ok((s(b, "key"), routines))
 }
 
-/// What `tirith lab start` asks for, checked: the bot, a routine of its own with no experiment running, the mode (live, shadow, or replay on its captured runs) and a branch with one commit over its main. Its row and, live or shadow, its worktree, or why not; a replay starts running its pairs.
+/// What `neobot lab start` asks for, checked: the bot, a routine of its own with no experiment running, the mode (live, shadow, or replay on its captured runs) and a branch with one commit over its main. Its row and, live or shadow, its worktree, or why not; a replay starts running its pairs.
 pub fn start(app: &Shared, b: &Value) -> Result<Value, String> {
     let (key, routines) = bot_of(app, &s(b, "bot"))?;
     let (branch, routine) = (s(b, "branch"), s(b, "routine"));

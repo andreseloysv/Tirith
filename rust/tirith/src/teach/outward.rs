@@ -60,7 +60,7 @@ const SENDS: [&str; 56] = [
     "papelera",
 ];
 /// What the bot is told when a step is refused.
-pub(super) const STOP: &str = "Do not run this step or any other that does the same, not even to see what happens: end with `tirith teach stop` and say in the chat in one line where you stopped (as «Paré antes de 4. Click «Enviar»: requiere tu aprobación»).";
+pub(super) const STOP: &str = "Do not run this step or any other that does the same, not even to see what happens: end with `neobot teach stop` and say in the chat in one line where you stopped (as «Paré antes de 4. Click «Enviar»: requiere tu aprobación»).";
 /// Whether `text` (a control's words, its aria-label, title, value, or the selector a bot named) says it sends, buys, pays, deletes or publishes.
 pub fn sends(text: &str) -> bool {
     words(&fold(text))

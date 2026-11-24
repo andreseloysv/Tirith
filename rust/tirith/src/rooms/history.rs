@@ -1,7 +1,7 @@
 //! The room's last messages, as the page shows them.
 use super::{handle::Who, Msg, Room, KEPT};
 use serde_json::Value;
-/// A phone the owner had OpenBot forget: nothing it writes is read.
+/// A phone the owner had NeoBot forget: nothing it writes is read.
 pub(super) fn blocked(r: &Room, id: &str) -> bool {
     r.managers.iter().any(|p| p.blocked && p.key_id == id)
 }

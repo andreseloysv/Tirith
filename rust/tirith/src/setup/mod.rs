@@ -1,4 +1,4 @@
-//! The guide: `tirith setup`, `tirith connect`, `tirith doctor` (and `tirith service`, server mode, beside it). It takes a bare Mac or Linux machine to agents that are installed, signed in, held by the rules and proven with a real turn.
+//! The guide: `neobot setup`, `neobot connect`, `neobot doctor` (and `neobot service`, server mode, beside it). It takes a bare Mac or Linux machine to agents that are installed, signed in, held by the rules and proven with a real turn.
 mod api;
 mod as_user;
 mod ask;
@@ -49,7 +49,7 @@ pub use opts::Opts;
 pub use private::Hidden;
 pub use secret::read as read_secret;
 
-/// Whether this process is an agent's, by what OpenBot names it.
+/// Whether this process is an agent's, by what NeoBot names it.
 pub fn from_agent() -> bool {
     ["TIRITH_LANE", "TIRITH_ROLE"]
         .iter()
@@ -68,7 +68,7 @@ pub fn cli(args: &[String]) -> Option<i32> {
     let looks = matches!(rest.first().map(String::as_str), Some("status" | "logs"));
     if from_agent() && command != "doctor" && !(command == "service" && looks) {
         eprintln!(
-            "tirith {command} is the owner's: run it in your own terminal, not from an agent"
+            "neobot {command} is the owner's: run it in your own terminal, not from an agent"
         );
         return Some(1);
     }

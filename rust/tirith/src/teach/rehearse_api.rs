@@ -1,4 +1,4 @@
-//! The rehearsal API: the bot (through `tirith teach`) starts and stops a rehearsal and sends its steps; the extension, with the token, asks for the next step and answers it with a result and a screenshot.
+//! The rehearsal API: the bot (through `neobot teach`) starts and stops a rehearsal and sends its steps; the extension, with the token, asks for the next step and answers it with a result and a screenshot.
 use super::caller::own;
 use super::cors::preflight;
 use super::rehearsal::{begin, end, last, live, until_s};
@@ -63,12 +63,12 @@ async fn step(
     if r["on"] != true {
         return refuse(
             StatusCode::CONFLICT,
-            "no rehearsal is on: start one with tirith teach rehearse \"<skill>\"",
+            "no rehearsal is on: start one with neobot teach rehearse \"<skill>\"",
         );
     }
     if !live(&r) {
         end(&app, &key);
-        return refuse(StatusCode::GONE, "the rehearsal stopped by itself after 10 minutes: say in the chat where it stopped, or start a new one with tirith teach rehearse \"<skill>\"");
+        return refuse(StatusCode::GONE, "the rehearsal stopped by itself after 10 minutes: say in the chat where it stopped, or start a new one with neobot teach rehearse \"<skill>\"");
     }
     match run::step(&app, &key, &b, until_s(&r) * 1000).await {
         Ok(out) => Json(out).into_response(),

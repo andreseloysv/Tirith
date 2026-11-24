@@ -1,7 +1,7 @@
 //! A bot's own commands, in its conversation.
 use crate::client::{call, print, Flag};
 use serde_json::json;
-/// A bot's own commands, in its conversation (`TIRITH_PROJECT` is `bot-<id>`): `tirith routine add|hook|remove|list`.
+/// A bot's own commands, in its conversation (`TIRITH_PROJECT` is `bot-<id>`): `neobot routine add|hook|remove|list`.
 pub fn cli(pos: &[&str], _: Flag) -> Option<Result<(), String>> {
     let key = std::env::var("TIRITH_PROJECT").unwrap_or_default();
     let path = format!(

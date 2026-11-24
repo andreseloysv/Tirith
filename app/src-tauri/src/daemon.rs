@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// The binary's file name: `tirith`, `tirith.exe` on Windows.
-const BIN: &str = if cfg!(windows) { "tirith.exe" } else { "tirith" };
+/// The binary's file name: `neobot`, `neobot.exe` on Windows (`tirith` is its alias).
+const BIN: &str = if cfg!(windows) { "neobot.exe" } else { "neobot" };
 
 /// HOME; on Windows, where it is seldom set, USERPROFILE (the daemon reads the same).
 pub fn home_dir() -> PathBuf {
@@ -38,15 +38,15 @@ fn answers(port: u16) -> bool {
     TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok()
 }
 
-/// `tirith` next to the app's executable: where a bundle carries it.
+/// `neobot` next to the app's executable: where a bundle carries it.
 pub fn beside() -> Option<PathBuf> {
     Some(std::env::current_exe().ok()?.parent()?.join(BIN)).filter(|p| p.is_file())
 }
 
-/// The `tirith` binary: next to the app's executable, then `~/.local/bin`, then `PATH`.
+/// The `neobot` binary: next to the app's executable, then `~/.local/bin`, then `PATH`.
 pub fn tirith_bin() -> PathBuf {
     let local = home_dir().join(".local/bin").join(BIN);
-    beside().or_else(|| Some(local).filter(|p| p.is_file())).unwrap_or_else(|| "tirith".into())
+    beside().or_else(|| Some(local).filter(|p| p.is_file())).unwrap_or_else(|| "neobot".into())
 }
 
 /// A console program started from the window: on Windows without a console window of its own (the daemon's hidden one is shared by all it starts); elsewhere as is.

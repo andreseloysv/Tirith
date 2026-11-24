@@ -55,7 +55,7 @@ fn hooks_keep_the_owners_own_and_never_pile_up() {
         ..Default::default()
     };
     let (exe, home) = (
-        Path::new("/opt/My Tools/tirith"),
+        Path::new("/opt/My Tools/neobot"),
         Path::new("/srv/tirith home"),
     );
     assert!(hooks::install(&known, &file, exe, Some(home)).unwrap());
@@ -75,7 +75,7 @@ fn hooks_keep_the_owners_own_and_never_pile_up() {
     assert_eq!(pre[0]["hooks"][0]["command"], "my-own-check");
     assert_eq!(
         pre[1]["hooks"][0]["command"],
-        "'/opt/My Tools/tirith' hook --agent x --event PreToolUse --home '/srv/tirith home'"
+        "'/opt/My Tools/neobot' hook --agent x --event PreToolUse --home '/srv/tirith home'"
     );
     assert!(hook_lines::heard(&text));
     assert!(!hook_lines::heard(&own_without_ours().to_string()));
@@ -333,10 +333,13 @@ fn our_hook_is_known_by_windows_lines_too() {
     let ours = |line: &str| hook_lines::ours(&json!({"command": line}));
     for line in [
         "C:/Users/me/.local/bin/tirith.exe hook --agent codex --event Stop",
-        "'C:/Program Files/OpenBot/tirith.exe' hook --agent muse --event Stop",
-        "'C:\\Program Files\\OpenBot\\tirith.exe' hook --agent muse --event Stop",
+        "'C:/Program Files/NeoBot/tirith.exe' hook --agent muse --event Stop",
+        "'C:\\Program Files\\NeoBot\\tirith.exe' hook --agent muse --event Stop",
         "tirith.exe hook --agent copilot --event Stop",
         "/usr/local/bin/tirith hook --agent codex --event Stop",
+        "/usr/local/bin/neobot hook --agent codex --event Stop",
+        "C:/Users/me/.local/bin/neobot.exe hook --agent codex --event Stop",
+        "neobot hook --agent copilot --event Stop",
     ] {
         assert!(ours(line), "{line}");
     }
@@ -408,4 +411,31 @@ fn vs_code_s_copilot_stand_in_is_never_taken_for_the_agent() {
     assert!(!super::find::stand_in(Path::new(
         "C:/Users/x/AppData/Roaming/npm/copilot.cmd"
     )));
+}
+
+/// Lines written before the command was renamed are replaced, not kept beside the new ones.
+#[test]
+fn reinstalling_replaces_the_lines_of_the_old_command_name() {
+    let d = dir("old-lines");
+    let file = d.join("settings.json");
+    let old = json!({"hooks": {"PreToolUse": [{"hooks": [
+        {"type": "command", "command": "/home/me/.local/bin/tirith hook --agent x --event PreToolUse"},
+        {"type": "command", "command": "mine"}]}]}});
+    std::fs::write(&file, old.to_string()).unwrap();
+    let known = catalog::Known {
+        alias: "x".into(),
+        hooks: "groups".into(),
+        ..Default::default()
+    };
+    assert!(hooks::install(&known, &file, Path::new("/home/me/.local/bin/neobot"), None).unwrap());
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(!text.contains("bin/tirith hook"), "{text}");
+    assert_eq!(
+        text.matches("neobot hook --agent x --event PreToolUse")
+            .count(),
+        1,
+        "{text}"
+    );
+    assert!(text.contains("mine"));
+    std::fs::remove_dir_all(&d).unwrap();
 }

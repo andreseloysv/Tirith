@@ -1,4 +1,4 @@
-//! `tirith net run`: the launcher of a confined process, the parent that stays outside and carries its few ports.
+//! `neobot net run`: the launcher of a confined process, the parent that stays outside and carries its few ports.
 use super::{child::child, handover, relay, supervise};
 use std::io::Write;
 use std::net::TcpListener;
@@ -36,6 +36,6 @@ pub(super) fn run(ports: &[u16], hidden: &[String], program: &[String]) -> i32 {
 }
 
 fn said(why: &str) -> i32 {
-    eprintln!("tirith sandbox: {why}");
+    eprintln!("neobot sandbox: {why}");
     125
 }

@@ -32,7 +32,7 @@ fn keep_local(dir: &Path, hook: &str) -> Result<(), String> {
         let local = dir.join(format!("{hook}.local"));
         (!(local.exists())).then_some(()).ok_or_else(|| {
             format!(
-                "{} is not OpenBot's hook and {} exists: merge them by hand",
+                "{} is not NeoBot's hook and {} exists: merge them by hand",
                 path.display(),
                 local.display()
             )

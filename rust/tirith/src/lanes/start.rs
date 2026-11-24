@@ -26,7 +26,7 @@ fn ensure_open(app: &Shared, project: &str, step: &str, item: &str) -> Result<()
         .iter()
         .find(|s| s.num == step)
         .ok_or(format!("the plan of {project} has no step {step}"))?;
-    st.items.iter().any(|i| !i.done && plan::same(&i.text, item)).then_some(()).ok_or_else(|| format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: tirith plan add {project} {step} \"<text>\""))
+    st.items.iter().any(|i| !i.done && plan::same(&i.text, item)).then_some(()).ok_or_else(|| format!("\"{item}\" is not an open item of step {step} of {project}. Add it first: neobot plan add {project} {step} \"<text>\""))
 }
 /// No active lane may already work on the item.
 fn ensure_free(app: &Shared, project: &str, step: &str, item: &str) -> Result<(), String> {

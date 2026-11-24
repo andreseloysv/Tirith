@@ -3,7 +3,7 @@
 // answers 2xx, one that fails does not stop the next, and each call stays under the platform's 64 KB whatever the characters.
 
 /** The script for `url` and the label `tirith/<name>`. */
-export const mailScript = (url, name) => `// Sends the new mail labelled tirith/${String(name).replace(/\s+/g, ' ')} to OpenBot every 5 minutes, and marks it read once OpenBot has it.
+export const mailScript = (url, name) => `// Sends the new mail labelled tirith/${String(name).replace(/\s+/g, ' ')} to NeoBot every 5 minutes, and marks it read once NeoBot has it.
 const HOOK = ${JSON.stringify(url)};
 const LABEL = ${JSON.stringify(`tirith/${name}`)};
 const LIMIT = 60000; // bytes: the webhook takes 64 KB at most
@@ -25,8 +25,8 @@ function send(m, thread) {
     const res = UrlFetchApp.fetch(HOOK, { method: 'post', contentType: 'application/json', payload: body(m, thread), muteHttpExceptions: true });
     const code = res.getResponseCode();
     if (code >= 200 && code < 300) { m.markRead(); return true; }
-    console.warn('OpenBot answered ' + code + ': the mail stays unread for the next run');
-  } catch (e) { console.warn('Could not send a mail to OpenBot: ' + e); }
+    console.warn('NeoBot answered ' + code + ': the mail stays unread for the next run');
+  } catch (e) { console.warn('Could not send a mail to NeoBot: ' + e); }
   return false;
 }
 

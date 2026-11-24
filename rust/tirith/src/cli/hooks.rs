@@ -1,8 +1,8 @@
-//! `tirith hooks install`: the agent's command hooks become HTTP hooks on the daemon.
+//! `neobot hooks install`: the agent's command hooks become HTTP hooks on the daemon.
 use crate::config;
 use serde_json::{json, Value};
 
-/// Rewrites the hooks of the configured agents whose settings file uses `tirith hook …` into HTTP hooks on the daemon (a backup of each file is kept next to it). Agents without HTTP hooks keep the command bridge.
+/// Rewrites the hooks of the configured agents whose settings file uses `neobot hook …` into HTTP hooks on the daemon (a backup of each file is kept next to it). Agents without HTTP hooks keep the command bridge.
 pub(super) fn install_hooks() -> Result<(), String> {
     let cfg = config::Config::load_at(&config::tirith_home());
     cfg.factory

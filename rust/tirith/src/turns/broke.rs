@@ -15,7 +15,7 @@ static NESTING: LazyLock<Regex> = LazyLock::new(|| {
 });
 /// Fatal wherever it stands at a line's beginning.
 static FATAL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^bwrap: |^tool failed: environment failure|^tirith: (codex could not be started|a codex already under a limit)|^(error: )?not logged in\b").unwrap()
+    Regex::new(r"(?i)^bwrap: |^tool failed: environment failure|^(?:tirith|neobot): (codex could not be started|a codex already under a limit)|^(error: )?not logged in\b").unwrap()
 });
 /// Fatal as an output's end (a page that was read may say the same in its middle).
 static FINAL: LazyLock<Regex> = LazyLock::new(|| {

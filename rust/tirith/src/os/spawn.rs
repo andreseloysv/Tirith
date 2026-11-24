@@ -34,7 +34,7 @@ pub fn detach(command: &mut std::process::Command) -> &mut std::process::Command
     };
     use windows_sys::Win32::System::Threading::{CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW};
     // A child gets every inheritable handle: a daemon holding this process's output pipe would keep whoever reads
-    // that pipe (`tirith setup | …`, a captured run) waiting. Its own stdio stays inheritable: Rust duplicates it.
+    // that pipe (`neobot setup | …`, a captured run) waiting. Its own stdio stays inheritable: Rust duplicates it.
     for id in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
         // SAFETY: this process's own standard handle; only its inherit flag changes.
         unsafe { SetHandleInformation(GetStdHandle(id), HANDLE_FLAG_INHERIT, 0) };

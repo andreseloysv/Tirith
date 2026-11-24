@@ -1,4 +1,4 @@
-//! The broker's socket: in the user's own temporary folder of macOS (0700, whatever TMPDIR says), one for each OpenBot home. Who calls is told by the kernel.
+//! The broker's socket: in the user's own temporary folder of macOS (0700, whatever TMPDIR says), one for each NeoBot home. Who calls is told by the kernel.
 use sha2::{Digest, Sha256};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;

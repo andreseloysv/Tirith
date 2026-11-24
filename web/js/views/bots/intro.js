@@ -6,7 +6,7 @@ const SAMPLE = [['dome', '#3b82f6', 'watch'], ['cloud', '#ec4899', 'idle'], ['pi
 
 export function Intro({ onNew, onTemplate, onImport }) {
   return html`<div class="bintro">
-    <div class="btop"><span>OpenBot</span><span>Bots</span><span class="bnum">Agents that keep watch</span></div><div class="brule"></div>
+    <div class="btop"><span>NeoBot</span><span>Bots</span><span class="bnum">Agents that keep watch</span></div><div class="brule"></div>
     <h1>Bots that keep watch.</h1>
     <p class="bsub">They do your tasks on a schedule, <b>and only speak up when it matters.</b></p>
     <span class="bdash"></span>

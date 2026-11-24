@@ -1,9 +1,9 @@
-# OpenBot always on, on a Mac mini
+# NeoBot always on, on a Mac mini
 
-A Mac mini on mains power can run OpenBot day and night, with no screen, and your phone reaches it from anywhere.
+A Mac mini on mains power can run NeoBot day and night, with no screen, and your phone reaches it from anywhere.
 It needs five things:
 
-1. [The daemon starts by itself](#1-the-daemon-starts-by-itself): `tirith service install`.
+1. [The daemon starts by itself](#1-the-daemon-starts-by-itself): `neobot service install`.
 2. [The Mac does not sleep](#2-the-mac-does-not-sleep): `[power] keep_awake = true` and one switch in Energy.
 3. [It starts after a power cut](#3-it-starts-after-a-power-cut): another setting in Energy.
 4. [Someone is logged in](#4-someone-is-logged-in): automatic login, **which does not exist with FileVault: after
@@ -14,24 +14,24 @@ Names of settings are given in English, then as a Mac in Spanish shows them.
 
 ## 1. The daemon starts by itself
 
-If OpenBot already runs (started by `./run` or by the app), stop it first, when no lane is working, because two
+If NeoBot already runs (started by `./run` or by the app), stop it first, when no lane is working, because two
 daemons cannot share the port (7717 unless `[server] port` says otherwise):
 
 ```bash
-tirith status                                        # wait for "no lane is working"
+neobot status                                        # wait for "no lane is working"
 kill $(lsof -t -iTCP:7717 -sTCP:LISTEN)
 ```
 
-Then, as the user who will run OpenBot (no `sudo`):
+Then, as the user who will run NeoBot (no `sudo`):
 
 ```bash
-tirith service install
-tirith service status                                # how it runs, and alive: its own process answers
+neobot service install
+neobot service status                                # how it runs, and alive: its own process answers
 ```
 
 This writes `~/Library/LaunchAgents/com.tirith.serve.plist`: launchd starts the daemon at login and again whenever
 it ends. Its log is `~/.tirith/logs/tirithd.log`. The service runs the binary you installed it with, so install it
-again if that binary moves. `tirith service uninstall` undoes it.
+again if that binary moves. `neobot service uninstall` undoes it.
 
 It is a LaunchAgent, not a LaunchDaemon, because Safari, Edge and the keychain need your session. So it runs only
 while you are logged in: a locked screen is fine, logging out stops it.
@@ -82,7 +82,7 @@ sudo pmset -a autorestart 1
 pmset -g custom | grep autorestart
 ```
 
-This only turns the Mac on. OpenBot starts when you are logged in, which is the next step.
+This only turns the Mac on. NeoBot starts when you are logged in, which is the next step.
 
 ## 4. Someone is logged in
 
@@ -92,14 +92,14 @@ This only turns the Mac on. OpenBot starts when you are logged in, which is the 
 |---|---|---|
 | The disk | locked until someone types the password | readable by whoever has the Mac |
 | Automatic login | does not exist | can be turned on |
-| After a power cut | the Mac waits: log in by hand | OpenBot comes back by itself |
+| After a power cut | the Mac waits: log in by hand | NeoBot comes back by itself |
 
 **With FileVault off:** System Settings > Users & Groups > **Automatically log in as** (*Usuarios y grupos >
 Iniciar sesión automáticamente como*), and choose the user who installed the service. Anyone who can touch the Mac
 can then get into that session, so this is for a Mac in a place you trust.
 
 **With FileVault on:** after every power cut or restart, also one for a macOS update, type the password at the Mac.
-Nothing of OpenBot runs until then and the phone gets no answer. Since macOS 26, with Remote Login on, SSH from your
+Nothing of NeoBot runs until then and the phone gets no answer. Since macOS 26, with Remote Login on, SSH from your
 own network can unlock the disk (`man apple_ssh_and_filevault`), but that opens no session: you still log in at the
 Mac or by Screen Sharing on your own network. Do not open either of them to the internet for this.
 
@@ -116,14 +116,14 @@ project, also of those you add later, and works from any network, **with nothing
 - The rooms and the pairing survive restarts: when the daemon is back it reads on from the last message it saw.
 
 Do not forward port 7717 and do not put a reverse proxy in front of it: whatever reaches that port can give your
-agents orders. If a phone is lost, `tirith room forget <phone key id>` cuts it off.
+agents orders. If a phone is lost, `neobot room forget <phone key id>` cuts it off.
 
 ## Try it before you leave
 
-1. When no lane is working, restart the Mac and do not open OpenBot. With FileVault, log in.
-2. `tirith service status` says alive, and `pmset -g assertions | grep caffeinate` prints a line.
+1. When no lane is working, restart the Mac and do not open NeoBot. With FileVault, log in.
+2. `neobot service status` says alive, and `pmset -g assertions | grep caffeinate` prints a line.
 3. Turn the phone's Wi-Fi off and send `/models` in a project's chat: the Mac answers without calling a model.
 
 If the phone gets no answer, look in this order: the Mac has power and internet, someone is logged in,
-`tirith service status`, then `tail -50 ~/.tirith/logs/tirithd.log` (`port 7717 is taken` means that another daemon
+`neobot service status`, then `tail -50 ~/.tirith/logs/tirithd.log` (`port 7717 is taken` means that another daemon
 was started by hand: stop it as in step 1 and launchd starts its own).
