@@ -1,10 +1,10 @@
 //! launchctl on one job: in the owner's domain, or the system's with sudo.
 use super::unit::Unit;
 use crate::setup::{root, run, Ask};
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::{path::Path, path::PathBuf, time::Duration};
 
 const LAUNCHCTL: &str = "/bin/launchctl";
+const LIMIT: Duration = Duration::from_secs(30);
 
 pub(super) struct Launchctl<'a> {
     ask: &'a Ask,
@@ -35,7 +35,7 @@ impl<'a> Launchctl<'a> {
     fn run(&self, args: &[&str]) -> bool {
         match root::sudo().filter(|_| self.boot) {
             Some(sudo) => run::shown(self.ask, &sudo, &[&[LAUNCHCTL][..], args].concat(), &[]),
-            None => run::quiet(Path::new(LAUNCHCTL), args, &[], Duration::from_secs(30)),
+            None => run::quiet(Path::new(LAUNCHCTL), args, &[], LIMIT) == Some(true),
         }
     }
 

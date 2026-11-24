@@ -18,7 +18,8 @@ import { Working } from './working.js';
 import { Next } from './next.js';
 import { Quiet } from './quiet.js';
 import { Setup } from './setup.js';
-import { Start } from './start.js';
+import { Start, starting } from './start.js';
+import { useAgents } from '../setup/agents.js';
 
 const newest = (a, b) => String(b.at).localeCompare(String(a.at));
 
@@ -34,10 +35,11 @@ export function Overview({ project }) {
   const groups = crew(s, { project: p ? p.id : '', q, cards, shown: (k) => shown.has(k) });
   const helpers = groups.reduce((n, g) => n + g.helpers.length, 0);
   const lanes = p ? Object.values(s.lanes).filter((l) => l.project === p.id) : [];
-  const calm = !asks.length && !groups.length;
+  const [agents, reload] = useAgents();
+  const calm = !asks.length && !groups.length && !starting(agents);
   const main = html`<div class="home">
-    <${Hello} place=${p ? p.name || p.id : ''} asks=${asks.length} helpers=${helpers} bosses=${groups.length} line=${!(calm && !p && !q)} />
-    ${p ? html`<${Setup} project=${p.id} name=${p.name} />` : html`<${Start} />`}
+    <${Hello} place=${p ? p.name || p.id : ''} asks=${asks.length} helpers=${helpers} bosses=${groups.length} line=${!(calm && !p && !q) && !starting(agents)} />
+    ${p ? html`<${Setup} project=${p.id} name=${p.name} />` : html`<${Start} list=${agents} reload=${reload} />`}
     <${Working} groups=${groups} who=${who} />
     <${Asks} list=${asks} who=${who} />
     ${calm && !p && !q ? html`<${Quiet} faces=${bots} />` : null}
