@@ -4,6 +4,7 @@ mod chain;
 mod input;
 mod job;
 mod seen;
+mod steps;
 
 use crate::app::{bad, Shared, R};
 use crate::server::Who;

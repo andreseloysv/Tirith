@@ -95,3 +95,14 @@ fn a_hidden_login_shows_its_link_and_takes_the_code_pasted_on_the_page() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_page_is_never_told_to_type_a_command() {
+    let why = "OpenAI Codex's installer failed: install it, then run tirith connect codex; git missing: winget install Git.Git".to_string();
+    assert_eq!(
+        super::chain::for_page(why),
+        "OpenAI Codex's installer failed; git missing: winget install Git.Git"
+    );
+    let why = "Muse Code is not signed in: run tirith connect muse in a terminal, or give it a Meta API key".to_string();
+    assert_eq!(super::chain::for_page(why), "Muse Code is not signed in");
+}
