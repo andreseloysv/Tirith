@@ -5,7 +5,7 @@ const FAR: usize = 8;
 
 /// `name` as the nearest ancestor that has it was given it.
 pub(super) fn var(name: &str) -> Option<String> {
-    let mut pid = crate::os::parent_id()?;
+    let mut pid = crate::os::parent_id().or_else(|| parent(std::process::id()))?;
     for _ in 0..FAR {
         if pid <= 1 {
             break;
@@ -78,12 +78,19 @@ fn parent(pid: u32) -> Option<u32> {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(windows)]
+use super::windows_env::{given, parent};
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn given(_pid: u32) -> Option<Vec<u8>> {
     None
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn parent(_pid: u32) -> Option<u32> {
     None
 }
+
+#[cfg(test)]
+#[path = "../../checks/ancestry.rs"]
+mod tests;

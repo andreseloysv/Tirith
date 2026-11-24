@@ -98,11 +98,47 @@ fn a_hidden_login_shows_its_link_and_takes_the_code_pasted_on_the_page() {
 
 #[test]
 fn the_page_is_never_told_to_type_a_command() {
-    let why = "OpenAI Codex's installer failed: install it, then run tirith connect codex; git missing: winget install Git.Git".to_string();
+    let why = "OpenAI Codex's installer failed: install it, then run neobot connect codex; git missing: winget install Git.Git".to_string();
     assert_eq!(
         super::chain::for_page(why),
         "OpenAI Codex's installer failed; git missing: winget install Git.Git"
     );
-    let why = "Muse Code is not signed in: run tirith connect muse in a terminal, or give it a Meta API key".to_string();
+    let why = "Muse Code is not signed in: run neobot connect muse in a terminal, or give it a Meta API key".to_string();
     assert_eq!(super::chain::for_page(why), "Muse Code is not signed in");
+}
+
+#[test]
+fn connected_means_it_really_worked_and_no_check_failed_since() {
+    let dir = std::env::temp_dir().join(format!("tirith-setup-worked-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let app = crate::app::App::open_at(dir.clone());
+    let turn = |role: &str, agent: &str, status: &str| {
+        let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, agent) VALUES (?1, ?1, 'event', '', 'x', 'x', ?2, ?3)";
+        app.insert(sql, rusqlite::params![role, status, agent]);
+    };
+    assert!(
+        !super::list::worked(&app, "muse"),
+        "in config.toml alone it never worked"
+    );
+    turn("check", "copilot", "failed");
+    assert!(
+        !super::list::worked(&app, "copilot"),
+        "a stand-in that failed its check"
+    );
+    turn("manager", "muse", "ok");
+    assert!(super::list::worked(&app, "muse"));
+    turn("manager", "muse", "failed");
+    assert!(
+        super::list::worked(&app, "muse"),
+        "one failed turn is no sign-out"
+    );
+    turn("check", "muse", "failed");
+    assert!(
+        !super::list::worked(&app, "muse"),
+        "its check failed after its last good turn"
+    );
+    turn("check", "muse", "ok");
+    assert!(super::list::worked(&app, "muse"));
+    let _ = std::fs::remove_dir_all(&dir);
 }

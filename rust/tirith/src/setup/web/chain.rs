@@ -4,24 +4,18 @@ use super::steps::{ready, roles, sign_in};
 use crate::app::Shared;
 use crate::setup::{catalog, context::Context, prove};
 
-/// Set in kv while an agent is in config.toml but has not answered its check yet.
-pub fn unproven(alias: &str) -> String {
-    format!("setup_unproven:{alias}")
-}
-
 pub async fn run(app: Shared, alias: String) {
     let done = steps(&app, &alias).await;
-    if done.is_ok() {
-        app.set_kv(&unproven(&alias), None);
-    }
     job::end(&alias, done.map_err(for_page));
 }
 
 /// The words for the page: what a terminal would be told to type is dropped.
 pub(super) fn for_page(why: String) -> String {
-    const TOLD: [&str; 3] = [
-        ": install it, then run tirith",
-        ": run tirith",
+    const TOLD: [&str; 5] = [
+        ": install it, then run ",
+        ", then run ",
+        ": run ",
+        " (neobot doctor",
         " (tirith doctor",
     ];
     let cut = |part: &str| {
@@ -35,7 +29,6 @@ async fn steps(app: &Shared, alias: &str) -> Result<(), String> {
     let known = catalog::known(alias).ok_or(format!("no agent '{alias}'"))?;
     let (a, k) = (alias.to_string(), known.clone());
     let (path, mut signed) = blocking(move || ready(&a, &k)).await?;
-    app.set_kv(&unproven(alias), Some("1"));
     loop {
         job::step(alias, "check");
         let got = prove::prove(app, alias).await?;

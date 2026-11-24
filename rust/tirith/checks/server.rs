@@ -422,6 +422,19 @@ async fn every_agent_obeys_the_rules() {
         reason(&skipped).contains("Commit checks are never skipped"),
         "the refusal names the commit checks: {skipped}"
     );
+    let windows = pre(
+        &app,
+        "",
+        "lane-agents",
+        ws,
+        "powershell",
+        cmd("git commit --no-verify -m x"),
+    )
+    .await;
+    assert!(
+        deny(&windows),
+        "Muse's powershell tool on Windows is a shell to the rules: {windows}"
+    );
     let config = app.home.join("config.toml").display().to_string();
     for (what, tool, input) in [
         (

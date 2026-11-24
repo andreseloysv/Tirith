@@ -3,6 +3,7 @@ pub mod capture;
 mod chain;
 mod input;
 mod job;
+mod list;
 mod seen;
 mod steps;
 
@@ -13,22 +14,10 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::{json, Value};
 
-/// Every agent this build knows how to set up (the catalog's, or one config.toml names), in the guide's order.
+/// Every agent this build knows how to set up, and how far each is.
 async fn agents(State(app): State<Shared>) -> R {
-    let cfg = app.cfg();
-    let rows: Vec<Value> = super::catalog::all()
-        .into_iter()
-        .filter_map(|k| {
-            let set = cfg.factory.command(&k.alias);
-            (!k.bin.is_empty() || set.is_some()).then_some(())?;
-            let installed = super::find::agent(&k, set.as_deref()).is_some();
-            let unproven = app.kv(&chain::unproven(&k.alias)).is_some();
-            let connected = set.is_some() && installed && !unproven;
-            let job = job::get(&k.alias);
-            Some(json!({"alias": k.alias, "name": k.name, "installed": installed, "connected": connected, "job": job}))
-        })
-        .collect();
-    Ok(Json(json!({ "agents": rows })))
+    let rows = tokio::task::spawn_blocking(move || list::rows(&app)).await;
+    Ok(Json(json!({ "agents": rows.unwrap_or_default() })))
 }
 
 fn owner(who: &Who) -> Result<(), (axum::http::StatusCode, String)> {

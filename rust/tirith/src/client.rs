@@ -2,6 +2,8 @@
 
 mod ancestry;
 mod token;
+#[cfg(windows)]
+mod windows_env;
 
 pub use token::{command as caller, hook as hook_caller, VAR};
 
