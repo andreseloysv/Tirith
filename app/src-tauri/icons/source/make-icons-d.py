@@ -8,13 +8,15 @@ body #8fd14f in cel shading, the Calm eyes of their expression sheet in ink) fil
 with a soft glow and a light rim. From the repo root:
   python3 app/src-tauri/icons/source/make-icons-d.py app/src-tauri/icons/source/icon-bot-1024.png
 Tauri PNGs and the .ico are full-bleed rounded squares; icon.png and the .icns follow the
-macOS grid (824 px tile on a 1024 canvas with a soft shadow); the site logos are opaque."""
-import os, shutil, subprocess, sys, tempfile
+macOS grid (824 px tile on a 1024 canvas with a soft shadow); the browser icons and the site's logo come
+from make-web-icons.py, run at the end."""
+import os, subprocess, sys, tempfile
 from PIL import Image, ImageDraw, ImageFilter
 
 ICONS = 'app/src-tauri/icons'
 SRC = f'{ICONS}/source'
-art = Image.open(sys.argv[1] if len(sys.argv) > 1 else f'{SRC}/icon-d-1024.png').convert('RGB')
+ART = sys.argv[1] if len(sys.argv) > 1 else f'{SRC}/icon-d-1024.png'
+art = Image.open(ART).convert('RGB')
 
 def mask(size, frac=0.2237, k=4):
     m = Image.new('L', (size * k, size * k), 0)
@@ -51,6 +53,4 @@ with tempfile.TemporaryDirectory() as d:
         mac.resize((s * 2, s * 2), Image.LANCZOS).save(f'{iconset}/icon_{s}x{s}@2x.png')
     subprocess.run(['iconutil', '-c', 'icns', iconset, '-o', f'{ICONS}/icon.icns'], check=True)
 
-art.save('site/img/tirith-logo.png')
-art.resize((64, 64), Image.LANCZOS).save('site/img/tirith-logo-64.png')
-shutil.copy('site/img/tirith-logo-64.png', 'web/img/tirith-logo-64.png')
+subprocess.run([sys.executable, f'{SRC}/make-web-icons.py', ART], check=True)
