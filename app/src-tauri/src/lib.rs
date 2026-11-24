@@ -6,6 +6,8 @@ mod cli_link;
 #[cfg(windows)]
 mod cli_path;
 mod daemon;
+#[cfg(windows)]
+mod guide;
 mod page;
 
 use daemon::{ensure_daemon, port, tirith_bin};
@@ -24,6 +26,10 @@ pub fn run() {
                 eprintln!("tirith is not on PATH: {e}");
             }
             ensure_daemon(port);
+            #[cfg(windows)] // no agent connected yet: the guide opens beside the window
+            if !cfg!(dev) {
+                guide::offer(&daemon::tirith_home(), &tirith_bin());
+            }
             let url = page::link(port, &tirith_bin()).parse().expect("valid daemon url");
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
                 .title("OpenBot")

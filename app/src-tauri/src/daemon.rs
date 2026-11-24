@@ -16,7 +16,7 @@ pub fn home_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-fn tirith_home() -> PathBuf {
+pub fn tirith_home() -> PathBuf {
     std::env::var_os("TIRITH_HOME").map(PathBuf::from).unwrap_or_else(|| home_dir().join(".tirith"))
 }
 
