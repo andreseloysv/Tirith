@@ -19,20 +19,21 @@ function addProject(onAdd) {
             onClick=${onAdd}><${Icon} d="M12 5v14 M5 12h14" size=${14} w=${2} /></button></div>`;
 }
 
-export function Nav({ r, onAdd }) {
+/** `bare`: no agent works yet, so only the brand shows (no faces, views or projects that could not be used). */
+export function Nav({ r, onAdd, bare }) {
   const s = useStore();
   const mem = useNavMemory();
   const lanes = Object.values(s.lanes);
   return html`<aside id="nav">
-    <${Faces} r=${r} />
+    <${Faces} r=${r} bare=${bare} />
     <div class="nmenu">
       <div id="navlist">
         <div class="brand"><span>NeoBot</span></div>
-        <nav>
+        ${bare ? null : html`<nav>
           ${topViews(r)}
           ${addProject(onAdd)}
           ${s.projects.map((p) => projectRow(p, { r, lanes, mem }))}
-        </nav>
+        </nav>`}
       </div>
     </div>
     <${NavResizer} />

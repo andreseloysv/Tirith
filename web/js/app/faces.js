@@ -1,7 +1,7 @@
 // The faces at the far left of the sidebar (faces/list.js): each agent in its state with its unread answers, in the
 // owner's order — drag one up or down to choose its place (faces/drag.js, faces/order.js) — and, while the pointer
 // rests on one, its card: the name, then where it works or its last message (faces/hover.js, faces/where.js).
-// "+" adds a bot.
+// "+" adds a bot. None of them while no agent works yet (`bare`): only the logo.
 import { html, useState } from '../../vendor/preact-htm.js';
 import { useStore, setUi } from '../store.js';
 import { Face, NewFace } from '../views/bots/face.js';
@@ -26,7 +26,7 @@ function faceButton(f, sel, drag, card) {
     ${n ? html`<em class="nunread">${n > 9 ? '9+' : n}</em>` : null}</button>`;
 }
 
-export function Faces({ r }) {
+export function Faces({ r, bare }) {
   const s = useStore();
   const [order, setOrder] = useState(loadOrder);
   const { faces, sel } = useFaces(r, order);
@@ -37,8 +37,8 @@ export function Faces({ r }) {
   const shown = card.at && faces.find((f) => f.id === card.at.id);
   return html`<nav class="nbots" aria-label="Agents" onScroll=${card.now}>
     <div class="nlogo" title="NeoBot">${BRAND}</div>
-    ${faces.map((f) => faceButton(f, sel, drag, card))}
-    <button type="button" class="nbot nnew" title="New bot" aria-label="New bot" onClick=${() => setUi('botCard', {})}><${NewFace} size=${46} /></button>
+    ${bare ? null : faces.map((f) => faceButton(f, sel, drag, card))}
+    ${bare ? null : html`<button type="button" class="nbot nnew" title="New bot" aria-label="New bot" onClick=${() => setUi('botCard', {})}><${NewFace} size=${46} /></button>`}
     ${shown ? html`<${HoverCard} face=${shown} at=${card.at} line=${whereOf(shown, s)} />` : null}
   </nav>`;
 }

@@ -1,4 +1,4 @@
-/* the agents to set up (web/js/views/setup/): a row each with its one button, on the Home while none is connected
+/* the agents to set up (web/js/views/setup/): a row each with its one button, the whole page while none works yet
    and in Settings; while one signs in, the code to confirm, the sign-in page and a box for a code from the browser */
 .su-list { display: flex; flex-direction: column; }
 .su-row { padding: 12px 0; border-top: 1px solid var(--line); }
@@ -14,5 +14,5 @@
 .su-paste { flex: 1; display: flex; gap: 8px; min-width: 240px; }
 .su-paste input { flex: 1; min-width: 0; height: 40px; padding: 0 16px; border-radius: 20px; background: var(--well); color: var(--fg); border: 1px solid transparent; font: 15px var(--sans); }
 .su-paste input:focus { outline: 0; border-color: var(--line2); }
-.su-start .hm-q { margin-top: 0; }
+.su-welcome .hm-ask { margin-top: 28px; }
 .scard .su-list { margin-top: 6px; }
