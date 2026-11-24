@@ -8,6 +8,7 @@ import { bubble, words } from './bubble.js';
 import { mdOf, FileChip } from './files.js';
 import { Reactions, turnOf } from './react.js';
 import { cited } from './cite.js';
+import { t } from '../../i18n.js';
 
 /** One answer of an ended turn: a quiet line, or a bubble with who said it (and a bot's 👍 / 👎 under the turn's last one; its memory citations as small marks). */
 function answer(r, { who, turn, notes, cls }) {
@@ -15,7 +16,7 @@ function answer(r, { who, turn, notes, cls }) {
   return bubble({
     key: r.id,
     cls,
-    from: who || 'Manager',
+    from: who || t('Manager'),
     time: clockTime(r.at),
     meta: turn ? html`<${Reactions} turn=${turn} />` : null,
     body: words(cited(mdOf(r.id, r.text), notes)),
@@ -41,6 +42,6 @@ export function Local({ o, onRetry, onCopy }) {
     : html`<${FileChip} name=${f.name} title=${f.name} />`))}</div>` : null}
     ${words(o.text ? md(o.text) : '')}`;
   const failed = o.state === 'failed';
-  const meta = failed ? html`<span class="mc-unsent"><b class="mc-bad">Not sent</b> · <button type="button" class="mc-lnk" onClick=${onRetry}>Retry</button> · <button type="button" class="mc-lnk" onClick=${onCopy}>Copy text</button>${o.err ? html`<br /><span class="mc-why">${o.err}</span>` : null}</span>` : null;
-  return bubble({ cls: `me local ${o.state}`, time: failed ? '' : `Sending… · ${clockTime(new Date(o.at).toISOString())}`, meta, body });
+  const meta = failed ? html`<span class="mc-unsent"><b class="mc-bad">${t('Not sent')}</b> · <button type="button" class="mc-lnk" onClick=${onRetry}>${t('Retry')}</button> · <button type="button" class="mc-lnk" onClick=${onCopy}>${t('Copy text')}</button>${o.err ? html`<br /><span class="mc-why">${o.err}</span>` : null}</span>` : null;
+  return bubble({ cls: `me local ${o.state}`, time: failed ? '' : `${t('Sending…')} · ${clockTime(new Date(o.at).toISOString())}`, meta, body });
 }

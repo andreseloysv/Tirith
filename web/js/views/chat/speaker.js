@@ -4,8 +4,9 @@ import { useStore, useTalk, useFetch } from '../../store.js';
 import { useUnread } from '../../unread.js';
 import { projName } from './util.js';
 import { lookOf } from '../bots/face/face-map.js';
+import { t } from '../../i18n.js';
 
-const LABEL = { work: 'Working', watch: 'Waiting', sleep: 'Asleep' };
+const LABEL = { work: t('Working'), watch: t('Waiting'), sleep: t('Asleep') };
 
 /** The head's face, as in Faces: working on a turn, else on watch (a bot with nothing on sleeps). */
 function faceStateOf(busy, bot) {
@@ -21,7 +22,7 @@ export function useSpeaker(project, who) {
   const [M] = useFetch('/api/models', ['models', 'bots']);
   const unread = useUnread();   /* the bots and their unread answers, as the sidebar's Faces show them */
   const entry = (M && M.roles[role]) || null;
-  const whoName = who || (entry && entry.name) || (isProject ? 'Project Manager' : 'Manager');
+  const whoName = who || (entry && entry.name) || (isProject ? t('Project Manager') : t('Manager'));
   const busy = !!s.busy[project];
   /* with its unread answers */
   const bot = unread.bots.find((b) => (b.key || `bot-${b.id}`) === project) || null;

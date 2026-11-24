@@ -1,11 +1,12 @@
 // When a bot's routines run, in words: their days, their time, the next run.
-export const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+import { t } from '../../i18n.js';
+export const DAY = [t('Mon'), t('Tue'), t('Wed'), t('Thu'), t('Fri'), t('Sat'), t('Sun')];
 export const WEEKDAYS = [1, 2, 3, 4, 5], DAILY = [1, 2, 3, 4, 5, 6, 7];
 export const isOn = (r) => r.on !== false;
 
 export function daysLabel(d = []) {
   const s = [...d].sort().join();
-  return s === DAILY.join() ? 'Every day' : s === WEEKDAYS.join() ? 'Weekdays' : s === '6,7' ? 'Weekends' : [...d].sort().map((n) => DAY[n - 1]).join(', ');
+  return s === DAILY.join() ? t('Every day') : s === WEEKDAYS.join() ? t('Weekdays') : s === '6,7' ? t('Weekends') : [...d].sort().map((n) => DAY[n - 1]).join(', ');
 }
 const hm = (at) => String(at || '').split(':').map((x) => Number(x) || 0);
 export const timeLabel = (at) => { const [h, m] = hm(at); return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
@@ -22,8 +23,8 @@ export function nextRun(r, now = new Date()) {
 }
 export function whenLabel(d) {
   if (!d) return '';
-  const day = new Date(), t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const day = new Date(), time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(day.getFullYear(), day.getMonth(), day.getDate())) / 86400000);
-  return `${diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : DAY[(d.getDay() + 6) % 7]} ${t}`;
+  return diff === 0 ? t('today {time}', { time }) : diff === 1 ? t('tomorrow {time}', { time }) : `${DAY[(d.getDay() + 6) % 7]} ${time}`;
 }
 export const soonest = (bot) => (bot.routines || []).map((r) => nextRun(r)).filter(Boolean).sort((a, b) => a - b)[0] || null;
