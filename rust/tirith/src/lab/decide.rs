@@ -33,7 +33,7 @@ pub fn decide(app: &Shared, id: i64) {
         Due::No => {}
         Due::Expired(n) => {
             let line = format!(
-                "Descarté {name}: sus días se acabaron con solo {n} comparaciones (mínimo {})",
+                "Discarded {name}: its days ran out with only {n} comparisons (minimum {})",
                 minimum(&lab)
             );
             close(app, &e, false, &line);
@@ -60,7 +60,7 @@ pub(super) fn close(app: &Shared, e: &Experiment, adopt_it: bool, line: &str) {
             (adopted, line) = (
                 false,
                 format!(
-                    "Descarté {}: no entra en su main (conflicto: cambió mientras se probaba)",
+                    "Discarded {}: it does not fit its main (conflict: it changed while being tested)",
                     name_of(app, e)
                 ),
             );

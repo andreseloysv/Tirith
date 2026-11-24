@@ -2,7 +2,7 @@
 use super::rule::{Side, Tally};
 use crate::factory::Lab;
 
-const TIME: &str = "tiempo";
+const TIME: &str = "time";
 const TOKENS: &str = "tokens";
 
 /// What `b` is less than `a`, as a share of `a`.

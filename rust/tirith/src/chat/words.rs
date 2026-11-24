@@ -4,7 +4,7 @@
 pub fn parse_keep(words: &str) -> Result<Option<u64>, String> {
     let w = words.trim().trim_end_matches('.').to_lowercase();
     let err = || {
-        format!("no entiendo «{words}»: escribe un tiempo como 30m, 1h, 24 h, 2 días o una semana, o «siempre» para quitar el límite")
+        format!("I do not understand «{words}»: write a time like 30m, 1h, 24 h, 2 days or a week, or «forever» to remove the limit")
     };
     let Some(()) = (!matches!(
         w.as_str(),
@@ -21,7 +21,12 @@ pub fn parse_keep(words: &str) -> Result<Option<u64>, String> {
 
 /// The number and the unit: «una semana» is one week, `24 h` is 24 hours.
 fn amount(w: &str) -> Option<(f64, &str)> {
-    match w.strip_prefix("una ").or_else(|| w.strip_prefix("un ")) {
+    match w
+        .strip_prefix("una ")
+        .or_else(|| w.strip_prefix("un "))
+        .or_else(|| w.strip_prefix("an "))
+        .or_else(|| w.strip_prefix("a "))
+    {
         Some(u) => Some((1.0, u.trim())),
         None => {
             let i = w

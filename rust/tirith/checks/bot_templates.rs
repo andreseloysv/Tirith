@@ -103,14 +103,11 @@ fn bot_templates_are_complete() {
 
     let of = |id: &str| bots.iter().find(|b| b["id"] == id).unwrap();
     let mail = of("resumen-correo");
-    assert_eq!(mail["name"], "Resumen del correo a las 07:00");
+    assert_eq!(mail["name"], "Mail summary at 07:00");
     assert_eq!(mail["routines"][0]["at"], "07:00");
-    assert_eq!(
-        of("vigilar-web")["name"],
-        "Vigilar una web y avisar si cambia"
-    );
+    assert_eq!(of("vigilar-web")["name"], "Watch a web page for changes");
     let pr = of("revisar-pr");
-    assert_eq!(pr["name"], "Revisar los PR nuevos");
+    assert_eq!(pr["name"], "Review new PRs");
     assert_eq!(pr["routines"][0]["when"], "github:pull_request.opened");
 
     // Written as bots, the factory takes them.
