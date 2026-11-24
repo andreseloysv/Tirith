@@ -10,8 +10,24 @@ fn usual() -> Vec<PathBuf> {
         .map(|d| home.join(d))
         .collect();
     all.extend(["/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from));
+    all.extend(shim_dirs(&home));
+    if cfg!(windows) {
+        // Where winget puts Git and Node: the PATH of this process does not see them until a new terminal.
+        let files = ["ProgramFiles", "ProgramW6432"].map(std::env::var_os);
+        let kept = files.into_iter().flatten().map(PathBuf::from);
+        all.extend(kept.flat_map(|d| [d.join("Git/cmd"), d.join("nodejs")]));
+    }
     all.extend(std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("npm")));
     all
+}
+
+/// Where `npm install -g --prefix ~/.local` puts its programs: `bin` on Unix, the prefix itself on Windows.
+pub(super) fn shim_dirs(home: &Path) -> Vec<PathBuf> {
+    if cfg!(windows) {
+        vec![home.join(".local")]
+    } else {
+        vec![]
+    }
 }
 
 /// `path` when it runs.

@@ -36,6 +36,7 @@ mod terminal;
 mod trust;
 mod trusted;
 mod why;
+mod winget;
 
 pub use api::routes;
 pub use as_user::{as_service_user, in_anothers_terminal};

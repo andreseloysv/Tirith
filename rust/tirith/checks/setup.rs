@@ -327,3 +327,74 @@ fn nothing_types_into_roots_terminal() {
         "every other ioctl is as before"
     );
 }
+
+#[test]
+fn our_hook_is_known_by_windows_lines_too() {
+    let ours = |line: &str| hook_lines::ours(&json!({"command": line}));
+    for line in [
+        "C:/Users/me/.local/bin/tirith.exe hook --agent codex --event Stop",
+        "'C:/Program Files/OpenBot/tirith.exe' hook --agent muse --event Stop",
+        "'C:\\Program Files\\OpenBot\\tirith.exe' hook --agent muse --event Stop",
+        "tirith.exe hook --agent copilot --event Stop",
+        "/usr/local/bin/tirith hook --agent codex --event Stop",
+    ] {
+        assert!(ours(line), "{line}");
+    }
+    for line in [
+        "C:/tools/other.exe hook",
+        "C:/tools/tirith-x.exe hook",
+        "tirith.exe status",
+    ] {
+        assert!(!ours(line), "{line}");
+    }
+}
+
+#[test]
+fn an_agents_command_is_named_by_its_file_with_either_slash() {
+    let base = super::auth::base;
+    assert_eq!(base("/home/me/.local/bin/codex"), "codex");
+    assert_eq!(
+        base("C:\\Users\\me\\AppData\\Roaming\\npm\\codex.cmd"),
+        "codex"
+    );
+    assert_eq!(base("C:/Users/me/.local/bin/MUSE.EXE"), "MUSE");
+    assert_eq!(base("copilot.bat"), "copilot");
+    assert_eq!(base("codex"), "codex");
+}
+
+#[test]
+fn the_path_is_joined_with_the_systems_separator() {
+    let sep = if cfg!(windows) { ";" } else { ":" };
+    let got = super::install::put_first(Path::new("first"), &format!("a{sep}b"));
+    assert_eq!(got, format!("first{sep}a{sep}b"));
+    assert_eq!(
+        super::install::put_first(Path::new("first"), "a"),
+        "first".to_string() + sep + "a"
+    );
+}
+
+#[test]
+fn npms_programs_are_in_the_prefix_on_windows_and_in_bin_elsewhere() {
+    let home = Path::new("home");
+    let dirs = super::find::shim_dirs(home);
+    assert_eq!(dirs.is_empty(), !cfg!(windows));
+    assert!(dirs.iter().all(|d| d == &home.join(".local")));
+}
+
+#[test]
+fn windows_needs_git_alone_and_winget_knows_git_and_node() {
+    assert_eq!(
+        super::needs::PROGRAMS.len(),
+        if cfg!(windows) { 1 } else { 3 }
+    );
+    assert_eq!(super::winget::id("git"), Some("Git.Git"));
+    assert_eq!(super::winget::id("npm"), Some("OpenJS.NodeJS.LTS"));
+    assert_eq!(super::winget::id("bash"), None);
+    let all = catalog::read(include_str!("../assets/agents.toml"), "").unwrap();
+    let ps1: Vec<&str> = all
+        .iter()
+        .filter(|k| !k.install_ps1.is_empty())
+        .map(|k| k.alias.as_str())
+        .collect();
+    assert_eq!(ps1, ["codex", "muse"]);
+}

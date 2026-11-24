@@ -1,6 +1,7 @@
 # The agents `tirith setup` and `tirith connect` can guide: how each is found, installed (its maker's own
 # installer), signed in over SSH and checked, and where its hooks live. A release build may lay a file of its
 # own over this one (build.rs, TIRITH_AGENTS_FILE).
+#   install_ps1  its installer on Windows (a PowerShell script; Copilot uses npm there)
 #   signin   the arguments that sign it in, on a terminal with no browser
 #   status   the arguments that exit 0 only when it is signed in (none: only a real turn tells)
 #   hooks    the shape of its hooks file: groups, copilot, or codex (groups that must also be trusted)
@@ -21,6 +22,7 @@ name = "OpenAI Codex"
 order = 2
 bin = "codex"
 install = "https://chatgpt.com/codex/install.sh"
+install_ps1 = "https://chatgpt.com/codex/install.ps1"
 installer_env = { CODEX_NON_INTERACTIVE = "1" }
 signin = ["login", "--device-auth"]
 status = ["login", "status"]
@@ -47,6 +49,7 @@ name = "Muse Code"
 order = 4
 bin = "muse"
 install = "https://dev.meta.ai/install.sh"
+install_ps1 = "https://dev.meta.ai/install.ps1"
 signin = ["login"]
 status = ["usage"]
 settings = "~/.config/muse/settings.json"

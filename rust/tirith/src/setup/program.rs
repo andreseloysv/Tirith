@@ -9,9 +9,15 @@ pub(super) fn ready(cx: &Context, known: &Known) -> Result<PathBuf, String> {
         return Ok(path);
     }
     if known.bin.is_empty() {
-        let said = cx
-            .ask
-            .text(&format!("  The command that starts the {}", known.name), "");
+        let hint = if cfg!(windows) {
+            " (its full path, such as C:\\Users\\you\\.local\\bin\\agent.exe)"
+        } else {
+            ""
+        };
+        let said = cx.ask.text(
+            &format!("  The command that starts the {}{hint}", known.name),
+            "",
+        );
         return find::program(&said).ok_or_else(|| {
             format!(
                 "{} is not known here: install it, put `command = \"<it>\"` under [agents.{}] in {}/config.toml, then run tirith connect {}",
@@ -24,13 +30,25 @@ pub(super) fn ready(cx: &Context, known: &Known) -> Result<PathBuf, String> {
     }
     let question = format!(
         "  {} is not installed. Install it now with its official installer ({})?",
-        known.name, known.install
+        known.name,
+        if cfg!(windows) {
+            &known.install_ps1
+        } else {
+            &known.install
+        }
     );
     let again = format!("install it, then run tirith connect {}", known.alias);
     if !cx.ask.yes_no(&question, true) {
         return Err(format!("{} is not installed: {again}", known.name));
     }
-    println!("  installing from {}", known.install);
+    println!(
+        "  installing from {}",
+        if cfg!(windows) {
+            &known.install_ps1
+        } else {
+            &known.install
+        }
+    );
     install::install(&cx.ask, known, &cx.home).map_err(|e| format!("{e}: {again}"))?;
     let path = find::agent(known, None)
         .ok_or_else(|| format!("{} was installed but is not found: {again}", known.bin))?;
