@@ -51,14 +51,19 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// One file, copied into OUT_DIR so the binary names no folder of the machine that built it.
+/// One file, copied into OUT_DIR so the binary names no folder of the machine that built it. Its name joins the
+/// parts with `/` on every system, as the lookups write it (built on Windows it was `web\index.html`: every page 404).
 fn row(root: &Path, out: &Path, i: usize, file: &Path) -> String {
-    let name = file.strip_prefix(root).expect("a file of the repository");
+    let rel = file.strip_prefix(root).expect("a file of the repository");
+    let parts: Vec<String> = rel
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
     let copy = format!("carried-{i}");
     std::fs::copy(file, out.join(&copy)).expect("copy a carried file");
     format!(
         "    ({:?}, include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{copy}\")).as_slice()),\n",
-        name.to_string_lossy()
+        parts.join("/")
     )
 }
 
