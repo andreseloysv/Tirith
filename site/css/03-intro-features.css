@@ -3,9 +3,10 @@
 .split h2 { max-width: 12em; }
 .split .text { display: grid; gap: 18px; font-size: 19px; color: var(--ink2); padding-top: 6px; }
 
-/* The bots' own faces, as the app draws them, each floating on its own beat. */
-.faces { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 72px; }
-.faces img { width: clamp(52px, 9vw, 120px); height: auto; animation: bob 5s ease-in-out infinite; }
+/* The bots' own faces, as the app draws them, one per feeling: rows that wrap and centre, each face floating on its
+   own beat. */
+.faces { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 6px; margin-top: 72px; }
+.faces img { width: clamp(52px, 6.6vw, 88px); height: auto; animation: bob 5s ease-in-out infinite; }
 .faces img:nth-child(2n) { animation-duration: 6.2s; animation-delay: -1.4s; }
 .faces img:nth-child(3n) { animation-duration: 5.6s; animation-delay: -2.9s; }
 .faces img:nth-child(4n+1) { animation-delay: -.7s; }
@@ -39,7 +40,7 @@
   .fcard { padding: 28px 22px 0; }
 }
 @media (max-width: 520px) {
-  .faces { flex-wrap: wrap; justify-content: center; }
-  .faces img { width: 64px; }
+  .faces { gap: 2px; }
+  .faces img { width: calc((100% - 12px) / 7); }
   .more { grid-template-columns: 1fr; }
 }
