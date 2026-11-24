@@ -9,6 +9,7 @@ import { useAction } from './settings/ui.js';
 import { AccessCard, AccessPage } from './settings/access.js';
 import { Health } from './settings/health.js';
 import { AgentsCard } from './setup/agents.js';
+import { LanguageCard } from './settings/language.js';
 
 const THEME_KEY = 'tirith.theme';
 const THEMES = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
@@ -69,6 +70,7 @@ export function Settings({ project, sub }) {
     ${project ? html`${own}<h2 class="rsec">For all projects</h2>` : null}
     <${AgentsCard} />
     <${Appearance} />
+    <${LanguageCard} />
     <${AccessCard} />
     <${Health} />
     <p class="mut sm mlead">Roles come from the factory; their model and effort from <code>config.toml</code> under <code>[roles]</code>. What you save here overrides it until you go back to config.toml.</p>

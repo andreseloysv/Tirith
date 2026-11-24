@@ -16,3 +16,4 @@
 .su-paste input:focus { outline: 0; border-color: var(--line2); }
 .su-welcome .hm-ask { margin-top: 28px; }
 .scard .su-list { margin-top: 6px; }
+.su-lang { display: flex; justify-content: flex-end; margin: -16px 0 18px; }

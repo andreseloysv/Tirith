@@ -3,6 +3,7 @@ pub mod capture;
 mod chain;
 mod input;
 mod job;
+pub mod lang;
 mod list;
 mod seen;
 mod steps;
@@ -63,6 +64,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/setup/agents/{alias}", post(start))
         .route("/api/setup/agents/{alias}/code", post(code))
         .route("/api/setup/agents/{alias}/open", post(open))
+        .route("/api/lang", post(lang::set))
 }
 
 #[cfg(test)]

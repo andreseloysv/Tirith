@@ -48,6 +48,7 @@ pub use hook_lines::others;
 pub use opts::Opts;
 pub use private::Hidden;
 pub use secret::read as read_secret;
+pub use web::lang::told as owner_language;
 
 /// Whether this process is an agent's, by what NeoBot names it.
 pub fn from_agent() -> bool {

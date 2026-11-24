@@ -3,12 +3,15 @@
 import { html } from '../../../vendor/preact-htm.js';
 import { useStore } from '../../store.js';
 import { AgentList } from './agents.js';
+import { LanguagePicker } from '../settings/language.js';
+import { t } from '../../i18n.js';
 
 export function Welcome() {
   const list = useStore().setupAgents || [];
   return html`<div class="hm-page"><div class="home su-welcome">
-    <header class="hm-hello"><h1>Welcome to NeoBot</h1>
-      <p>NeoBot works through an AI helper you already have. Set one up to begin: it installs and signs in right here.</p></header>
+    <div class="su-lang"><${LanguagePicker} /></div>
+    <header class="hm-hello"><h1>${t('Welcome to NeoBot')}</h1>
+      <p>${t('NeoBot works through an AI helper you already have. Set one up to begin: it installs and signs in right here.')}</p></header>
     <article class="hm-ask"><${AgentList} list=${list} /></article>
   </div></div>`;
 }

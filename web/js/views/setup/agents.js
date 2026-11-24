@@ -5,6 +5,7 @@
 import { html, useState, useEffect } from '../../../vendor/preact-htm.js';
 import { api, S, setUi, useStore } from '../../store.js';
 import { AgentRow } from './row.js';
+import { t } from '../../i18n.js';
 
 /** Asks the daemon again; what it says goes to the store, the last answer when it cannot say. */
 export function reloadAgents() {
@@ -38,13 +39,13 @@ export function AgentList({ list }) {
   return html`<div class="su-list">
     ${list.map((a) => html`<${AgentRow} key=${a.alias} a=${a} act=${act} />`)}
     ${err ? html`<p class="hm-err" role="alert">${err}</p>` : null}
-    <p class="su-note">NeoBot's rules then watch that helper's other sessions on this computer too.</p>
+    <p class="su-note">${t("NeoBot's rules then watch that helper's other sessions on this computer too.")}</p>
   </div>`;
 }
 
 /** Settings: every agent, connected or not. */
 export function AgentsCard() {
   const list = useStore().setupAgents;
-  return html`<div class="card scard"><div class="phead"><b>Agents</b><span class="mut sm">The AI helpers NeoBot works through. Set one up here: it installs and signs in on this computer.</span></div>
+  return html`<div class="card scard"><div class="phead"><b>${t('Agents')}</b><span class="mut sm">${t('The AI helpers NeoBot works through. Set one up here: it installs and signs in on this computer.')}</span></div>
     ${list ? html`<${AgentList} list=${list} />` : null}</div>`;
 }

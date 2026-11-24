@@ -141,3 +141,21 @@ fn connected_means_the_rules_really_heard_it() {
     assert!(works("muse"), "its last check passed");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_owner_s_language_is_what_the_bots_are_told() {
+    let dir = std::env::temp_dir().join(format!("tirith-setup-lang-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let app = crate::app::App::open_at(dir.clone());
+    assert_eq!(
+        super::lang::told(&app),
+        None,
+        "English is the factory's own"
+    );
+    app.set_kv("owner_language", Some("de"));
+    assert_eq!(super::lang::told(&app), Some("German (Deutsch)"));
+    app.set_kv("owner_language", Some("xx"));
+    assert_eq!(super::lang::told(&app), None);
+    let _ = std::fs::remove_dir_all(&dir);
+}
