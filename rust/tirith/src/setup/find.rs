@@ -18,8 +18,13 @@ fn usual() -> Vec<PathBuf> {
         all.extend(kept.flat_map(|d| [d.join("Git/cmd"), d.join("nodejs")]));
     }
     all.extend(std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("npm")));
-    // Muse's installer puts muse.cmd here and tells only new terminals.
-    all.extend(std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("Programs/muse")));
+    // Muse's and Codex's installers put them here and tell only new terminals (the user's PATH in the registry).
+    let programs = std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("Programs"));
+    all.extend(
+        programs
+            .into_iter()
+            .flat_map(|p| [p.join("muse"), p.join("OpenAI/Codex/bin")]),
+    );
     all
 }
 
@@ -53,25 +58,32 @@ fn named(path: &Path) -> Option<PathBuf> {
 
 /// The program called `name` (a path, or a name looked up), as an absolute path.
 pub fn program(name: &str) -> Option<PathBuf> {
+    program_if(name, |_| true)
+}
+
+/// The first program called `name` that `keep` takes: a later one when an earlier one is not.
+fn program_if(name: &str, keep: impl Fn(&Path) -> bool) -> Option<PathBuf> {
     if name.is_empty() {
         return None;
     }
     if name.contains('/') || (cfg!(windows) && name.contains('\\')) {
         let path = crate::config::expand(name);
-        return named(&path).map(|p| std::path::absolute(&p).unwrap_or(p));
+        let found = named(&path).map(|p| std::path::absolute(&p).unwrap_or(p));
+        return found.filter(|p| keep(p));
     }
     let path = std::env::var("PATH").unwrap_or_default();
     std::env::split_paths(&path)
         .filter(|d| d.is_absolute())
         .chain(usual())
-        .find_map(|d| named(&d.join(name)))
+        .filter_map(|d| named(&d.join(name)))
+        .find(|p| keep(p))
 }
 
-/// An agent's program: config.toml's command when it runs, else the catalog's name. Never a stand-in that only says the agent is missing.
+/// An agent's program: config.toml's command when it runs, else the catalog's name. Never a stand-in that only says the agent is missing (the real one after it on PATH is found).
 pub fn agent(known: &Known, configured: Option<&str>) -> Option<PathBuf> {
-    let real = |p: &PathBuf| !stand_in(p);
-    let set = configured.and_then(program).filter(real);
-    set.or_else(|| program(&known.bin).filter(real))
+    let real = |p: &Path| !stand_in(p);
+    let set = configured.and_then(|c| program_if(c, real));
+    set.or_else(|| program_if(&known.bin, real))
 }
 
 /// VS Code's `copilot-shim\copilot.exe`, on PATH for every terminal it opens: it exits 127 with "GitHub Copilot CLI was not found".

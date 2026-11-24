@@ -9,6 +9,7 @@
 #   host_*   the variable all its processes get, and the login's flag, for an enterprise's host
 #   npm_on_musl  its maker's npm package, installed instead on Alpine (the script brings a glibc build there)
 #   check_*  the cheap setting of its connection check
+#   models   the models the page offers for it while config.toml's [models] choices names none of its own
 
 [anthropic]
 name = "Anthropic CLI"
@@ -61,3 +62,4 @@ token_env = "META_API_KEY"
 token_hint = "a Meta API key"
 check_model = "muse-ember-1.0"
 check_effort = "low"
+models = ["muse-spark-1.3", "muse-wonder-1.0", "muse-wonder-full-1.0", "muse-ember-1.0"]

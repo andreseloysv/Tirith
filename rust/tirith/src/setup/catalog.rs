@@ -37,6 +37,8 @@ pub struct Known {
     pub model_hosts: Vec<String>,
     pub check_model: String,
     pub check_effort: String,
+    /// The models the page offers for it while config.toml's `[models] choices` lists none of its own.
+    pub models: Vec<String>,
 }
 
 /// Every agent, in the guide's order.
@@ -67,4 +69,12 @@ pub fn model_hosts(alias: &str) -> Vec<String> {
 
 pub fn known(alias: &str) -> Option<Known> {
     all().into_iter().find(|k| k.alias == alias)
+}
+
+/// The agent whose catalog lists `model`.
+pub fn owner_of_model(model: &str) -> Option<String> {
+    all()
+        .into_iter()
+        .find(|k| k.models.iter().any(|m| m == model))
+        .map(|k| k.alias)
 }
