@@ -1,12 +1,22 @@
 name: cli
 
-# That the Linux binaries build static on a version tag. They are NOT signed, so they stay the run's artifacts and go
+# That the Linux binaries build static on a version tag, and Windows' tirith.exe (MSVC) beside them. They are NOT signed, so they stay the run's artifacts and go
 # on no Release: a Release holds only what scripts/release/release.sh signed, which is what scripts/install.sh takes.
 # They are static (musl, SQLite compiled in), so they need no particular glibc and no system library.
 on:
   push:
     tags:
       - "v*"
+  # A test release's Windows build: its version, and the guide's catalog overlay (release.sh's TIRITH_AGENTS_FILE).
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version the binaries say (e.g. 0.2.2-rc.1)"
+        required: true
+      agents:
+        description: "The catalog overlay (TOML), or empty"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -57,3 +67,42 @@ jobs:
           name: tirith-linux-${{ matrix.arch }}
           if-no-files-found: error
           path: dist/*
+
+  windows:
+    name: build (windows x86_64)
+    runs-on: windows-latest
+    env:
+      ASSET: tirith-x86_64-pc-windows-msvc
+      TIRITH_DIST: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Version and catalog overlay
+        shell: bash
+        env:
+          WANTED: ${{ inputs.version }}
+          AGENTS: ${{ inputs.agents }}
+        run: |
+          echo "TIRITH_RELEASE=${WANTED:-${GITHUB_REF_NAME#v}}" >> "$GITHUB_ENV"
+          if [ -n "$AGENTS" ]; then
+            printf '%s\n' "$AGENTS" > "$RUNNER_TEMP/agents.toml"
+            echo "TIRITH_AGENTS_FILE=$RUNNER_TEMP/agents.toml" >> "$GITHUB_ENV"
+          fi
+      - name: Build
+        run: cargo build --release --locked -p tirith
+      - name: Check and pack
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item target/release/tirith.exe, LICENSE dist/
+          $usage = & dist/tirith.exe 2>&1 | Out-String
+          if ($usage -notmatch 'tirith serve') { throw "unexpected usage: $usage" }
+          & dist/tirith.exe --version
+          Compress-Archive -Path dist/* -DestinationPath "$env:ASSET.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET }}
+          if-no-files-found: error
+          path: ${{ env.ASSET }}.zip

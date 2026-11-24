@@ -3,6 +3,8 @@
 
 #[cfg(unix)]
 mod cli_link;
+#[cfg(windows)]
+mod cli_path;
 mod daemon;
 mod page;
 
@@ -16,6 +18,10 @@ pub fn run() {
             #[cfg(unix)] // not in development: there the binary beside the app is a build, not a bundle
             if let Some(Err(e)) = daemon::beside().filter(|_| !cfg!(dev)).map(|bin| cli_link::link(&bin, &daemon::home_dir())) {
                 eprintln!("tirith is not linked in ~/.local/bin: {e}");
+            }
+            #[cfg(windows)] // the same, for Windows: the app's folder on the user's PATH
+            if let Some(Err(e)) = daemon::beside().filter(|_| !cfg!(dev)).and_then(|b| b.parent().map(cli_path::add)) {
+                eprintln!("tirith is not on PATH: {e}");
             }
             ensure_daemon(port);
             let url = page::link(port, &tirith_bin()).parse().expect("valid daemon url");
