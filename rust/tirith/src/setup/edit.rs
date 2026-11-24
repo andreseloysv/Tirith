@@ -1,5 +1,4 @@
 //! config.toml changed by the guide: one change at a time, its comments kept, readable by the owner alone.
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use toml_edit::{DocumentMut, Item, Table};
 
@@ -28,7 +27,7 @@ pub fn edit(
     std::fs::create_dir_all(home).map_err(failed)?;
     let new = home.join(format!(".config.toml.{}", std::process::id()));
     std::fs::write(&new, out).map_err(failed)?;
-    std::fs::set_permissions(&new, PermissionsExt::from_mode(0o600)).map_err(failed)?;
+    crate::os::set_mode(&new, 0o600).map_err(failed)?;
     std::fs::rename(&new, &file).map_err(failed)
 }
 

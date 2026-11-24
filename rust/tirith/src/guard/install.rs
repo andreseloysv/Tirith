@@ -3,7 +3,7 @@ use super::render::{HOOKS, MARKER};
 use super::{git_dir::git_dir, immutable::immutable, intact, render::render, words::words};
 use crate::app::Shared;
 use crate::config::Project;
-use std::{os::unix::fs::PermissionsExt, path::Path};
+use std::path::Path;
 
 /// Writes both hooks (mode 755) where they are missing or ours (an older guard is replaced); never over a hook that is not ours.
 pub fn install(app: &Shared, project: &Project) -> Result<(), String> {
@@ -47,8 +47,7 @@ fn keep_local(dir: &Path, hook: &str) -> Result<(), String> {
 fn write(path: &Path, text: &str) -> Result<(), String> {
     immutable(path, false);
     std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
-        .map_err(|e| e.to_string())?;
+    crate::os::set_mode(path, 0o755).map_err(|e| e.to_string())?;
     immutable(path, true);
     Ok(())
 }

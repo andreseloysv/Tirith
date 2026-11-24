@@ -6,6 +6,13 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location (Join-Path $root "app")
 
 if (-not (Test-Path "node_modules")) { npm install; if ($LASTEXITCODE) { exit $LASTEXITCODE } }
+
+# The daemon the bundle carries (bundle.externalBin): tauri.windows.conf.json runs no sidecar.sh here.
+$triple = ((rustc -vV | Select-String '^host: ').Line -replace '^host: ', '')
+cargo build --release --locked -p tirith --target $triple
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+New-Item -ItemType Directory -Force "src-tauri\binaries" | Out-Null
+Copy-Item (Join-Path $root "target\$triple\release\tirith.exe") "src-tauri\binaries\tirith-$triple.exe" -Force
 npm run tauri build -- @args
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 

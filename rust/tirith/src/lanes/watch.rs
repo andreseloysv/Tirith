@@ -26,14 +26,14 @@ async fn end_completed(app: &Shared, l: &Lane) {
             std::mem::take(&mut x.note)
         }
     });
-    kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
+    kill_group(l.pid.unwrap_or(0), crate::app::KILL);
     if !app.children.lock().unwrap().contains(&l.id) {
         ended(app, &l.id, None).await; // no waiter task (daemon restart): the killed process ends here, else its waiter ends it
     }
 }
 /// No new output for `limits.inactivity_minutes`: the agent is stopped and the lane goes back to it.
 fn stop_idle(app: &Shared, l: &Lane, f: &Factory) {
-    kill_group(l.pid.unwrap_or(0), libc::SIGKILL);
+    kill_group(l.pid.unwrap_or(0), crate::app::KILL);
     let why = format!(
         "no new output for {} min (an agent stuck retrying its API call counts as silent)",
         f.limits.inactivity_minutes

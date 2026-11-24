@@ -5,7 +5,7 @@ const FAR: usize = 8;
 
 /// `name` as the nearest ancestor that has it was given it.
 pub(super) fn var(name: &str) -> Option<String> {
-    let mut pid = std::os::unix::process::parent_id();
+    let mut pid = crate::os::parent_id()?;
     for _ in 0..FAR {
         if pid <= 1 {
             break;

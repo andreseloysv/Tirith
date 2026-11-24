@@ -39,3 +39,5 @@ keyring = { version = "3.6.3", default-features = false, features = ["async-secr
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
+# What Windows does in place of Unix calls (`src/os/`): process ends, the console's echo, free disk space.
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Threading"] }

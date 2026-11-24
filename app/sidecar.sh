@@ -18,6 +18,10 @@ case "$triple" in
     lipo -create -output "$out" \
       "$target/aarch64-apple-darwin/release/tirith" "$target/x86_64-apple-darwin/release/tirith"
     ;;
+  *-windows-*)
+    cargo build --release --locked -p tirith --target "$triple"
+    cp "$target/$triple/release/tirith.exe" "$out.exe"
+    ;;
   *)
     cargo build --release --locked -p tirith --target "$triple"
     cp "$target/$triple/release/tirith" "$out"

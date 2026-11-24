@@ -7,7 +7,7 @@ use crate::{
 use std::time::Duration;
 
 pub(super) fn serve() -> Result<(), String> {
-    use_login_path();
+    super::login_path::use_login_path();
     // The daemon is nobody's agent, wherever it was started from: what it starts gets a token of its own.
     std::env::remove_var(crate::client::VAR);
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -33,34 +33,6 @@ pub(super) fn serve() -> Result<(), String> {
             server::router(app, port).into_make_service_with_connect_info::<server::Caller>();
         axum::serve(door, page).await.map_err(|e| e.to_string())
     })
-}
-
-/// Started by the desktop app, the daemon has launchd's short PATH and its checks find no node, npm or brew tools. The PATH of the owner's login shell goes first, so a check runs as it does in the owner's terminal.
-fn use_login_path() {
-    let usual = if cfg!(target_os = "macos") {
-        "/bin/zsh"
-    } else {
-        "/bin/sh"
-    };
-    let out = std::process::Command::new(std::env::var("SHELL").unwrap_or(usual.into()))
-        .args(["-lc", "printf '\\n%s' \"$PATH\""])
-        .output();
-    let login = out
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .last()
-                .unwrap_or("")
-                .trim()
-                .to_string()
-        })
-        .unwrap_or_default();
-    let _ = (!login.is_empty()).then(|| {
-        std::env::set_var(
-            "PATH",
-            format!("{login}:{}", std::env::var("PATH").unwrap_or_default()),
-        )
-    });
 }
 
 /// Every module's background work, the lane scheduler, the merge worker and the plan flusher.

@@ -83,7 +83,7 @@ impl Local {
 impl Drop for Local {
     fn drop(&mut self) {
         if let Some(pid) = self.child.id() {
-            crate::app::kill_group(pid, libc::SIGKILL);
+            crate::app::kill_group(pid, crate::app::KILL);
         }
     }
 }

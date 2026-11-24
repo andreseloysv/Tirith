@@ -1,7 +1,6 @@
 //! `tirith quiet`: an agent that was given private values (a token, an enterprise's host) starts through it, and they are hidden in all it writes before that reaches a log, a chat or an event.
 use crate::setup::Hidden;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Stdio};
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
@@ -67,7 +66,10 @@ fn run(names: &str, program: &str, args: &[String]) -> i32 {
     for _ in 0..2 {
         let _ = ends.recv_timeout(Duration::from_secs(2)); // what it left behind may hold them open
     }
-    ended.map_or(125, |s| s.code().unwrap_or(128 + s.signal().unwrap_or(0)))
+    ended.map_or(125, |s| {
+        s.code()
+            .unwrap_or(128 + crate::os::signal_of(&s).unwrap_or(0))
+    })
 }
 
 /// Every line of `from`, hidden, on `to`.

@@ -1,11 +1,24 @@
 //! What this machine must have before the agents can work: the programs, a git identity, the sandbox.
 use super::{context::Context, find, packages, root, run};
 
-pub(super) const PROGRAMS: [&str; 3] = ["git", "curl", "bash"];
+/// Git alone on Windows: its installers are PowerShell scripts and curl.exe comes with the system.
+pub(super) const PROGRAMS: &[&str] = if cfg!(windows) {
+    &["git"]
+} else {
+    &["git", "curl", "bash"]
+};
+
+/// What `doctor` calls the programs.
+pub(super) const PROGRAMS_LABEL: &str = if cfg!(windows) {
+    "git"
+} else {
+    "git, curl and bash"
+};
 
 pub(super) fn missing() -> Vec<&'static str> {
     PROGRAMS
-        .into_iter()
+        .iter()
+        .copied()
         .filter(|p| find::program(p).is_none())
         .collect()
 }
@@ -47,6 +60,10 @@ pub(super) fn sandbox_off() -> Option<String> {
 
 /// The sandbox on, allowed with sudo where Ubuntu asks for that; else what to do.
 pub(super) fn sandbox(cx: &Context) -> Vec<String> {
+    if cfg!(windows) {
+        println!("Network sandbox: not available on Windows (agents run with your own rights).");
+        return vec![];
+    }
     let Some(mut why) = sandbox_off() else {
         println!("Network sandbox: on.");
         return vec![];

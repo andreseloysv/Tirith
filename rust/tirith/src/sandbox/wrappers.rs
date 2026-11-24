@@ -38,11 +38,10 @@ fn write_tools(app: &Shared, dir: &Path) {
         files.push(("codex".into(), body));
     }
     files.into_iter().for_each(|(name, body)| {
-        use std::os::unix::fs::PermissionsExt;
         let (path, text) = (dir.join(name), format!("{head}{body}"));
         let _ = (std::fs::read_to_string(&path).ok().as_deref() != Some(text.as_str()))
             .then(|| std::fs::write(&path, text));
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
+        let _ = crate::os::set_mode(&path, 0o755);
     });
 }
 

@@ -33,7 +33,7 @@ pub async fn turn(
     let input = line.stdin.as_deref();
     let work = read(&mut child, stdin, stdout, input, &mut event, &setup);
     let result = tokio::time::timeout(setup.limit(), work).await;
-    kill_group(pid, libc::SIGKILL);
+    kill_group(pid, crate::app::KILL);
     let _ = child.wait().await;
     // Copilot writes what the turn used into a file as it ends.
     let used = line.usage.as_deref().and_then(|f| std::fs::read(f).ok());

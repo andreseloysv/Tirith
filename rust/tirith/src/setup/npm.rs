@@ -1,10 +1,11 @@
-//! A maker's npm installer, where its script's build cannot run: on musl (Alpine) Copilot's script downloads the glibc one, and its npm package brings the musl one.
+//! A maker's npm installer, where its script's build cannot run: on Windows (the script is for Mac and Linux), on musl (Alpine) Copilot's script downloads the glibc one, and its npm package brings the musl one.
 use super::{ask::Ask, catalog::Known, find, packages, run};
 use std::path::Path;
 
 /// The package to install with npm here; none where the maker's script serves.
 pub(super) fn package(known: &Known) -> Option<&str> {
-    (!known.npm_on_musl.is_empty() && musl()).then_some(known.npm_on_musl.as_str())
+    (!known.npm_on_musl.is_empty() && (cfg!(windows) || musl()))
+        .then_some(known.npm_on_musl.as_str())
 }
 
 /// True where the system's C library is musl's.

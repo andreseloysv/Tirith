@@ -7,6 +7,15 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version the daemon inside says (empty: the crate's)"
+        required: false
+        default: ""
+      agents:
+        description: "The guide's catalog overlay (TOML, release.sh's TIRITH_AGENTS_FILE), or empty"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -56,11 +65,22 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$pass" "$keychain"
           security list-keychains -d user -s "$keychain" login.keychain-db
           rm "$RUNNER_TEMP/cert.p12"
-      # Writes app/src-tauri/binaries/tirith-<target triple> (universal on macOS) for bundle.externalBin.
-      # The daemon is Unix-only: the Windows bundle has none (tauri.windows.conf.json).
+      # Writes app/src-tauri/binaries/tirith-<target triple> (universal on macOS, .exe on Windows) for
+      # bundle.externalBin. On Windows here, not as beforeBuildCommand: Tauri runs that through cmd, which has no sh.
       - name: Daemon sidecar
-        if: runner.os != 'Windows'
-        run: sh app/sidecar.sh
+        shell: bash
+        env:
+          WANTED: ${{ inputs.version }}
+          AGENTS: ${{ inputs.agents }}
+        run: |
+          # a daemon to hand out: it carries its page and factory (TIRITH_DIST), its version and the catalog overlay
+          export TIRITH_DIST=1
+          if [ -n "$WANTED" ]; then export TIRITH_RELEASE="$WANTED"; fi
+          if [ -n "$AGENTS" ]; then
+            printf '%s\n' "$AGENTS" > "$RUNNER_TEMP/agents.toml"
+            export TIRITH_AGENTS_FILE="$RUNNER_TEMP/agents.toml"
+          fi
+          sh app/sidecar.sh
       - name: Build
         working-directory: app
         env:

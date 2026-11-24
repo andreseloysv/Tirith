@@ -1,8 +1,8 @@
 //! What proves who calls, kept 0600 in OpenBot's home where no confined process reads or writes it (`sandbox/confine.rs`): the owner's token, the secret every caller's token derives from, and the file that opens the page once.
+use crate::os::Mode;
 use crate::rooms::sealed::hex;
 use rusqlite::Connection;
 use std::io::{Read, Write};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 /// The owner's token.
@@ -56,15 +56,14 @@ fn key(file: &Path) -> (String, bool) {
 
 /// `file` opened as this user's alone, never through a link.
 fn private(file: &Path) -> std::io::Result<std::fs::File> {
-    let opened = std::fs::OpenOptions::new()
-        .read(true)
+    let mut open = std::fs::OpenOptions::new();
+    open.read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(file)?;
-    opened.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        .with_mode(0o600);
+    let opened = crate::os::nofollow(&mut open).open(file)?;
+    crate::os::set_file_mode(&opened, 0o600)?;
     Ok(opened)
 }
 

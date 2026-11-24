@@ -7,8 +7,10 @@ pub fn expand(p: &str) -> PathBuf {
         .map_or_else(|| PathBuf::from(p), |rest| home_dir().join(rest))
 }
 
+/// HOME; on Windows, where it is seldom set, USERPROFILE.
 pub fn home_dir() -> PathBuf {
     std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE").filter(|_| cfg!(windows)))
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
 }

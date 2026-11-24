@@ -13,8 +13,8 @@ impl Launch {
         c.args(&self.args);
         let _ =
             (!self.env.iter().any(|(k, _)| k == "PATH")).then(|| c.env("PATH", app.child_path()));
-        c.envs(self.env.iter().map(|(k, v)| (k, v)))
-            .process_group(0); // its own process group, so a stop kills all it started
+        c.envs(self.env.iter().map(|(k, v)| (k, v)));
+        crate::os::own_group(&mut c); // its own process group, so a stop kills all it started
         c
     }
 }

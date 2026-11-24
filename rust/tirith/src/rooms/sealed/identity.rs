@@ -1,9 +1,9 @@
 //! This OpenBot's identity in the rooms: its ed25519 key in `<home>/am/<name>.json`.
 use super::text::{hex, key_id, unhex};
+use crate::os::Mode;
 use ed25519_dalek::{Signer, SigningKey};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha512};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::{io::Write, path::Path};
 /// This OpenBot's identity in the rooms. The secret never leaves the `sealed` module (no Debug, no Serialize).
 pub struct Me {
@@ -39,14 +39,14 @@ pub fn identity(home: &Path, name: &str) -> Result<Me, String> {
 fn make_key_file(dir: &Path, path: &Path, name: &str) -> Result<(), String> {
     std::fs::DirBuilder::new()
         .recursive(true)
-        .mode(0o700)
+        .with_mode(0o700)
         .create(dir)
         .map_err(|e| e.to_string())?;
     let secret = hex(&SigningKey::from_bytes(&rand::random()).to_keypair_bytes());
     let mut f = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .mode(0o600)
+        .with_mode(0o600)
         .open(path)
         .map_err(|e| e.to_string())?;
     f.write_all(

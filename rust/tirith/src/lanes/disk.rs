@@ -1,17 +1,9 @@
 //! Free disk space: how much is left, and one card to the owner when it runs low.
 use crate::app::Shared;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 pub fn free_gb(dir: &Path) -> f64 {
-    let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else {
-        return f64::MAX;
-    };
-    let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
-    let Some(()) = (unsafe { libc::statvfs(c.as_ptr(), &mut s) } == 0).then_some(()) else {
-        return f64::MAX;
-    };
-    s.f_bavail as f64 * s.f_frsize as f64 / 1e9
+    crate::os::free_gb(dir).unwrap_or(f64::MAX)
 }
 /// Ask once per low-disk spell: `asked` is whether a card is already out; it re-arms after the disk recovers (2 GB above the factory's limit).
 pub(super) fn low_disk_ask(free: f64, asked: bool) -> Option<bool> {

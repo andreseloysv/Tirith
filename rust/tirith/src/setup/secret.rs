@@ -14,7 +14,7 @@ pub(super) fn cleaned(line: &str) -> String {
 
 pub fn read(prompt: &str) -> Result<String, String> {
     let stdin = std::io::stdin();
-    let hidden = stdin.is_terminal().then(Hidden::new).flatten();
+    let hidden = stdin.is_terminal().then(crate::os::NoEcho::new).flatten();
     if hidden.is_some() {
         eprint!("{prompt}: ");
     }
@@ -31,25 +31,4 @@ pub fn read(prompt: &str) -> Result<String, String> {
     (!word.is_empty())
         .then_some(word)
         .ok_or_else(|| "nothing came on stdin".to_string())
-}
-
-/// The terminal's echo off for as long as it lives.
-struct Hidden(libc::termios);
-
-impl Hidden {
-    fn new() -> Option<Hidden> {
-        unsafe {
-            let mut was: libc::termios = std::mem::zeroed();
-            (libc::tcgetattr(0, &mut was) == 0).then_some(())?;
-            let mut now = was;
-            now.c_lflag &= !libc::ECHO;
-            (libc::tcsetattr(0, libc::TCSANOW, &now) == 0).then_some(Hidden(was))
-        }
-    }
-}
-
-impl Drop for Hidden {
-    fn drop(&mut self) {
-        unsafe { libc::tcsetattr(0, libc::TCSANOW, &self.0) };
-    }
 }

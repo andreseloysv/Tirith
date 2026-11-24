@@ -60,7 +60,7 @@ fn stage_command(
             .filter(|l| !l.is_empty())
             .unwrap_or("main")
     );
-    let launch = sandbox::wrap(app, &who, vec!["sh".into(), "-c".into(), run.into()]);
+    let launch = sandbox::wrap(app, &who, vec![crate::os::sh(), "-c".into(), run.into()]);
     let mut command = launch.command(app);
     command.env(
         "CARGO_TARGET_DIR",
@@ -86,7 +86,7 @@ async fn wait_within_limit(
             child
                 .id()
                 .into_iter()
-                .for_each(|pid| kill_group(pid, libc::SIGKILL));
+                .for_each(|pid| kill_group(pid, crate::app::KILL));
             let _ = child.wait().await;
             learn_timeout(app, &pipe.project, name);
             "timeout"

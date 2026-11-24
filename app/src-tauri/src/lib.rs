@@ -1,80 +1,16 @@
 //! The desktop app is a window on the local `tirith serve` daemon: it starts the daemon when nothing
 //! answers on its port and then shows the page the daemon serves. All state and actions live in the daemon.
 
-use std::net::{SocketAddr, TcpStream};
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
-
 #[cfg(unix)]
 mod cli_link;
+#[cfg(windows)]
+mod cli_path;
+mod daemon;
+#[cfg(windows)]
+mod guide;
 mod page;
 
-fn home_dir() -> PathBuf {
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
-}
-
-fn tirith_home() -> PathBuf {
-    std::env::var_os("TIRITH_HOME").map(PathBuf::from).unwrap_or_else(|| home_dir().join(".tirith"))
-}
-
-/// `TIRITH_PORT`, else `[server] port` of `config.toml`, else 7717 (the daemon reads the same places).
-fn port() -> u16 {
-    if let Some(p) = std::env::var("TIRITH_PORT").ok().and_then(|v| v.parse().ok()) {
-        return p;
-    }
-    std::fs::read_to_string(tirith_home().join("config.toml"))
-        .ok()
-        .and_then(|text| text.parse::<toml::Table>().ok())
-        .and_then(|cfg| cfg.get("server")?.get("port")?.as_integer())
-        .and_then(|p| u16::try_from(p).ok())
-        .unwrap_or(7717)
-}
-
-fn answers(port: u16) -> bool {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok()
-}
-
-/// `tirith` next to the app's executable: where a bundle carries it.
-fn beside() -> Option<PathBuf> {
-    Some(std::env::current_exe().ok()?.parent()?.join("tirith")).filter(|p| p.is_file())
-}
-
-/// The `tirith` binary: next to the app's executable, then `~/.local/bin`, then `PATH`.
-fn tirith_bin() -> PathBuf {
-    let local = home_dir().join(".local/bin/tirith");
-    beside().or_else(|| Some(local).filter(|p| p.is_file())).unwrap_or_else(|| "tirith".into())
-}
-
-/// Starts the daemon in its own process group (it outlives the window) and waits up to 10 s for it.
-fn ensure_daemon(port: u16) {
-    if answers(port) {
-        return;
-    }
-    let logs = tirith_home().join("logs");
-    let _ = std::fs::create_dir_all(&logs);
-    let log = std::fs::OpenOptions::new().create(true).append(true).open(logs.join("tirithd.log"));
-    let mut cmd = Command::new(tirith_bin());
-    cmd.arg("serve").stdin(Stdio::null());
-    if let Ok(file) = log {
-        if let Ok(copy) = file.try_clone() {
-            cmd.stdout(copy).stderr(file);
-        }
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
-    if cmd.spawn().is_err() {
-        return;
-    }
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while Instant::now() < deadline && !answers(port) {
-        std::thread::sleep(Duration::from_millis(100));
-    }
-}
+use daemon::{ensure_daemon, port, tirith_bin};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -82,10 +18,18 @@ pub fn run() {
         .setup(|app| {
             let port = port();
             #[cfg(unix)] // not in development: there the binary beside the app is a build, not a bundle
-            if let Some(Err(e)) = beside().filter(|_| !cfg!(dev)).map(|bin| cli_link::link(&bin, &home_dir())) {
+            if let Some(Err(e)) = daemon::beside().filter(|_| !cfg!(dev)).map(|bin| cli_link::link(&bin, &daemon::home_dir())) {
                 eprintln!("tirith is not linked in ~/.local/bin: {e}");
             }
+            #[cfg(windows)] // the same, for Windows: the app's folder on the user's PATH
+            if let Some(Err(e)) = daemon::beside().filter(|_| !cfg!(dev)).and_then(|b| b.parent().map(cli_path::add)) {
+                eprintln!("tirith is not on PATH: {e}");
+            }
             ensure_daemon(port);
+            #[cfg(windows)] // no agent connected yet: the guide opens beside the window
+            if !cfg!(dev) {
+                guide::offer(&daemon::tirith_home(), &tirith_bin());
+            }
             let url = page::link(port, &tirith_bin()).parse().expect("valid daemon url");
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
                 .title("OpenBot")
