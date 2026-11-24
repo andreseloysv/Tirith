@@ -23,9 +23,8 @@ pub async fn run(app: Shared, alias: String) {
 async fn steps(app: &Shared, alias: &str) -> Result<(), String> {
     let known = catalog::known(alias).ok_or(format!("no agent '{alias}'"))?;
     let (a, k) = (alias.to_string(), known.clone());
-    let path = blocking(move || ready(&a, &k)).await?;
+    let (path, mut signed) = blocking(move || ready(&a, &k)).await?;
     app.set_kv(&unproven(alias), Some("1"));
-    let mut signed = false;
     loop {
         job::step(alias, "check");
         let got = prove::prove(app, alias).await?;
@@ -39,7 +38,7 @@ async fn steps(app: &Shared, alias: &str) -> Result<(), String> {
         if signed || known.signin.is_empty() {
             return Err(format!("it did not answer: {said}"));
         }
-        signed = true; // its status said signed in, or says nothing: a sign-in may still be what it lacks
+        signed = true; // its status said signed in, or said nothing: a sign-in may still be what it lacks
         let (a, k, p) = (alias.to_string(), known.clone(), path.clone());
         blocking(move || sign_in(&Context::page(&a)?, &k, &p)).await?;
     }
@@ -57,8 +56,8 @@ async fn blocking<T: Send + 'static>(
         .map_err(|e| e.to_string())?
 }
 
-/// The machine, the program and its hooks; signed in when its status says it is not.
-fn ready(alias: &str, known: &Known) -> Result<PathBuf, String> {
+/// The machine, the program and its hooks; signed in when its status says it is not (and whether it was, now).
+fn ready(alias: &str, known: &Known) -> Result<(PathBuf, bool), String> {
     let cx = Context::page(alias)?;
     job::step(alias, "machine");
     let pending = needs::machine(&cx);
@@ -68,10 +67,11 @@ fn ready(alias: &str, known: &Known) -> Result<PathBuf, String> {
     job::step(alias, "install");
     let path = program::ready(&cx, known)?;
     connect::wire(&cx, known, &path)?;
-    if signin::signed_in(&cx, known, &path) == Some(false) {
+    let signed = signin::signed_in(&cx, known, &path) == Some(false);
+    if signed {
         sign_in(&cx, known, &path)?;
     }
-    Ok(path)
+    Ok((path, signed))
 }
 
 fn sign_in(cx: &Context, known: &Known, path: &std::path::Path) -> Result<(), String> {
