@@ -39,7 +39,7 @@ pub(super) fn roles(app: &Shared, alias: &str) -> Result<(), String> {
     let works = |a: &String| {
         let set = cfg.factory.command(a);
         let known = catalog::known(a).unwrap_or_default();
-        find::agent(&known, set.as_deref()).is_some() && super::list::worked(app, a)
+        find::agent(&known, set.as_deref()).is_some() && super::list::works(app, a)
     };
     let usable: Vec<String> = cfg
         .factory

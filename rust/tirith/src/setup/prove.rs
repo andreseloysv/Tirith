@@ -53,7 +53,14 @@ pub async fn prove(app: &Shared, alias: &str) -> Result<Value, String> {
         why => format!("{e}: {why}"),
     });
     let said: String = redact_secrets(&said).chars().take(600).collect();
+    let verdict = if answered && hooks { "ok" } else { "failed" };
+    app.set_kv(&verdict_key(alias), Some(verdict)); // what the page counts as connected
     Ok(
         json!({"ok": answered && hooks, "answered": answered, "hooks": hooks, "said": said, "model": model}),
     )
+}
+
+/// Where the last check of an agent keeps its verdict: ok or failed.
+pub fn verdict_key(alias: &str) -> String {
+    format!("setup_check:{alias}")
 }

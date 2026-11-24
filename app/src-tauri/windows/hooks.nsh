@@ -11,6 +11,16 @@
   Pop $0
 !macroend
 
+; NeoBot was called OpenBot in its first Windows test builds (0.2.2-rc.1 to rc.3): that install goes,
+; silently (its own uninstaller, which keeps the app's data when silent), so one NeoBot remains and a
+; bare `tirith` no longer finds the old binary first on PATH.
+!macro NSIS_HOOK_POSTINSTALL
+  ${If} ${FileExists} "$LOCALAPPDATA\OpenBot\uninstall.exe"
+    ExecWait '"$LOCALAPPDATA\OpenBot\uninstall.exe" /S _?=$LOCALAPPDATA\OpenBot'
+    RMDir /r "$LOCALAPPDATA\OpenBot"
+  ${EndIf}
+!macroend
+
 !macro NSIS_HOOK_PREUNINSTALL
   nsExec::Exec 'taskkill /F /T /IM neobot.exe'
   Pop $0

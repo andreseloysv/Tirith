@@ -108,37 +108,36 @@ fn the_page_is_never_told_to_type_a_command() {
 }
 
 #[test]
-fn connected_means_it_really_worked_and_no_check_failed_since() {
-    let dir = std::env::temp_dir().join(format!("tirith-setup-worked-{}", std::process::id()));
+fn connected_means_the_rules_really_heard_it() {
+    let dir = std::env::temp_dir().join(format!("tirith-setup-works-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let app = crate::app::App::open_at(dir.clone());
-    let turn = |role: &str, agent: &str, status: &str| {
-        let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, agent) VALUES (?1, ?1, 'event', '', 'x', 'x', ?2, ?3)";
-        app.insert(sql, rusqlite::params![role, status, agent]);
+    let turn = |agent: &str, from: &str, to: &str| {
+        let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, agent) VALUES ('c', 'manager', 'event', '', ?1, ?2, 'ok', ?3)";
+        app.insert(sql, rusqlite::params![from, to, agent]);
     };
+    let hook = |at: &str| {
+        let sql = "INSERT INTO events (at, lane, project, kind, tool, summary, session) VALUES (?1, '', '', 'PreToolUse', 'Bash', 'Bash: ls', '')";
+        app.insert(sql, rusqlite::params![at]);
+    };
+    let works = |agent: &str| super::list::works(&app, agent);
+    assert!(!works("muse"), "in config.toml alone it never worked");
+    turn("muse", "2026-11-24T20:46:15Z", "2026-11-24T20:46:26Z");
     assert!(
-        !super::list::worked(&app, "muse"),
-        "in config.toml alone it never worked"
+        !works("muse"),
+        "a turn that ended well while its hooks never arrived (Windows before rc.4)"
     );
-    turn("check", "copilot", "failed");
+    hook("2026-11-24T21:00:05Z");
+    assert!(!works("muse"), "a hook call outside its turns is not its");
+    turn("codex", "2026-11-24T21:00:00Z", "2026-11-24T21:00:09Z");
     assert!(
-        !super::list::worked(&app, "copilot"),
-        "a stand-in that failed its check"
+        works("codex"),
+        "a turn that ended well while a hook call reached the rules"
     );
-    turn("manager", "muse", "ok");
-    assert!(super::list::worked(&app, "muse"));
-    turn("manager", "muse", "failed");
-    assert!(
-        super::list::worked(&app, "muse"),
-        "one failed turn is no sign-out"
-    );
-    turn("check", "muse", "failed");
-    assert!(
-        !super::list::worked(&app, "muse"),
-        "its check failed after its last good turn"
-    );
-    turn("check", "muse", "ok");
-    assert!(super::list::worked(&app, "muse"));
+    app.set_kv(&crate::setup::prove::verdict_key("codex"), Some("failed"));
+    assert!(!works("codex"), "its last check failed");
+    app.set_kv(&crate::setup::prove::verdict_key("muse"), Some("ok"));
+    assert!(works("muse"), "its last check passed");
     let _ = std::fs::remove_dir_all(&dir);
 }
