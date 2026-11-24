@@ -35,6 +35,7 @@ mod summary;
 mod terminal;
 mod trust;
 mod trusted;
+mod web;
 mod why;
 mod winget;
 
@@ -42,11 +43,12 @@ pub use api::routes;
 pub use as_user::{as_service_user, in_anothers_terminal};
 pub use ask::Ask;
 pub use auth::for_program;
-pub use catalog::model_hosts;
+pub use catalog::{known as known_agent, model_hosts, owner_of_model};
 pub use hook_lines::others;
 pub use opts::Opts;
 pub use private::Hidden;
 pub use secret::read as read_secret;
+pub use web::lang::told as owner_language;
 
 /// Whether this process is an agent's, by what NeoBot names it.
 pub fn from_agent() -> bool {

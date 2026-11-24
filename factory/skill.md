@@ -1,25 +1,25 @@
 ---
 name: {name}
-description: Cuándo usarla, en una frase.
+description: When to use it, in one sentence.
 ---
 
 ## Cuándo usarla
-Qué pedido o qué rutina la pone en marcha, y cuándo no sirve.
+What request or routine sets it going, and when it does not apply.
 
 ## Entradas y accesos
-Lo que necesita para empezar: datos del pedido, cuentas, páginas, archivos y permisos.
+What it needs to start: request data, accounts, pages, files and permissions.
 
 ## Pasos
-Los pasos numerados, en orden, con dónde mirar, qué filtrar y qué saltarse.
+The numbered steps, in order, with where to look, what to filter and what to skip.
 
 ## Cómo validar
-Cómo comprobar que el resultado es correcto antes de darlo: cada comprobación en una línea.
+How to check that the result is right before giving it: each check on one line.
 
 ## Qué devuelve
-El formato y el largo de la respuesta (por ejemplo: tres líneas, una por oferta nueva, o «∅» si miró y no hay nada nuevo; nunca «∅» si no pudo).
+The format and length of the answer (for example: three lines, one per new offer, or «∅» if it looked and nothing is new; never «∅» if it could not).
 
 ## Qué requiere aprobación
-Lo que no se hace sin el sí del dueño: enviar, comprar, borrar, publicar o tocar producción.
+What is not done without the owner's yes: sending, buying, deleting, publishing or touching production.
 
 ## Si algo falla
-Qué hacer cuando falta un acceso o un paso ya no funciona, y qué decir al dueño en una línea que empieza por «✗».
+What to do when an access is missing or a step no longer works, and what to tell the owner in one line that starts with «✗».

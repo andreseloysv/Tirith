@@ -5,6 +5,7 @@ import { api, onMessage, useStore } from '../../../store.js';
 import { openCards } from '../../need.js';
 import { laneLabel } from '../../../common.js';
 import { Svg, OK, OPEN, Rich } from '../bits.js';
+import { t } from '../../../i18n.js';
 
 const CHECK = /\s*\(check:\s*`[^`]*`\)\s*/i;
 
@@ -41,7 +42,7 @@ function LaneChip({ lane }) {
   const you = s === 'waiting' && openCards(st).some((o) => o.lane === lane.id && o.kind !== 'lane');
   const cls = s === 'running' || s === 'queued' ? 'progress' : s === 'failed' ? 'blocked' : s === 'stopped' ? 'reopened' : '';
   if (s === 'merged') return null;
-  return html`<span class=${`pstate ${cls}`} title=${`Lane ${lane.id}`}>${you ? 'Waiting for you' : laneLabel(s)}</span>`;
+  return html`<span class=${`pstate ${cls}`} title=${t('Lane {id}', { id: lane.id })}>${you ? t('Waiting for you') : laneLabel(s)}</span>`;
 }
 
 export function Item({ i, lane }) {
@@ -49,7 +50,7 @@ export function Item({ i, lane }) {
   return html`<li class=${i.done ? 'ok' : ''}>
     <${Svg} cls="pi" s=${i.done ? OK : OPEN} />
     <span class="pit"><${Rich} t=${text} /></span>
-    ${i.check ? html`<span class="pwhen pchk" title="The command that proves this item is done"><code>${i.check}</code></span>` : null}
+    ${i.check ? html`<span class="pwhen pchk" title=${t('The command that proves this item is done')}><code>${i.check}</code></span>` : null}
     ${i.done ? null : html`<${LaneChip} lane=${lane} />`}
   </li>`;
 }

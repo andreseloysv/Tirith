@@ -4,6 +4,7 @@ import { html } from '../../../vendor/preact-htm.js';
 import { Msg, CARD } from './msg.js';
 import { Turn, Local } from './turn.js';
 import { Working } from './working.js';
+import { t } from '../../i18n.js';
 
 /** The rows of `items` (group's answer): a Msg per message, a Turn per manager turn; and the running turn's newest row. */
 function rowsOf(items, sp, project, setZoom, turns, notes) {
@@ -20,8 +21,8 @@ function rowsOf(items, sp, project, setZoom, turns, notes) {
 /** What an empty conversation says. */
 function emptyHint({ isProject, whoName, name }, hint) {
   return html`<p class="quiet">${hint || (isProject
-    ? `Write to the ${whoName} of ${name} here. It works on this project only: its answers, its agents' questions and what lands on main show in this thread.`
-    : 'Write here about anything that is not one project\'s: this manager gets the health reports and the CEO\'s passes. Every project has its own Project Manager: select a project to talk to it.')}</p>`;
+    ? t("Write to the {role} of {name} here. It works on this project only: its answers, its agents' questions and what lands on main show in this thread.", { role: whoName, name })
+    : t("Write here about anything that is not one project's: this manager gets the health reports and the CEO's passes. Every project has its own Project Manager: select a project to talk to it."))}</p>`;
 }
 
 /** v: {sp, project, hint, items, hidden, scroll, onEarlier, setZoom, send: useSend's answer, turns: a bot's turns (useBotTurns), notes: its numbered notes (useNotes)}. */
@@ -30,10 +31,10 @@ export function thread({ sp, project, hint, items, hidden, scroll, onEarlier, se
   const { rows, step } = rowsOf(items, sp, project, setZoom, turns, notes);
   const empty = !rows.length && !out.length && !busy && talk.loaded;
   return html`<div class="mc-log" id="mc-log" ref=${scroll.log} onScroll=${scroll.onScroll}>
-      ${hidden ? html`<button type="button" class="mc-earlier" onClick=${onEarlier}>Show earlier (${hidden})</button>` : null}
+      ${hidden ? html`<button type="button" class="mc-earlier" onClick=${onEarlier}>${t('Show earlier ({n})', { n: hidden })}</button>` : null}
       ${talk.error && !talk.loaded ? html`<div class="ierr mc-note">${/not found|not allowed/i.test(talk.error.message)
-          ? 'The running NeoBot daemon is older than this page: quit NeoBot, stop the daemon (pkill -f "neobot serve") and open NeoBot again.'
-          : `Could not read this conversation: ${talk.error.message}`}</div>` : null}
+          ? t('The running NeoBot daemon is older than this page: quit NeoBot, stop the daemon (pkill -f "neobot serve") and open NeoBot again.')
+          : t('Could not read this conversation: {error}', { error: talk.error.message })}</div>` : null}
       ${rows}
       ${empty ? emptyHint(sp, hint) : null}
       ${out.map((o) => html`<${Local} key=${o.cid} o=${o} onRetry=${() => retry(o)} onCopy=${() => copy(o)} />`)}

@@ -4,17 +4,18 @@ import { api } from '../../store.js';
 import { CopyBtn } from '../settings/ui.js';
 import { enc, Status, AgentFace, Who, useRoomAction } from './bits.js';
 import { Popover } from './popover.js';
+import { t } from '../../i18n.js';
 
 function scan(r, shown, busy, error, make, setBad, forget, title) {
   // the url is part of the src so a new code draws a new picture
   const src = `/api/rooms/${enc(r.id)}/qr.svg?kind=invite&v=${enc(r.invite || '')}`;
   return html`<div class="rscan">
-      ${shown ? html`<img class="qr" src=${src} alt="QR code that connects a phone to NeoBot" width="232" height="232" onError=${() => setBad(r.invite)} />`
-        : html`<div class="qr qrwait">${busy === 'qr' || !error ? 'Making the QR…' : html`<button class="abtn" onClick=${make}>Show the QR</button>`}</div>`}
+      ${shown ? html`<img class="qr" src=${src} alt=${t('QR code that connects a phone to NeoBot')} width="232" height="232" onError=${() => setBad(r.invite)} />`
+        : html`<div class="qr qrwait">${busy === 'qr' || !error ? t('Making the QR…') : html`<button class="abtn" onClick=${make}>${t('Show the QR')}</button>`}</div>`}
       <div class="rhow">
-        <p class="rlead">Scan this QR with the phone's camera.</p>
-        <p>It opens ${title} on the phone and gives it a chat with the manager of every project, also of those you add later. Encrypted, with nothing to install.</p>
-        <p class="mut sm">It works once, and the next one appears here by itself. Scan it again whenever the phone says it is not connected: a browser forgets its chats after some days without use.${r.invite ? html` <${CopyBtn} text=${r.invite} label="Copy it as a link" />` : null}</p>
+        <p class="rlead">${t('Scan this QR with the phone\'s camera.')}</p>
+        <p>${t('It opens {title} on the phone and gives it a chat with the manager of every project, also of those you add later. Encrypted, with nothing to install.', { title })}</p>
+        <p class="mut sm">${t('It works once, and the next one appears here by itself. Scan it again whenever the phone says it is not connected: a browser forgets its chats after some days without use.')}${r.invite ? html` <${CopyBtn} text=${r.invite} label=${t('Copy it as a link')} />` : null}</p>
         <${Who} r=${r} phones=${true} forget=${forget} />
       </div>
     </div>`;
@@ -36,8 +37,8 @@ export function PhoneCard({ r, reload, title, agent }) {
     else if (Date.now() - asked.current > 10000) { asked.current = Date.now(); make(); }
   });
   return html`<div class="card scard rphone" data-room=${r.id}>
-    <div class="phead"><${AgentFace} a=${agent} /><b>Your phone</b><span class="chip">Encrypted</span><${Status} r=${r} /></div>
-    ${r.error ? html`<div class="ierr rerr">NeoBot cannot reach agentsmessenger.com now, so a phone connects when it can again: ${r.error}</div>` : null}
+    <div class="phead"><${AgentFace} a=${agent} /><b>${t('Your phone')}</b><span class="chip">${t('Encrypted')}</span><${Status} r=${r} /></div>
+    ${r.error ? html`<div class="ierr rerr">${t('NeoBot cannot reach agentsmessenger.com now, so a phone connects when it can again: {error}', { error: r.error })}</div>` : null}
     ${scan(r, shown, busy, error, make, setBad, (id) => setAsk(ask === id ? '' : id), title)}
     ${ask ? html`<${Popover} r=${r} ask=${`forget:${ask}`} close=${() => setAsk('')} act=${act} />` : null}
     ${error ? html`<div class="ierr">${error}</div>` : null}
@@ -48,10 +49,10 @@ export function PhoneCard({ r, reload, title, agent }) {
 export function NoRoom({ reload, project, agent }) {
   const [busy, error, run] = useRoomAction(reload);
   return html`<div class="card scard rphone">
-    <div class="phead"><${AgentFace} a=${agent} /><b>Your phone</b><span class="chip">Encrypted</span></div>
-    <p class="rlead">Work from your phone.</p>
-    <p>NeoBot opens an encrypted room on agentsmessenger.com and shows a QR here: scan it with the phone's camera and the phone has a chat with the manager of every project, with nothing to install.</p>
-    <div class="sfoot"><button class="isend" disabled=${busy === 'new'} onClick=${() => run('new', () => api('POST', '/api/rooms', { title: '', project: project || '' }))}>${busy === 'new' ? 'Making the room…' : 'Show the QR'}</button></div>
+    <div class="phead"><${AgentFace} a=${agent} /><b>${t('Your phone')}</b><span class="chip">${t('Encrypted')}</span></div>
+    <p class="rlead">${t('Work from your phone.')}</p>
+    <p>${t('NeoBot opens an encrypted room on agentsmessenger.com and shows a QR here: scan it with the phone\'s camera and the phone has a chat with the manager of every project, with nothing to install.')}</p>
+    <div class="sfoot"><button class="isend" disabled=${busy === 'new'} onClick=${() => run('new', () => api('POST', '/api/rooms', { title: '', project: project || '' }))}>${busy === 'new' ? t('Making the room…') : t('Show the QR')}</button></div>
     ${error ? html`<div class="ierr">${error}</div>` : null}
   </div>`;
 }

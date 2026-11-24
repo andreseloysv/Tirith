@@ -7,6 +7,7 @@ import { PhoneCard, NoRoom } from './phone.js';
 import { PrivateCard, JoinCard } from './private.js';
 import { PublicCard } from './public.js';
 import { agentOf } from './agent.js';
+import { t } from '../../i18n.js';
 
 /** The QR on the screen must be the one that works: the rooms are also read on a clock and when the window comes
     back, in case the stream missed the moment a QR was used. */
@@ -41,14 +42,14 @@ export function Rooms({ project }) {
   const rooms = (data && data.rooms) || [];
   const [priv, pub, phone] = useRoomLists(data, rooms, project);
   /* a room without a name of its own goes by its project's, as it does on the phone (the room of no project: All projects) */
-  const titleOf = (r) => r.title || (s.projects.find((p) => p.id === r.project) || {}).name || (r.kind === 'manager' && !r.project ? 'All projects' : r.id);
+  const titleOf = (r) => r.title || (s.projects.find((p) => p.id === r.project) || {}).name || (r.kind === 'manager' && !r.project ? t('All projects') : r.id);
   const agentFor = agentOf(s, M, bots);
   return html`<div class="msettings mrooms">
-    ${err && !data ? html`<div class="ierr">Could not read the rooms: ${err.message}</div>` : null}
+    ${err && !data ? html`<div class="ierr">${t('Could not read the rooms: {message}', { message: err.message })}</div>` : null}
     ${phone ? html`<${PhoneCard} key=${phone.id} r=${phone} reload=${reload} title=${titleOf(phone)} agent=${agentFor(phone.project)} />` : data ? html`<${NoRoom} reload=${reload} project=${project} agent=${agentFor(project)} />` : null}
     ${priv.map((r) => html`<${PrivateCard} key=${r.id} r=${r} reload=${reload} title=${titleOf(r)} agent=${agentFor(r.project)} />`)}
     ${data ? html`<${JoinCard} reload=${reload} project=${project} />` : null}
-    ${pub.length ? html`<h2 class="rsec">Public rooms <span class="n">${pub.length}</span></h2>
+    ${pub.length ? html`<h2 class="rsec">${t('Public rooms')} <span class="n">${pub.length}</span></h2>
       ${pub.map((r) => html`<${PublicCard} key=${r.id} r=${r} reload=${reload} />`)}` : null}
   </div>`;
 }

@@ -1,4 +1,5 @@
 // Reading a log's pieces: ANSI colors out, a tool result as text, a tool call in one line, a test run's verdict.
+import { t } from '../../../i18n.js';
 export const TEST_RE = /\b(test|tests|pytest|jest|vitest|mocha|cargo test|go test|gradlew\s+\S*test|npm (run )?test|ctest)\b/i;
 export const EDIT = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 export const READ = new Set(['Read', 'Grep', 'Glob', 'LS', 'WebFetch', 'WebSearch', 'TodoWrite']);
@@ -21,5 +22,5 @@ export function testResult(out) {
 }
 export function counts(out) {
   const p = /(\d+) passed/.exec(out), f = /(\d+) failed/.exec(out);
-  return p || f ? `${p ? p[1] : 0} passed, ${f ? f[1] : 0} failed` : '';
+  return p || f ? t('{p} passed, {f} failed', { p: p ? p[1] : 0, f: f ? f[1] : 0 }) : '';
 }

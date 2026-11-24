@@ -1,14 +1,14 @@
 # A bot template: what «Desde plantilla» makes. Its folder's name is its skill's name.
-name = "Resumen del correo a las 07:00"
-start = "Cada día a las 07:00 te resumo el correo de las últimas 24 horas, sin abrirlo ni marcarlo como leído. Leo Gmail con el navegador de NeoBot: dime «abre el correo» para iniciar sesión allí una vez. Si usas otro correo, dime su dirección web."
+name = "Mail summary at 07:00"
+start = "Every day at 07:00 I summarise your mail of the last 24 hours, without opening it or marking it as read. I read Gmail with NeoBot's browser: tell me «open the mail» to sign in there once. If you use another mail service, tell me its web address."
 
 [face]
 shape = "pill"
 color = "#3b82f6"
 
 [routine]
-title = "Resumen del correo"
+title = "Mail summary"
 trigger = "schedule"
 days = "daily"
 at = "07:00"
-prompt = "Usa la skill resumen-correo: lee la bandeja de entrada con el navegador de NeoBot y resume lo que llegó en las últimas 24 horas, primero lo que pide algo del dueño. No abras ni cambies ningún mensaje."
+prompt = "Use the skill resumen-correo: read the inbox with NeoBot's browser and summarise what arrived in the last 24 hours, first what asks something of the owner. Do not open or change any message."

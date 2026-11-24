@@ -18,13 +18,16 @@ import { Working } from './working.js';
 import { Next } from './next.js';
 import { Quiet } from './quiet.js';
 import { Setup } from './setup.js';
+import { Onboarding } from '../onboarding/view.js';
+import { welcoming } from '../onboarding/state.js';
 
 const newest = (a, b) => String(b.at).localeCompare(String(a.at));
 
 export function Overview({ project }) {
   const s = useStore();
   const who = useWho();
-  const bots = useUnread().bots.filter((b) => b.show !== false);
+  const every = useUnread().bots;
+  const bots = every.filter((b) => b.show !== false);
   const q = String(s.q || '').trim().toLowerCase();
   const p = s.projects.find((x) => x.id === project);
   const cards = openCards(s);
@@ -34,6 +37,7 @@ export function Overview({ project }) {
   const helpers = groups.reduce((n, g) => n + g.helpers.length, 0);
   const lanes = p ? Object.values(s.lanes).filter((l) => l.project === p.id) : [];
   const calm = !asks.length && !groups.length;
+  if (!p && welcoming(every)) return html`<${Onboarding} />`; /* the first bot is still to be made: the welcome, not "All quiet" */
   const main = html`<div class="home">
     <${Hello} place=${p ? p.name || p.id : ''} asks=${asks.length} helpers=${helpers} bosses=${groups.length} line=${!(calm && !p && !q)} />
     ${p ? html`<${Setup} project=${p.id} name=${p.name} />` : null}

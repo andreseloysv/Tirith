@@ -15,7 +15,7 @@ fn unapproved_is_measured() {
     let m = get(&app);
     assert_eq!(
         (m.label.as_str(), m.value, m.target, m.at_least, m.red),
-        ("Sin aprobación (24 h)", 0.0, Some(0.0), false, false)
+        ("Unapproved (24 h)", 0.0, Some(0.0), false, false)
     );
     let score = |ago: u64, label: &str, why: &str| {
         app.insert("INSERT INTO scores (at, event, eval, label, score, why, factory, role_hash) VALUES (?1, 1, 'unapproved', ?2, NULL, ?3, 'v1+abc12345', 'judge123')", rusqlite::params![at(ago), label, why])

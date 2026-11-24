@@ -42,7 +42,7 @@ pub fn ended(
     if good {
         return close(app, run.id, OK, turn, "");
     }
-    let why = why.unwrap_or("su agente falló");
+    let why = why.unwrap_or("its agent failed");
     close(app, run.id, FAILED, turn, why);
     app.insert(
         "UPDATE turns SET why = ?1 WHERE id = ?2",
@@ -67,7 +67,7 @@ pub fn unstarted(app: &Shared, conv: &str, routine: &str, error: &str) {
         never(
             app,
             &run,
-            &format!("no arrancó: {}", super::reasons::failure(error)),
+            &format!("did not start: {}", super::reasons::failure(error)),
         );
     }
 }
@@ -77,7 +77,11 @@ pub fn orphaned(app: &Shared, conv: &str) {
     let rest = "conv = ?1 AND state = ?2 AND routine <> ?3 ORDER BY id";
     for run in select(app, rest, params![conv, RUNNING, PASS]) {
         let why = Some(run.why.as_str()).filter(|w| !w.is_empty());
-        never(app, &run, why.unwrap_or("su agente terminó sin responder"));
+        never(
+            app,
+            &run,
+            why.unwrap_or("its agent ended without answering"),
+        );
     }
 }
 
@@ -85,6 +89,6 @@ pub fn orphaned(app: &Shared, conv: &str) {
 pub fn unhanded(app: &Shared, conv: &str, routine: &str) {
     let rest = "conv = ?1 AND routine = ?2 AND state = ?3 ORDER BY id DESC LIMIT 1";
     for run in select(app, rest, params![conv, routine, WAITING]) {
-        never(app, &run, "nadie puede hacerla: su rol no recibe tareas");
+        never(app, &run, "nobody can do it: its role takes no tasks");
     }
 }

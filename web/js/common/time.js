@@ -1,5 +1,6 @@
 // Times: an ISO time's milliseconds, a duration, how long ago, a clock time, seconds between two times.
 
+import { t, getLang } from '../i18n.js';
 /** Milliseconds of an ISO time (UTC when it has no zone), or null. */
 export function ms(iso) {
   let s = String(iso || '').trim();
@@ -29,13 +30,22 @@ export function ago(iso) {
   return `${Math.floor(s / 86400)} d`;
 }
 
+/** `ago`, in words: "just now", "5 min ago". */
+export function agoText(iso) {
+  const a = ago(iso);
+  if (!a) return '';
+  if (a === 'now') return t('just now');
+  const [n, unit] = a.split(' ');
+  return unit === 's' ? t('{n} s ago', { n }) : unit === 'min' ? t('{n} min ago', { n }) : unit === 'h' ? t('{n} h ago', { n }) : t('{n} d ago', { n });
+}
+
 export function clockTime(iso) {
   const t = ms(iso);
   if (t == null) return '';
   const d = new Date(t), n = new Date(), p = (x) => (x < 10 ? '0' : '') + x;
   const hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
   if (d.toDateString() === n.toDateString()) return hm;
-  return `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getDate()} ${hm}`;
+  return `${d.toLocaleString(getLang(), { month: 'short' })} ${d.getDate()} ${hm}`;
 }
 
 /** Seconds between two ISO times (or until now). */

@@ -8,6 +8,7 @@ import { useCardModel, modelSection } from './card-model.js';
 import { factorySection } from './card-factory.js';
 import { connectorsSection } from './card-connectors.js';
 import { materialSection } from './card-material.js';
+import { t } from '../../i18n.js';
 
 /** Focus the name; Esc closes the card. */
 function useCardKeys(input, onClose) {
@@ -21,21 +22,21 @@ function useCardKeys(input, onClose) {
 
 /** The shape and colour pickers; each shape wears the material being chosen. */
 function pickers(shape, setShape, color, setColor, look) {
-  return html`<div class="bshapes" role="radiogroup" aria-label="Shape">${Object.keys(SHAPES).map((k) => html`<button type="button" role="radio" key=${k}
+  return html`<div class="bshapes" role="radiogroup" aria-label=${t('Shape')}>${Object.keys(SHAPES).map((k) => html`<button type="button" role="radio" key=${k}
           aria-checked=${k === shape} aria-label=${k} class=${k === shape ? 'on' : ''} onClick=${() => setShape(k)}><span class="bface"><${Face} ...${{ ...look, shape: k, color }} size=${58} still />${k === shape
             ? html`<svg class="bring" viewBox="-12 -12 124 124" aria-hidden="true"><path d=${ringOf(k)} /></svg>` : null}</span></button>`)}</div>
-        <div class="bcolors" role="radiogroup" aria-label="Colour">${COLORS.map((c) => html`<button type="button" role="radio" key=${c}
+        <div class="bcolors" role="radiogroup" aria-label=${t('Colour')}>${COLORS.map((c) => html`<button type="button" role="radio" key=${c}
           aria-checked=${c === color} aria-label=${c} class=${c === color ? 'on' : ''} style=${`--c:${c}`} onClick=${() => setColor(c)}><i></i></button>`)}</div>`;
 }
 
 /** Delete (asked once), Cancel and Save. */
 function footer({ bot, ask, setAsk, del, onClose, name, valid, save }) {
   return html`<footer>
-        ${bot.id && !bot.system ? (ask ? html`<span class="bask">Delete ${bot.name} with its routines, memory and own skills?</span><button type="button" class="bbtn bdel" onClick=${del}>Delete</button>
-            <button type="button" class="bbtn" onClick=${() => setAsk(false)}>Keep</button>`
-          : html`<button type="button" class="blink bdel" onClick=${() => setAsk(true)}>Delete bot</button>`) : null}
-        ${ask ? null : html`<span class="bsp"></span><button type="button" class="bbtn" onClick=${onClose}>Cancel</button>
-          <button type="button" class="bbtn pri" disabled=${!name.trim() || !valid} onClick=${save}>${bot.id ? 'Save' : 'Create'}</button>`}
+        ${bot.id && !bot.system ? (ask ? html`<span class="bask">${t('Delete {name} with its routines, memory and own skills?', { name: bot.name })}</span><button type="button" class="bbtn bdel" onClick=${del}>${t('Delete')}</button>
+            <button type="button" class="bbtn" onClick=${() => setAsk(false)}>${t('Keep')}</button>`
+          : html`<button type="button" class="blink bdel" onClick=${() => setAsk(true)}>${t('Delete bot')}</button>`) : null}
+        ${ask ? null : html`<span class="bsp"></span><button type="button" class="bbtn" onClick=${onClose}>${t('Cancel')}</button>
+          <button type="button" class="bbtn pri" disabled=${!name.trim() || !valid} onClick=${save}>${bot.id ? t('Save') : t('Create')}</button>`}
       </footer>`;
 }
 
@@ -74,11 +75,11 @@ export function BotCard({ bot, onClose, onSaved }) {
   };
   const del = () => api('POST', `/api/bots/${encodeURIComponent(bot.id)}/delete`).then(() => onSaved(null), (e) => setErr(e.message));
   return html`<div class="bmback" onClick=${onClose}>
-    <div class="bmodal" role="dialog" aria-modal="true" aria-label=${bot.id ? 'Edit bot' : 'New bot'} onClick=${(e) => e.stopPropagation()}>
-      <header><h2>${bot.id ? 'Edit bot' : 'New bot'}</h2><button type="button" class="bx" aria-label="Close" onClick=${onClose}><${Icon} d=${ICON.close} size=${14} w=${1.6} /></button></header>
+    <div class="bmodal" role="dialog" aria-modal="true" aria-label=${bot.id ? t('Edit bot') : t('New bot')} onClick=${(e) => e.stopPropagation()}>
+      <header><h2>${bot.id ? t('Edit bot') : t('New bot')}</h2><button type="button" class="bx" aria-label=${t('Close')} onClick=${onClose}><${Icon} d=${ICON.close} size=${14} w=${1.6} /></button></header>
       <div class="bmbody">
         <div class="bprev"><${Face} ...${{ ...look, shape, color }} size=${132} /></div>
-        <input ref=${input} class="bnamein" placeholder="Name your bot" maxlength="40" aria-label="Name" value=${name}
+        <input ref=${input} class="bnamein" placeholder=${t('Name your bot')} maxlength="40" aria-label=${t('Name')} value=${name}
           onInput=${(e) => setName(e.target.value)} onKeyDown=${(e) => e.key === 'Enter' && save()} />
         ${pickers(shape, setShape, color, setColor, look)}
         ${materialSection(look, setLook)}

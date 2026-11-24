@@ -1,0 +1,18 @@
+/* the welcome right after the first agent connects (web/js/views/onboarding/): the new assistant's words as chat
+   bubbles in the Home's column, its face only while it "types", then a box for its name or its choices A, B, C */
+.ob { max-width: 680px; }
+.ob-skip { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.ob-talk { display: flex; flex-direction: column; gap: 10px; }
+.ob-talk .mc-m.me { align-self: flex-end; }
+.ob-talk .mc-time:empty { display: none; }
+.ob-typing { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.ob-dots { display: inline-flex; gap: 4px; padding: 10px 14px; border-radius: 18px; background: var(--raise); }
+.ob-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--mut); animation: ob-dot 1.2s infinite ease-in-out; }
+.ob-dots i:nth-child(2) { animation-delay: .15s; } .ob-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes ob-dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+.ob .hm-reply { margin-top: 18px; }
+.ob-choices { display: flex; flex-direction: column; gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; }
+.ob-choices button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border-radius: 16px;
+  background: var(--raise); border: 1px solid var(--card-edge2); color: var(--fg); font: 15px var(--sans); text-align: left; }
+.ob-choices button:hover { background: var(--tile); }
+.ob-choices b { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: var(--raise2); font-size: 13px; }

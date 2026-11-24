@@ -1,6 +1,7 @@
 // The Library's pieces: one skill (read, edit, delete) and the editor of the memory or of a skill.
 import { html, useState } from '../../../vendor/preact-htm.js';
 import { md } from '../../md.js';
+import { t } from '../../i18n.js';
 
 export const SKILL_START = '---\nname: {name}\ndescription: When to use it, in one sentence.\n---\n\n1. ';
 const descOf = (t) => (/^description:\s*(.+)$/m.exec(t || '') || [])[1] || '';
@@ -23,12 +24,12 @@ export function Editor({ e, onSave, onCancel, err }) {
   const named = !e.fresh || /^[a-z][a-z0-9-]{0,63}$/.test(name);
   const body = e.memory ? { memory: true, shared: !!e.shared, text } : { name: e.fresh ? name : e.name, shared: e.fresh ? shared : e.shared, text: e.fresh ? text.replace('{name}', name) : text };
   return html`<div class="bform bedit">
-    ${e.fresh ? html`<label><span class="bcap">Name · lowercase and dashes</span><input value=${name} placeholder="check-job-portal" maxlength="64" onInput=${(x) => setName(x.target.value.trim())} /></label>
-      <label class="bchk"><input type="checkbox" checked=${shared} onChange=${(x) => setShared(x.target.checked)} />Shared with every bot</label>` : null}
-    <textarea class="bcode" rows=${e.memory ? 12 : 14} value=${text} aria-label=${e.memory ? (e.shared ? 'Shared memory' : 'Memory') : 'Skill'} onInput=${(x) => setText(x.target.value)}></textarea>
+    ${e.fresh ? html`<label><span class="bcap">${t('Name · lowercase and dashes')}</span><input value=${name} placeholder="check-job-portal" maxlength="64" onInput=${(x) => setName(x.target.value.trim())} /></label>
+      <label class="bchk"><input type="checkbox" checked=${shared} onChange=${(x) => setShared(x.target.checked)} />${t('Shared with every bot')}</label>` : null}
+    <textarea class="bcode" rows=${e.memory ? 12 : 14} value=${text} aria-label=${e.memory ? (e.shared ? t('Shared memory') : t('Memory')) : t('Skill')} onInput=${(x) => setText(x.target.value)}></textarea>
     ${err ? html`<p class="berr">${err}</p>` : null}
-    <div class="bfoot"><button type="button" class="bbtn" onClick=${onCancel}>Cancel</button>
-      <button type="button" class="bbtn pri" disabled=${!named} onClick=${() => onSave(body)}>Save</button></div>
+    <div class="bfoot"><button type="button" class="bbtn" onClick=${onCancel}>${t('Cancel')}</button>
+      <button type="button" class="bbtn pri" disabled=${!named} onClick=${() => onSave(body)}>${t('Save')}</button></div>
   </div>`;
 }
 
@@ -37,13 +38,13 @@ export function Skill({ s, titles = [], open, onOpen, onEdit, onDelete, onActiva
   const missing = missingIn(s.text, titles);
   return html`<li class="bsk">
     <button type="button" class="bskh" aria-expanded=${open} onClick=${onOpen}><b>${s.name}</b><span class="bmut">${descOf(s.text)}</span></button>
-    ${s.draft || isDraft(s.text) ? html`<p class="bnote bmiss">Draft · kept apart, where no bot loads it, until you activate it.
-      <button type="button" class="blink" onClick=${onActivate}>Activate</button></p>` : null}
-    ${missing.length ? html`<p class="berr bmiss">Missing: ${missing.join(' · ')}</p>` : null}
+    ${s.draft || isDraft(s.text) ? html`<p class="bnote bmiss">${t('Draft · kept apart, where no bot loads it, until you activate it.')}
+      <button type="button" class="blink" onClick=${onActivate}>${t('Activate')}</button></p>` : null}
+    ${missing.length ? html`<p class="berr bmiss">${t('Missing: {titles}', { titles: missing.join(' · ') })}</p>` : null}
     ${open ? html`<div class="bskb md" dangerouslySetInnerHTML=${{ __html: md(bodyOf(s.text)) }} />` : null}
-    <span class="bacts">${ask ? html`<span class="bask">Delete ${s.shared ? 'this skill for every bot' : 'this skill'}?</span>
-        <button type="button" class="bdel" onClick=${onDelete}>Delete</button><button type="button" onClick=${() => setAsk(false)}>Keep</button>`
-      : html`<button type="button" onClick=${onOpen}>${open ? 'Hide' : 'Read'}</button><button type="button" onClick=${onEdit}>Edit</button>
-        <button type="button" class="bdel" onClick=${() => setAsk(true)}>Delete</button>`}</span>
+    <span class="bacts">${ask ? html`<span class="bask">${s.shared ? t('Delete this skill for every bot?') : t('Delete this skill?')}</span>
+        <button type="button" class="bdel" onClick=${onDelete}>${t('Delete')}</button><button type="button" onClick=${() => setAsk(false)}>${t('Keep')}</button>`
+      : html`<button type="button" onClick=${onOpen}>${open ? t('Hide') : t('Read')}</button><button type="button" onClick=${onEdit}>${t('Edit')}</button>
+        <button type="button" class="bdel" onClick=${() => setAsk(true)}>${t('Delete')}</button>`}</span>
   </li>`;
 }

@@ -2,6 +2,7 @@
 // error, a test run with its verdict, a sub-agent, the final answer, a system event, or the agent's text.
 import { html, useState } from '../../../../vendor/preact-htm.js';
 import { Md } from '../md.js';
+import { t } from '../../../i18n.js';
 
 const ic = (d) => html`<svg class="lic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${d} /></svg>`;
@@ -13,7 +14,7 @@ const I = {
 };
 
 function More({ open, set }) {
-  return html`<button class="link lmore" aria-expanded=${open} onClick=${() => set(!open)}>${open ? 'show less' : 'show more'}</button>`;
+  return html`<button class="link lmore" aria-expanded=${open} onClick=${() => set(!open)}>${open ? t('show less') : t('show more')}</button>`;
 }
 
 function edit(e) {
@@ -29,9 +30,9 @@ const BODY = {
   edit,
   read: (e) => html`<span class="lread" title=${e.text}>${e.text}</span>`,
   error: (e, open, setOpen, long) => html`<div class="lerr"><span class="lerrt">${open || !long ? e.text : e.text.split('\n').slice(0, 3).join('\n')}</span>${long ? html`<${More} open=${open} set=${setOpen} />` : null}</div>`,
-  test: (e) => html`${ic(I.flask)}<code class="lcmd" title=${e.text}>${e.text}</code>${e.sum ? html`<span class="mut lsum">${e.sum}</span>` : null}<span class=${`rb ${e.res}`}>${e.res}</span>`,
-  spawn: (e) => html`${ic(I.branch)}<span class="lspawn"><span class="mut">Started sub-agent</span> <b>${e.text}</b></span>`,
-  done: (e) => html`<div class="ldone"><div class="ldh">${ic(I.flag)}Final answer${e.usage ? html`<span class="mut lusage">${e.usage}</span>` : null}</div><div class="ldt"><${Md} text=${e.text} /></div></div>`,
+  test: (e) => html`${ic(I.flask)}<code class="lcmd" title=${e.text}>${e.text}</code>${e.sum ? html`<span class="mut lsum">${e.sum}</span>` : null}<span class=${`rb ${e.res}`}>${t(e.res)}</span>`,
+  spawn: (e) => html`${ic(I.branch)}<span class="lspawn"><span class="mut">${t('Started sub-agent')}</span> <b>${e.text}</b></span>`,
+  done: (e) => html`<div class="ldone"><div class="ldh">${ic(I.flag)}${t('Final answer')}${e.usage ? html`<span class="mut lusage">${e.usage}</span>` : null}</div><div class="ldt"><${Md} text=${e.text} /></div></div>`,
   system: (e) => html`<span class="lsys" title=${e.detail || ''}>${e.text}</span>`,
 };
 const say = (e) => html`<div class="lsay"><${Md} text=${e.text} /></div>`;

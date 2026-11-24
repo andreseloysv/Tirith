@@ -4,6 +4,7 @@ import { html, useState } from '../../../vendor/preact-htm.js';
 import { api } from '../../store.js';
 import { ICON, Icon, Span } from '../../common.js';
 import { STOPPABLE, itemText, startOf, endOf } from './lanes.js';
+import { t } from '../../i18n.js';
 
 export function Avatar({ a, color, size = 36 }) {
   const ch = String(a.agent || a.id || '?').trim().charAt(0).toUpperCase();
@@ -15,10 +16,10 @@ export function Clock({ a }) {
 }
 
 function confirm(a, where, stop, toggle) {
-  return html`<span class=${`stoppop ${where}`} role="dialog" aria-label="Confirm stop" onClick=${(e) => e.stopPropagation()}>
-      <span class="sptxt">Stop <b>${itemText(a.item)}</b>? It ends as stopped and its worktree is kept.</span>
-      <span class="spb"><span class="stopgo" role="button" tabindex="0" onClick=${stop}>Stop agent</span>
-      <span class="alink" role="button" tabindex="0" onClick=${toggle}>Cancel</span></span></span>`;
+  return html`<span class=${`stoppop ${where}`} role="dialog" aria-label=${t('Confirm stop')} onClick=${(e) => e.stopPropagation()}>
+      <span class="sptxt"><b>${itemText(a.item)}</b> ${t('Stop this agent? It ends as stopped and its worktree is kept.')}</span>
+      <span class="spb"><span class="stopgo" role="button" tabindex="0" onClick=${stop}>${t('Stop agent')}</span>
+      <span class="alink" role="button" tabindex="0" onClick=${toggle}>${t('Cancel')}</span></span></span>`;
 }
 
 export function StopBtn({ a, where }) {
@@ -26,16 +27,16 @@ export function StopBtn({ a, where }) {
   const [pend, setPend] = useState(false);
   const [err, setErr] = useState('');
   if (!STOPPABLE.includes(a.status)) return null;
-  if (pend) return html`<span class=${`stopb stopping ${where}`} role="status">Stopping…</span>`;
+  if (pend) return html`<span class=${`stopb stopping ${where}`} role="status">${t('Stopping…')}</span>`;
   const stop = (e) => {
     e.stopPropagation();
     setAsk(false); setPend(true); setErr('');
-    api('POST', `/api/lanes/${encodeURIComponent(a.id)}/stop`).catch((x) => { setPend(false); setErr(`Could not stop: ${x.message}`); });
+    api('POST', `/api/lanes/${encodeURIComponent(a.id)}/stop`).catch((x) => { setPend(false); setErr(t('Could not stop: {message}', { message: x.message })); });
   };
   const toggle = (e) => { e.stopPropagation(); setAsk(!ask); };
-  return html`<span class=${`stopb ${where}`} role="button" tabindex="0" title="Stop this lane: it ends as stopped and its worktree is kept"
+  return html`<span class=${`stopb ${where}`} role="button" tabindex="0" title=${t('Stop this lane: it ends as stopped and its worktree is kept')}
       onClick=${toggle} onKeyDown=${(e) => (e.key === 'Enter' || e.key === ' ') && toggle(e)}>
-      <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><rect x="2.5" y="2.5" width="7" height="7" rx="1.4" fill="currentColor" /></svg><span>Stop</span></span>
+      <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><rect x="2.5" y="2.5" width="7" height="7" rx="1.4" fill="currentColor" /></svg><span>${t('Stop')}</span></span>
     ${ask ? confirm(a, where, stop, toggle) : null}
     ${err ? html`<span class="ierr stoperr">${err}</span>` : null}`;
 }

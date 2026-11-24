@@ -42,7 +42,7 @@ fn steps(cx: &Context, known: &Known, token: bool) -> Result<String, String> {
 }
 
 /// Its command in config.toml and its hooks at this NeoBot.
-fn wire(cx: &Context, known: &Known, path: &std::path::Path) -> Result<(), String> {
+pub(super) fn wire(cx: &Context, known: &Known, path: &std::path::Path) -> Result<(), String> {
     super::configure::agent(&cx.home, &known.alias, path, &known.settings)?;
     let file = cx.settings(known).ok_or_else(|| {
         format!(

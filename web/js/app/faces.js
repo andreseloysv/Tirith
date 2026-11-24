@@ -1,7 +1,7 @@
 // The faces at the far left of the sidebar (faces/list.js): each agent in its state with its unread answers, in the
 // owner's order — drag one up or down to choose its place (faces/drag.js, faces/order.js) — and, while the pointer
 // rests on one, its card: the name, then where it works or its last message (faces/hover.js, faces/where.js).
-// "+" adds a bot.
+// "+" adds a bot. None of them while no agent works yet (`bare`): only the logo.
 import { html, useState } from '../../vendor/preact-htm.js';
 import { useStore, setUi } from '../store.js';
 import { Face, NewFace } from '../views/bots/face.js';
@@ -11,13 +11,14 @@ import { whereOf } from './faces/where.js';
 import { loadOrder, saveOrder, moved } from './faces/order.js';
 import { useDrag } from './faces/drag.js';
 import { useHoverCard, HoverCard } from './faces/hover.js';
+import { t } from '../i18n.js';
 
 /* one face: a click opens its conversation; a drag moves it; resting on it shows its card */
 function faceButton(f, sel, drag, card) {
   const n = f.unread;
   const show = (e) => card.show(f.id, e.currentTarget);
   return html`<button type="button" key=${f.id} data-face=${f.id} class=${`nbot${f.id === sel ? ' on' : ''}`}
-      aria-label=${n ? `${f.name}, ${n} new` : f.name} aria-current=${f.id === sel} aria-describedby=${card.at && card.at.id === f.id ? 'face-card' : null}
+      aria-label=${n ? t('{name}, {n} new', { name: f.name, n }) : f.name} aria-current=${f.id === sel} aria-describedby=${card.at && card.at.id === f.id ? 'face-card' : null}
       onPointerDown=${(e) => { card.now(); drag.down(e); }} onPointerMove=${drag.move} onPointerUp=${drag.up} onPointerCancel=${drag.cancel}
       onClick=${() => { if (!drag.swallowed()) f.open(); }} onKeyDown=${(e) => drag.key(e, f.id)}
       onPointerEnter=${(e) => { if (!e.buttons && e.pointerType !== 'touch') show(e); }} onPointerLeave=${card.hide}
@@ -26,7 +27,7 @@ function faceButton(f, sel, drag, card) {
     ${n ? html`<em class="nunread">${n > 9 ? '9+' : n}</em>` : null}</button>`;
 }
 
-export function Faces({ r }) {
+export function Faces({ r, bare }) {
   const s = useStore();
   const [order, setOrder] = useState(loadOrder);
   const { faces, sel } = useFaces(r, order);
@@ -35,10 +36,10 @@ export function Faces({ r }) {
   const place = (id, to) => { const next = moved(ids, id, to); saveOrder(next); setOrder(next); };
   const drag = useDrag(ids, place, card.now);
   const shown = card.at && faces.find((f) => f.id === card.at.id);
-  return html`<nav class="nbots" aria-label="Agents" onScroll=${card.now}>
+  return html`<nav class="nbots" aria-label=${t('Agents')} onScroll=${card.now}>
     <div class="nlogo" title="NeoBot">${BRAND}</div>
-    ${faces.map((f) => faceButton(f, sel, drag, card))}
-    <button type="button" class="nbot nnew" title="New bot" aria-label="New bot" onClick=${() => setUi('botCard', {})}><${NewFace} size=${46} /></button>
+    ${bare ? null : faces.map((f) => faceButton(f, sel, drag, card))}
+    ${bare ? null : html`<button type="button" class="nbot nnew" title=${t('New bot')} aria-label=${t('New bot')} onClick=${() => setUi('botCard', {})}><${NewFace} size=${46} /></button>`}
     ${shown ? html`<${HoverCard} face=${shown} at=${card.at} line=${whereOf(shown, s)} />` : null}
   </nav>`;
 }

@@ -2,6 +2,7 @@
 // effort at its end (a tap opens the efforts), and the tab's less-used models folded under "Other models".
 import { effortName, keptEffort, providerName } from './offer.js';
 import { element, icon, row } from './dom.js';
+import { t } from '../i18n.js';
 
 const FIRST = 5;   /* models of a tab shown before "Other models" (the chosen one is always shown) */
 
@@ -19,7 +20,7 @@ function modelRow(ctl, { value, disabled }, m, searching) {
 function fold(ctl) {
   const b = element('button', `fold${ctl.ui.others ? ' open' : ''}`); b.type = 'button';
   b.setAttribute('aria-expanded', String(ctl.ui.others));
-  b.append(icon('next'), element('span', '', 'Other models'));
+  b.append(icon('next'), element('span', '', t('Other models')));
   b.onclick = () => ctl.set({ others: !ctl.ui.others });
   return b;
 }
@@ -32,5 +33,5 @@ export function fillList(ctl, box, config, list, tab) {
   const draw = m => modelRow(ctl, config, m, searching);
   box.replaceChildren(...first.map(draw));
   if (rest.length) box.append(fold(ctl), ...(ctl.ui.others ? rest.map(draw) : []));
-  if (!shown.length) box.append(element('p', 'hint', searching ? 'No model matches.' : 'No agent can run a model: connect one in Settings.'));
+  if (!shown.length) box.append(element('p', 'hint', searching ? t('No model matches.') : t('No agent can run a model: connect one in Settings.')));
 }

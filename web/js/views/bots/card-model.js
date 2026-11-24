@@ -3,6 +3,7 @@ import { html, useState, useRef, useLayoutEffect } from '../../../vendor/preact-
 import { api } from '../../store.js';
 import { optionsFor } from '../../model-controls.js';
 import { keyOf } from './state.js';
+import { t } from '../../i18n.js';
 
 /** The model controls of Settings (a custom element), for one bot. */
 function ModelControls({ M, value, onChange }) {
@@ -13,7 +14,7 @@ function ModelControls({ M, value, onChange }) {
   });
   return html`<model-controls ref=${ref}></model-controls>`;
 }
-const modelName = (v) => (v ? v.model || v.agent || 'default' : '');
+const modelName = (v) => (v ? v.model || v.agent || t('default') : '');
 
 /** The bot's model as the card edits it: {hasOwn, value, valid, setOwn, setModel, persist(saved bot)}. */
 export function useCardModel(bot, M) {
@@ -33,7 +34,7 @@ export function useCardModel(bot, M) {
 /** The Model section (`cm`: useCardModel's answer). */
 export function modelSection(M, cm) {
   const { hasOwn, value, setOwn, setModel } = cm;
-  return html`<details class="bmodel"><summary><span class="bcap">Model</span> ${hasOwn ? modelName(value) : `the managers' · ${modelName(M.roles.manager)}`}</summary>
-          <label class="bchk"><input type="checkbox" checked=${hasOwn} onChange=${(e) => setOwn(e.target.checked)} />A model of its own, not the managers'</label>
+  return html`<details class="bmodel"><summary><span class="bcap">${t('Model')}</span> ${hasOwn ? modelName(value) : t("the managers' · {model}", { model: modelName(M.roles.manager) })}</summary>
+          <label class="bchk"><input type="checkbox" checked=${hasOwn} onChange=${(e) => setOwn(e.target.checked)} />${t("A model of its own, not the managers'")}</label>
           ${hasOwn ? html`<${ModelControls} M=${M} value=${value} onChange=${(v) => { setModel(v); setOwn(true); }} />` : null}</details>`;
 }

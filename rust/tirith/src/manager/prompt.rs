@@ -10,10 +10,14 @@ pub(super) fn prompt(app: &Shared, project: &str) -> String {
 }
 /// A role's instructions, wherever its turn runs (its conversation, a loose turn of the lab).
 pub(super) fn instructions(app: &Shared, role: &str) -> String {
-    app.cfg().factory.prompts_of(role).replace(
+    let text = app.cfg().factory.prompts_of(role).replace(
         "{shared}",
         &app.home.join("bots/skills").display().to_string(),
-    )
+    );
+    match crate::setup::owner_language(app) {
+        Some(lang) => format!("{text}\n\nThe owner reads {lang}: write every message, question and summary for the owner in it."),
+        None => text,
+    }
 }
 /// What a fresh session of `project` is handed before its first message: the recent chat, but in a run of an experiment, where each side would read the other's folder and calls there and do the same.
 pub(super) fn opening(app: &Shared, project: &str) -> String {

@@ -1,5 +1,6 @@
 // A picture of the chat at full size.
 import { html, useEffect, useRef } from '../../../vendor/preact-htm.js';
+import { t } from '../../i18n.js';
 
 /** Full size: one overlay, closed by a click or Esc. */
 export function Lightbox({ src, onClose }) {
@@ -10,6 +11,6 @@ export function Lightbox({ src, onClose }) {
     if (btn.current) btn.current.focus();
     return () => document.removeEventListener('keydown', key, true);
   }, []);
-  return html`<div class="mc-lb" role="dialog" aria-label="Image" onClick=${onClose}>
-    <img src=${src} alt="Attached image" /><button ref=${btn} type="button" class="mc-lbx" aria-label="Close">×</button></div>`;
+  return html`<div class="mc-lb" role="dialog" aria-label=${t('Image')} onClick=${onClose}>
+    <img src=${src} alt=${t('Attached image')} /><button ref=${btn} type="button" class="mc-lbx" aria-label=${t('Close')}>×</button></div>`;
 }

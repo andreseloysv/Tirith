@@ -7,7 +7,7 @@ use serde_json::json;
 /// The row's id.
 pub(super) fn row(app: &Shared, run: &Expected, why: &str) -> i64 {
     let (factory, role_hash) = app.stamp_for(&run.conv);
-    let answer = format!("(no se hizo: {why})");
+    let answer = format!("(did not run: {why})");
     let sql = "INSERT INTO turns (conv, role, \"trigger\", routine, started_at, ended_at, status, agent, answer, why, factory, role_hash) VALUES (?1,?1,?2,?3,?4,?5,'failed','',?6,?7,?8,?9)";
     let id = app.insert(
         sql,

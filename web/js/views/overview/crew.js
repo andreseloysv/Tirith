@@ -4,6 +4,7 @@
 import { ACTIVE } from '../../common.js';
 import { intentOf } from '../../intent.js';
 import { hit } from './bits.js';
+import { t } from '../../i18n.js';
 
 /** A short title from an item: its first sentence, without its check, quotes of code and parentheses. */
 export function titleOf(item) {
@@ -13,7 +14,7 @@ export function titleOf(item) {
 }
 
 /** What a helper's state says, when it is not simply working ('you': it waits on the owner's answer). */
-export const SAY = { you: 'Waiting for you', waiting: 'Asking its boss', queued: 'About to start', 'merge-queued': 'Finishing', merging: 'Checking its work' };
+export const say = (state) => ({ you: t('Waiting for you'), waiting: t('Asking its boss'), queued: t('About to start'), 'merge-queued': t('Finishing'), merging: t('Checking its work') })[state];
 
 /* what a conversation's running turn does now, in a few words */
 function doing(s, key) {
@@ -30,7 +31,7 @@ export function crew(s, { project, q, cards, shown }) {
   for (const l of Object.values(s.lanes)) {
     if (!ACTIVE.includes(l.status) || (project && l.project !== project) || !hit(q, l.item, l.project)) continue;
     const you = l.status === 'waiting' && cards.some((o) => o.lane === l.id && o.kind !== 'lane');
-    group(l.project).helpers.push({ id: l.id, title: titleOf(l.item) || 'A task', state: you ? 'you' : l.status, project: l.project, at: l.created_at });
+    group(l.project).helpers.push({ id: l.id, title: titleOf(l.item) || t('A task'), state: you ? 'you' : l.status, project: l.project, at: l.created_at });
   }
   for (const key of Object.keys(s.busy)) {
     const isProject = s.projects.some((p) => p.id === key);

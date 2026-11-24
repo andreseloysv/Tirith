@@ -16,18 +16,18 @@ static TIME: LazyLock<Regex> =
 pub(super) fn failure(said: &str) -> String {
     let last = said.lines().rev().find(|l| !l.trim().is_empty());
     let Some(last) = last else {
-        return "su agente terminó sin responder".into();
+        return "its agent ended without answering".into();
     };
     let kind = if crate::models::out_of_credits(said) {
-        "sin cuota"
+        "out of credits"
     } else if NET.is_match(said) {
-        "sin red"
+        "no network"
     } else if SESSION.is_match(said) {
-        "sin sesión"
+        "not logged in"
     } else if TIME.is_match(said) {
-        "tardó demasiado"
+        "took too long"
     } else {
-        "su agente falló"
+        "its agent failed"
     };
     format!("{kind} ({})", short(&crate::app::redact_secrets(last), 140))
 }

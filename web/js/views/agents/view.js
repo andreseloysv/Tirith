@@ -3,8 +3,9 @@
 import { html, useState, useEffect, useMemo } from '../../../vendor/preact-htm.js';
 import { useStore } from '../../store.js';
 import { projectColor } from '../../common.js';
-import { COLS, newest, isOld, questionOf, loadMode, saveMode } from './lanes.js';
+import { cols, newest, isOld, questionOf, loadMode, saveMode } from './lanes.js';
 import { Drawer, Column, ListRow } from './board.js';
+import { t } from '../../i18n.js';
 
 /** The lanes shown: of `project` (or all), matching the search, newest first. */
 function useLanes(s, project, q) {
@@ -24,8 +25,8 @@ function useDoing(s) {
 }
 
 function toolbar(mode, setMode) {
-  return html`<div class="toolbar"><div class="seg" role="group" aria-label="Layout">
-    ${[['list', 'List'], ['kanban', 'Kanban']].map(([m, label]) => html`<button class=${mode === m ? 'on' : ''} onClick=${() => { setMode(m); saveMode(m); }}>${label}</button>`)}</div></div>`;
+  return html`<div class="toolbar"><div class="seg" role="group" aria-label=${t('Layout')}>
+    ${[['list', t('List')], ['kanban', t('Kanban')]].map(([m, label]) => html`<button class=${mode === m ? 'on' : ''} onClick=${() => { setMode(m); saveMode(m); }}>${label}</button>`)}</div></div>`;
 }
 
 function list(v, more) {
@@ -33,13 +34,13 @@ function list(v, more) {
   const rows = v.vis.slice().sort((x, y) => rank(x) - rank(y) || newest(y) - newest(x));
   return html`<div class="listwrap"><ul class="rows card">${rows.slice(0, v.cap).map((a) => html`<${ListRow} key=${a.id} a=${a} open=${v.sel === a.id}
         onOpen=${v.setSel} color=${v.colorOf(a.project)} projName=${v.nameOf(a.project)} />`)}</ul>
-      ${rows.length > v.cap ? html`<button class="link lshow" onClick=${() => v.setCap(v.cap + 60)}>Show ${Math.min(60, rows.length - v.cap)} more</button>` : null} ${more}</div>`;
+      ${rows.length > v.cap ? html`<button class="link lshow" onClick=${() => v.setCap(v.cap + 60)}>${t('Show {n} more', { n: Math.min(60, rows.length - v.cap) })}</button>` : null} ${more}</div>`;
 }
 
 function kanban(v, more) {
   const { s, vis, cur, sel, setSel, colorOf, nameOf } = v;
   return [
-    html`<div class="board lboard">${COLS.filter((c) => !cur || vis.some((a) => c[3].includes(a.status))).map((c) => html`<${Column} key=${c[0]} col=${c} lanes=${vis.filter((a) => c[3].includes(a.status))}
+    html`<div class="board lboard">${cols().filter((c) => !cur || vis.some((a) => c[3].includes(a.status))).map((c) => html`<${Column} key=${c[0]} col=${c} lanes=${vis.filter((a) => c[3].includes(a.status))}
       sel=${cur ? sel : ''} onOpen=${(id) => setSel(sel === id ? '' : id)} colorOf=${colorOf} nameOf=${nameOf} doing=${v.doing} qOf=${(a) => questionOf(s, a)} />`)}</div>`,
     more ? html`<div class="moreline">${more}</div>` : null,
     cur ? html`<${Drawer} a=${cur} projName=${nameOf(cur.project)} color=${colorOf(cur.project)} onClose=${() => setSel('')} />` : null,
@@ -67,10 +68,10 @@ export function Agents({ project }) {
   const cur = sel && s.lanes[sel];
 
   const tb = toolbar(mode, setMode);
-  const more = old.length ? html`<button class="link" onClick=${() => setEarlier(!earlier)}>${earlier ? 'Hide earlier' : `Show ${old.length} earlier`}</button>` : null;
+  const more = old.length ? html`<button class="link" onClick=${() => setEarlier(!earlier)}>${earlier ? t('Hide earlier') : t('Show {n} earlier', { n: old.length })}</button>` : null;
 
   if (!all.length) {
-    return [tb, html`<div class="pad"><p class="quiet">${q ? 'No lanes match' : `No agents${project ? ' in this project' : ''} yet: lanes appear here when the plan or the manager starts them`}</p></div>`];
+    return [tb, html`<div class="pad"><p class="quiet">${q ? t('No lanes match') : project ? t('No agents in this project yet: lanes appear here when the plan or the manager starts them') : t('No agents yet: lanes appear here when the plan or the manager starts them')}</p></div>`];
   }
   const v = { s, vis, cur, sel, setSel, cap, setCap, colorOf, nameOf, doing };
   if (mode === 'list') return [tb, list(v, more)];

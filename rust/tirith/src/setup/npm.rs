@@ -28,6 +28,7 @@ pub(super) fn install(ask: &Ask, package: &str) -> Result<(), String> {
         packages::provide(ask, &["npm"])?;
     }
     let npm = find::program("npm").ok_or("npm is missing")?;
+    node_new_enough()?;
     let prefix = crate::config::home_dir().join(".local");
     std::fs::create_dir_all(prefix.join("bin"))
         .map_err(|e| format!("{}: {e}", prefix.display()))?;
@@ -44,4 +45,24 @@ pub(super) fn install(ask: &Ask, package: &str) -> Result<(), String> {
     run::shown(ask, Path::new(&npm), &args, &[])
         .then_some(())
         .ok_or(format!("npm could not install {package}"))
+}
+
+/// The makers' npm agents (Copilot) run on Node.js 22 or newer: an older one is said before anything installs.
+fn node_new_enough() -> Result<(), String> {
+    const NEEDED: u32 = 22;
+    let said =
+        find::program("node").and_then(|n| run::output(&n.display().to_string(), &["--version"]));
+    let major = said.as_deref().and_then(|v| {
+        v.trim_start_matches('v')
+            .split('.')
+            .next()?
+            .parse::<u32>()
+            .ok()
+    });
+    match major {
+        Some(m) if m < NEEDED => Err(format!(
+            "it needs Node.js {NEEDED} or newer, and this computer has Node.js {m}: update Node.js, then press Try again"
+        )),
+        _ => Ok(()),
+    }
 }

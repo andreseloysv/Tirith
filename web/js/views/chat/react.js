@@ -2,6 +2,7 @@
 // and time, and a click calls POST /api/turns/<id>/reaction (the same one again takes it back); the choice stays marked.
 import { html, useState, useEffect } from '../../../vendor/preact-htm.js';
 import { useFetch, api } from '../../store.js';
+import { t } from '../../i18n.js';
 
 /** The turns of a bot's conversation (`on`: it is a bot's), under its own role, the last first; none elsewhere. */
 export function useBotTurns(project, on) {
@@ -35,5 +36,5 @@ export function Reactions({ turn }) {
   };
   const btn = (v, face, label) => html`<button type="button" class=${mine === v ? 'on' : ''} aria-pressed=${mine === v}
       aria-label=${label} title=${err || label} onClick=${() => set(v)}>${face}</button>`;
-  return html`<span class="mc-react">${btn(1, '👍', 'Good answer')}${btn(-1, '👎', 'Bad answer')}</span>`;
+  return html`<span class="mc-react">${btn(1, '👍', t('Good answer'))}${btn(-1, '👎', t('Bad answer'))}</span>`;
 }

@@ -59,11 +59,11 @@ fn write_down(app: &Shared, t: &Timed, missed: &[String]) {
     for due in missed {
         let why = gaps::over(app, due).unwrap_or_else(|| {
             let skips = if t.skip {
-                " a su hora, y su catch_up es skip"
+                " at its time, and its catch_up is skip"
             } else {
                 ""
             };
-            format!("no llegó a empezar{skips}")
+            format!("never started{skips}")
         });
         let id = expect(
             app,

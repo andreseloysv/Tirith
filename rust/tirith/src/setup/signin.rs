@@ -23,13 +23,12 @@ pub(super) fn token(cx: &Context, known: &Known) -> Result<(), String> {
     Ok(())
 }
 
-/// None when only a real turn can tell.
+/// None when only a real turn can tell: it has no status, or its status did not answer in time (a first start that a virus scanner holds up).
 pub(super) fn signed_in(cx: &Context, known: &Known, path: &Path) -> Option<bool> {
-    (!known.status.is_empty()).then(|| {
-        let args: Vec<&str> = known.status.iter().map(String::as_str).collect();
-        let env = auth::env(&cx.home, &known.alias);
-        run::quiet(path, &args, &env, Duration::from_secs(30))
-    })
+    (!known.status.is_empty()).then_some(())?;
+    let args: Vec<&str> = known.status.iter().map(String::as_str).collect();
+    let env = auth::env(&cx.home, &known.alias);
+    run::quiet(path, &args, &env, Duration::from_secs(60))
 }
 
 /// The model that answered the real turn.

@@ -1,9 +1,10 @@
 // What the menu offers: only models an agent of config.toml runs (Codex's from its catalog), each with a readable
 // name and the efforts it takes, and the effort a newly picked model keeps.
 import { ownerOf, PROVIDERS } from './options.js';
+import { t } from '../i18n.js';
 
 const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
-const NAMES = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
+const NAMES = { low: t('Low'), medium: t('Medium'), high: t('High'), xhigh: t('Extra high'), max: t('Max'), ultra: t('Ultra') };
 /** An effort's name on screen ('' when none is set). */
 export const effortName = effort => NAMES[effort] || effort || '';
 /** A provider's short name: "Codex" for "OpenAI · Codex". */

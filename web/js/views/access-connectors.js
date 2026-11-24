@@ -6,6 +6,7 @@ import { html, useState } from '../../vendor/preact-htm.js';
 import { useFetch, api } from '../store.js';
 import { clockTime } from '../common.js';
 import { useAction } from './settings/ui.js';
+import { t } from '../i18n.js';
 
 const MAX_ROWS = 200;
 const tone = (v) => (v === 'ran' || v === 'approved and ran' ? 'api' : v.startsWith('refused') ? 'blk' : 'tcp');
@@ -13,17 +14,17 @@ const tone = (v) => (v === 'ran' || v === 'approved and ran' ? 'api' : v.startsW
 function Blocks({ blocks, busy, change }) {
   const btn = (c, bot, on) => {
     const key = `${on ? 'b' : 'u'}:${c}:${bot}`;
-    if (busy === key) return html`<span class="mut sm">${on ? 'Blocking…' : 'Unblocking…'}</span>`;
-    const title = bot ? `Bot ${bot} may not call ${c} (its grant comes back exactly on Unblock)` : `No bot may call ${c}`;
-    const word = `${on ? 'Block' : 'Unblock'}${bot ? '' : ' for all bots'}`;
+    if (busy === key) return html`<span class="mut sm">${on ? t('Blocking…') : t('Unblocking…')}</span>`;
+    const title = bot ? t('Bot {bot} may not call {c} (its grant comes back exactly on Unblock)', { bot, c }) : t('No bot may call {c}', { c });
+    const word = bot ? (on ? t('Block') : t('Unblock')) : on ? t('Block for all bots') : t('Unblock for all bots');
     return html`<button class="link sm" title=${on ? title : ''} onClick=${() => change(c, bot, on)}>${word}</button>`;
   };
   return html`<table class="mtab ext"><tbody>${blocks.map((c) => html`<tr key=${c.id}>
       <td><b>${c.id}</b></td>
-      <td class="sm">${c.blocked ? html`<span class="chip xk blk">Blocked for all bots</span> ` : null}${btn(c.id, '', !c.blocked)}</td>
+      <td class="sm">${c.blocked ? html`<span class="chip xk blk">${t('Blocked for all bots')}</span> ` : null}${btn(c.id, '', !c.blocked)}</td>
       <td class="sm">${c.bots.length ? c.bots.map((b) => html`<span key=${b.bot} class="cbot">
-          ${b.blocked ? html`<span class="chip xk blk">bot ${b.bot} blocked</span>` : html`<span>bot ${b.bot}</span>`} ${btn(c.id, b.bot, !b.blocked)}</span>`)
-        : html`<span class="mut">no bot is granted it</span>`}</td></tr>`)}</tbody></table>`;
+          ${b.blocked ? html`<span class="chip xk blk">${t('bot {bot} blocked', { bot: b.bot })}</span>` : html`<span>${t('bot {bot}', { bot: b.bot })}</span>`} ${btn(c.id, b.bot, !b.blocked)}</span>`)
+        : html`<span class="mut">${t('no bot is granted it')}</span>`}</td></tr>`)}</tbody></table>`;
 }
 
 export function Connectors() {
@@ -44,17 +45,17 @@ export function Connectors() {
       <option value="">${label}</option>${options.map((o) => html`<option key=${o} value=${o}>${o}</option>`)}</select>`;
   const rows = calls || [];
   return html`<section class="pad extsec">
-    <h2>Connectors <span class="mut">${rows.length} ${rows.length === 1 ? 'call' : 'calls'}</span></h2>
+    <h2>${t('Connectors')} <span class="mut">${rows.length === 1 ? t('1 call') : t('{n} calls', { n: rows.length })}</span></h2>
     <${Blocks} blocks=${list} busy=${busy} change=${change} />
     ${error ? html`<p class="ierr">${error}</p>` : null}
-    <div class="netadd">${pick('Every bot', bot, setBot, bots)} ${pick('Every connector', connector, setConnector, list.map((c) => c.id))}</div>
-    ${errC && !calls ? html`<p class="ierr">Could not read the calls: ${errC.message}</p>` : null}
+    <div class="netadd">${pick(t('Every bot'), bot, setBot, bots)} ${pick(t('Every connector'), connector, setConnector, list.map((c) => c.id))}</div>
+    ${errC && !calls ? html`<p class="ierr">${t('Could not read the calls: {message}', { message: errC.message })}</p>` : null}
     ${rows.length ? html`<table class="mtab ext"><tbody>${rows.slice(0, MAX_ROWS).map((r, i) => html`<tr key=${i}>
         <td class="sm num">${clockTime(r.at)}</td>
         <td class="sm">${r.bot}</td>
         <td><b>${r.call}</b></td>
-        <td class="sm tact"><span class=${`chip xk ${tone(r.verdict)}`}>${r.verdict}</span></td></tr>`)}</tbody></table>
-        ${rows.length > MAX_ROWS ? html`<p class="mut sm">Showing the newest ${MAX_ROWS} of ${rows.length}.</p>` : null}`
-      : calls ? html`<p class="mut sm">${bot || connector ? 'No call matches.' : 'No bot called a connector yet.'}</p>` : null}
+        <td class="sm tact"><span class=${`chip xk ${tone(r.verdict)}`}>${t(r.verdict)}</span></td></tr>`)}</tbody></table>
+        ${rows.length > MAX_ROWS ? html`<p class="mut sm">${t('Showing the newest {max} of {n}.', { max: MAX_ROWS, n: rows.length })}</p>` : null}`
+      : calls ? html`<p class="mut sm">${bot || connector ? t('No call matches.') : t('No bot called a connector yet.')}</p>` : null}
   </section>`;
 }
