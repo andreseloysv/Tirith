@@ -70,7 +70,7 @@ pub fn ensure_daemon(port: u16) {
     let _ = std::fs::create_dir_all(&logs);
     let log = std::fs::OpenOptions::new().create(true).append(true).open(logs.join("tirithd.log"));
     let mut cmd = Command::new(tirith_bin());
-    cmd.arg("serve").stdin(Stdio::null());
+    crate::clean_env::clean(&mut cmd).arg("serve").stdin(Stdio::null());
     if let Ok(file) = log {
         if let Ok(copy) = file.try_clone() {
             cmd.stdout(copy).stderr(file);

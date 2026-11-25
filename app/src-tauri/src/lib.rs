@@ -1,6 +1,7 @@
 //! The desktop app is a window on the local `neobot serve` daemon: it starts the daemon when nothing
 //! answers on its port and then shows the page the daemon serves. All state and actions live in the daemon.
 
+mod clean_env;
 #[cfg(unix)]
 mod cli_link;
 #[cfg(windows)]
