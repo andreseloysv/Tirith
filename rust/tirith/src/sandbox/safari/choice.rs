@@ -32,7 +32,7 @@ pub fn how(which: &str) -> String {
         (_, Some(known)) => known.1,
         _ => return "neobot: act in NeoBot's own browser with your browser tools; a sign-in is theirs, in a window you show them with neobot browser login <url>".into(),
     };
-    format!("{which}: act in the owner's {name} with neobot {which} open|read|click|type; a sign-in is theirs, in their {name}: open the page with neobot {which} open <url> and give them its link")
+    format!("{which}: act in the owner's {name} with neobot {which} open|read|find|click|type|wait; a sign-in is theirs, in their {name}: open the page with neobot {which} open <url> and give them its link")
 }
 
 /// `neobot browser` (which one, and how), `use <name>` (the owner's choice) and `login <url>`.

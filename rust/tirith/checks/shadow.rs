@@ -297,6 +297,18 @@ fn a_shadow_runs_tool_must_say_it_reads() {
     );
     assert!(outward("~/.local/bin/tirith say hola"));
     assert!(outward("cd /tmp && neobot lane start x 1 y"));
+    // Looking at a page and waiting for it change nothing: only a click, typing or opening acts.
+    for looks in [
+        "neobot safari find Senden https://mail.example/",
+        "neobot chrome find",
+        "neobot edge wait \"Sent\"",
+        "neobot safari wait Senden && neobot safari read",
+    ] {
+        assert!(!outward(looks), "{looks} only looks");
+    }
+    assert!(outward(
+        "neobot safari wait Senden && neobot safari click Senden"
+    ));
 }
 
 #[test]
