@@ -1258,12 +1258,15 @@ Files:
 - `routes.rs`: The sandbox's HTTP routes: its status, the block list, the destinations seen and Safari.
 - `rules.rs`: The shape of a block rule: a domain, an address or a CIDR range.
 - `safari/act.rs`: `neobot safari click <target> [<url>]` / `type <target> <text> [<url>]`: osascript's arguments for the fixed Accessibility script (`assets/safari-ax.js`), and the AppleScript that brings a tab forward.
-- `safari/choice.rs`: `neobot browser [use neobot|safari | login <url>]`: the browser the owner chose for the agents (kv `browser`).
+- `safari/choice.rs`: `neobot browser [use <name> | login <url>]`: the browser the owner chose for the agents (kv `browser`): NeoBot's own, or their own one (`safari` on a Mac, `chrome` or `edge` on Windows).
 - `safari/login.rs`: `neobot browser login <url>`: NeoBot's own browser shown on the owner's screen at a page, to sign in once.
 - `safari/mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `safari/route.rs`: `POST /api/safari`: the lane and role come from the caller's token.
 - `safari/run.rs`: Running the Safari scripts outside the sandbox, and the browser commands.
 - `safari/script.rs`: The fixed AppleScript of `neobot safari open <url>` / `read [<url>]`.
+- `safari/uia.rs`: `neobot chrome|edge open|read|click|type`, the owner's own Chrome or Edge on Windows as Safari is on a Mac: a command's words checked (an address to open is a web address in one piece) and laid out as the script's environment variables, never as code, and the script's answer read.
+- `safari/uia_run.rs`: Runs the fixed script (`assets/win-browser.ps1`, Windows UI Automation: the tab in front of each window, nothing installed in the browser, no permission) out of sight with Windows PowerShell; `scripts/checks/win-browser.ps1` proves it against a real Chrome and a real Edge in CI (`.github/workflows/win-browser.yml`).
+- `safari/missing.rs`: What `neobot browser` adds when NeoBot's own browser is chosen and cannot run here (a new install has no helper for it): the agent is told so, and which browser of the owner's this system has.
 - `start.rs`: Starting the sandbox's part of the daemon.
 - `tags.rs`: Access-audit tags of one tool call, recorded by the hook handler as `access` events.
 - `hidden.rs`: macOS: the profile's rules that keep the owner's token, the secret and the page's file from everyone confined.

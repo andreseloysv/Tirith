@@ -111,6 +111,9 @@ jobs:
           # Windows: only the NSIS installer, the one handed out. Its hooks (src-tauri/windows/hooks.nsh) end the
           # daemon and take NeoBot's hooks out of the agents; an MSI has none, and refuses a version like 0.2.2-rc.9.
           if [ "$RUNNER_OS" = Windows ]; then args+=(--bundles nsis); fi
+          # Linux: an RPM cannot be named with a pre-release version (no "-" in its version: 0.2.2-rc.9 stopped
+          # the whole bundle), so a test build makes the .deb and the AppImage alone.
+          case "$RUNNER_OS:$NEOBOT_VERSION" in Linux:*-*) args+=(--bundles deb,appimage) ;; esac
           # An absent secret comes as an empty variable, and Tauri signs with any identity it is given, "" too.
           for name in $(compgen -e APPLE_ || true); do
             [ -n "${!name}" ] || unset "$name"

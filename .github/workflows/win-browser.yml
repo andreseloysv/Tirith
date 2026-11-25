@@ -1,0 +1,27 @@
+name: win-browser
+
+# The owner's own Chrome and Edge on Windows, read and driven through UI Automation
+# (rust/tirith/assets/win-browser.ps1): proven here on a real Windows desktop with both browsers, whenever the
+# script or its check changes. Nothing else can prove it: no other machine of this project runs Windows.
+on:
+  push:
+    paths:
+      - rust/tirith/assets/win-browser.ps1
+      - scripts/checks/win-browser.ps1
+      - .github/workflows/win-browser.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browsers:
+    name: Chrome and Edge
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # Windows PowerShell 5.1, the one every Windows has and the daemon runs.
+      - name: Read, click and type in both
+        shell: powershell
+        run: ./scripts/checks/win-browser.ps1

@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 /// A call that looks at something outside.
 static OUTSIDE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)safari|curl|wget|fetch|web_?search|browser|playwright|navigate|mcp__|https?://|\bcodex\b|\bgh |\bssh ").unwrap()
+    Regex::new(r"(?i)safari|neobot (?:chrome|edge)\b|curl|wget|fetch|web_?search|browser|playwright|navigate|mcp__|https?://|\bcodex\b|\bgh |\bssh ").unwrap()
 });
 /// A call that only keeps books: it undoes no failure.
 static BOOKS: LazyLock<Regex> = LazyLock::new(|| {

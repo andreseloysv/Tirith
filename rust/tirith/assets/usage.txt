@@ -45,7 +45,8 @@ neobot safari open <url>                       (the managers and bots) open the 
 neobot safari read [<url>]                     (the managers and bots) URL, title and text of Safari's current tab (or of the tab whose URL starts with <url>)
 neobot safari click <target> [<url>]          (the managers and bots) click in Safari's shown page (or that tab) the element with those words, through Accessibility
 neobot safari type <target> <text> [<url>]    (the managers and bots) type <text> into the field with that label or placeholder (a list: choose the option with those words)
-neobot browser [use neobot|safari]           (the managers and bots) the browser the owner chose for acting on the web, or set their choice
+neobot chrome|edge open|read|click|type …      (the managers and bots, on Windows) the same four in the owner's Chrome or Edge, through UI Automation: the tab in front of each window
+neobot browser [use neobot|safari|chrome|edge] (the managers and bots) the browser the owner chose for acting on the web, or set their choice (safari on a Mac; chrome, edge on Windows)
 neobot browser login <url>                    (the managers and bots) show that page in NeoBot's own browser on the owner's screen, to sign in once
 (modules add: neobot room …, neobot net …, neobot models …, neobot guard …)
 Who calls is known by a token alone: yours is <home>/owner.token (0600, unreadable inside the sandbox), read by
