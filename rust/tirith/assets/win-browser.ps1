@@ -92,8 +92,16 @@ if ($cmd -eq 'click') {
 if ($cmd -eq 'type') {
   $hit = Soon { Pick $doc $target @($C::Edit, $C::ComboBox) }
   if (-not $hit) { Say "not found: $target" }
-  $option = if ($hit.Current.ControlType -eq $C::ComboBox) { Pick $hit $text @($C::ListItem) }
-  if ($option) { if (Press $option) { Say "chose «$($option.Current.Name)» in $(Shown $hit)" } else { Say "could not choose «$text» in $(Shown $hit)" } }
+  $list = if ($hit.Current.ControlType -eq $C::ComboBox) { Pattern $hit ([System.Windows.Automation.ExpandCollapsePattern]) }
+  if ($list) {
+    # a list shows its options only while it is open: opened, the option pressed, and closed again if there is none
+    $list.Expand()
+    $option = Soon { Pick $hit $text @($C::ListItem) }
+    if (-not $option) { $list.Collapse(); Say "no option «$text» in $(Shown $hit)" }
+    if (-not (Press $option)) { $list.Collapse(); Say "could not choose «$text» in $(Shown $hit)" }
+    Start-Sleep -Milliseconds 300
+    Say "chose «$($option.Current.Name)» in $(Shown $hit); it now says «$(Value $hit)»"
+  }
   $field = Pattern $hit ([System.Windows.Automation.ValuePattern])
   if (-not $field -or $field.Current.IsReadOnly) { Say "could not type into $(Shown $hit)" }
   try { $hit.SetFocus() } catch { }
