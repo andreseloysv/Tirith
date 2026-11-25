@@ -1,4 +1,6 @@
 //! Running the fixed script of `uia.rs` (assets/win-browser.ps1) for one command, out of sight, on Windows.
+#[cfg(windows)]
+use super::uia::answer;
 use super::uia::{browser, vars};
 use serde_json::Value;
 use std::path::Path;
