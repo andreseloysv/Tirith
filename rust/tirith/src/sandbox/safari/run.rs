@@ -3,8 +3,8 @@ use super::act::{act_args, show_script};
 use super::script::{chat_role, safari_script};
 use crate::app::Shared;
 
-/// Runs `safari_script` (open, read), the fixed Accessibility script (click, type) or a browser command (browser,
-/// use, login); a read's page text is cut at 20,000 characters.
+/// Runs `safari_script` (open, read), the fixed Accessibility script (click, type, find, wait) or a browser command
+/// (browser, use, login); a read's page text is cut at 20,000 characters.
 pub async fn safari(
     app: &Shared,
     lane: &str,
@@ -15,20 +15,20 @@ pub async fn safari(
     text: &str,
 ) -> Result<String, String> {
     match cmd {
-        "click" | "type" => act(app, lane, role, cmd, url, target, text).await,
+        "click" | "type" | "find" | "wait" => act(app, lane, role, cmd, url, target, text).await,
         "browser" | "use" | "login" => super::choice::browser(app, lane, role, cmd, target, url),
         _ => {
             let script = safari_script(app, lane, role, cmd, url)?;
             let out = osascript(&["-e".into(), script]).await?;
             Ok(match cmd {
                 "open" => format!("opened {url}"),
-                _ => cut_page(&out),
+                _ => super::thin::hinted(cut_page(&out)),
             })
         }
     }
 }
 
-/// A click or typing: the tab brought forward when a URL names it, then the fixed script; its `ERROR …` is an error.
+/// A click, typing, `find` or `wait`: the tab brought forward when a URL names it, then the fixed script; its `ERROR …` is an error.
 async fn act(
     app: &Shared,
     lane: &str,
@@ -39,9 +39,14 @@ async fn act(
     text: &str,
 ) -> Result<String, String> {
     chat_role(app, lane, role)?;
+    let (target, url) = super::thin::asked(cmd, target, url);
     let args = act_args(cmd, target, text, url)?;
     if !url.is_empty() {
-        osascript(&["-e".into(), show_script(url)]).await?;
+        let shown = osascript(&["-e".into(), show_script(url)]).await;
+        // a page still on its way has no tab at that address yet: `wait` is what looks again
+        shown
+            .map(drop)
+            .or_else(|e| (cmd == "wait").then_some(()).ok_or(e))?;
     }
     let out = osascript(&args).await?;
     match out.strip_prefix("ERROR ") {

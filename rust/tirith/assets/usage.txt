@@ -45,7 +45,9 @@ neobot safari open <url>                       (the managers and bots) open the 
 neobot safari read [<url>]                     (the managers and bots) URL, title and text of Safari's current tab (or of the tab whose URL starts with <url>)
 neobot safari click <target> [<url>]          (the managers and bots) click in Safari's shown page (or that tab) the element with those words, through Accessibility
 neobot safari type <target> <text> [<url>]    (the managers and bots) type <text> into the field with that label or placeholder (a list: choose the option with those words)
-neobot chrome|edge open|read|click|type …      (the managers and bots, on Windows) the same four in the owner's Chrome or Edge, through UI Automation: the tab in front of each window
+neobot safari find [<words>] [<url>]           (the managers and bots) what can be pressed and typed into on the page, each with the words click and type take and its state; with words, whatever holds them (also inside frames, where read sees nothing)
+neobot safari wait <words> [<url>]             (the managers and bots) answer once something with those words is on the page, 15 seconds at most: how commands chained in one call wait for a page
+neobot chrome|edge open|read|find|click|type|wait …   (the managers and bots, on Windows) the same six in the owner's Chrome or Edge, through UI Automation: the tab in front of each window
 neobot browser [use neobot|safari|chrome|edge] (the managers and bots) the browser the owner chose for acting on the web, or set their choice (safari on a Mac; chrome, edge on Windows)
 neobot browser login <url>                    (the managers and bots) show that page in NeoBot's own browser on the owner's screen, to sign in once
 (modules add: neobot room …, neobot net …, neobot models …, neobot guard …)

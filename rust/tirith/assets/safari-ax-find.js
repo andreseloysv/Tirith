@@ -30,9 +30,10 @@ function list(v) {
   return out;
 }
 const kids = (el) => list(get(el, 'AXChildren'));
-/* what a person reads on an element: its title, description, value or placeholder, else the text inside it */
+/* what a person reads on an element: its title, description, value or placeholder (each once: a page often gives
+   the same words as two of them), else the text inside it */
 function said(el, depth = 0) {
-  const own = ['AXTitle', 'AXDescription', 'AXValue', 'AXPlaceholderValue'].map((a) => str(el, a)).filter(Boolean).join(' ');
+  const own = [...new Set(['AXTitle', 'AXDescription', 'AXValue', 'AXPlaceholderValue'].map((a) => str(el, a)).filter(Boolean))].join(' ');
   return own || depth > 2 ? own : kids(el).map((k) => said(k, depth + 1)).filter(Boolean).join(' ');
 }
 const role = (el) => ({ el, role: str(el, 'AXRole') });

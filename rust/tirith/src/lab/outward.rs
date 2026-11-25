@@ -9,11 +9,17 @@ static TIRITH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?:(?:^|[;&|(`\n])\s*["']?(?:[^\s"']*/)?|[^\w./-]|bin/)(?:tirith|neobot)["']?\s+([a-z][a-z-]*)(?:\s+([a-z-]+))?"#).unwrap()
 });
 /// The `tirith` commands that only read or report on their own run: (command, its word, or any when empty).
-const READS: [(&str, &str); 13] = [
+const READS: [(&str, &str); 19] = [
     ("turn", "checks"),
     ("safari", "read"),
     ("chrome", "read"),
     ("edge", "read"),
+    ("safari", "find"),
+    ("chrome", "find"),
+    ("edge", "find"),
+    ("safari", "wait"),
+    ("chrome", "wait"),
+    ("edge", "wait"),
     ("status", ""),
     ("plan", "show"),
     ("lab", "list"),

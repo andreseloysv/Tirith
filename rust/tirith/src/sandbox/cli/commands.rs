@@ -26,16 +26,17 @@ pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
         [app @ OWN!(), cmd @ ("open" | "read"), rest @ ..] => {
             own(app, json!({"cmd": cmd, "url": rest.join(" ")}))
         }
-        [app @ OWN!(), "click", target, rest @ ..] => own(
+        [app @ OWN!(), "find"] => own(app, json!({"cmd": "find"})),
+        [app @ OWN!(), cmd @ ("click" | "find" | "wait"), target, rest @ ..] => own(
             app,
-            json!({"cmd": "click", "target": target, "url": rest.join(" ")}),
+            json!({"cmd": cmd, "target": target, "url": rest.join(" ")}),
         ),
         [app @ OWN!(), "type", target, text, rest @ ..] => own(
             app,
             json!({"cmd": "type", "target": target, "text": text, "url": rest.join(" ")}),
         ),
         [app @ OWN!(), ..] => Err(format!(
-            "neobot {app} open <url> | read [<url>] | click <target> [<url>] | type <target> <text> [<url>]"
+            "neobot {app} open <url> | read [<url>] | find [<words>] [<url>] | click <target> [<url>] | type <target> <text> [<url>] | wait <words> [<url>]"
         )),
         ["browser"] => own("", json!({"cmd": "browser"})),
         ["browser", "use", which] => own("", json!({"cmd": "use", "target": which})),

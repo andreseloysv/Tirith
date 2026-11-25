@@ -1,4 +1,4 @@
-﻿# Proves rust/tirith/assets/win-browser.ps1 (`neobot chrome|edge open|read|click|type`) against a real Chrome and a
+﻿# Proves rust/tirith/assets/win-browser.ps1 (`neobot chrome|edge open|read|find|click|type|wait`) against a real Chrome and a
 # real Edge on a Windows desktop: each shows a page of ours from a throwaway profile, and the script is run the
 # way the daemon runs it (its text read from a file, the words in environment variables). CI's win-browser job
 # runs it; nothing here runs on the owner's own machines. This file starts with a byte order mark: Windows
@@ -22,6 +22,8 @@ Set-Content -Path $page -Encoding UTF8 -Value @'
 <p id="picked"></p>
 <a href="#second" onclick="document.title='Second title'">Go to the second part</a>
 <button disabled>Never</button>
+<label><input type="checkbox" checked> Teams meeting</label>
+<button onclick="setTimeout(function(){var b=document.createElement('button');b.textContent='Late thing';document.body.appendChild(b)},3000)">Start late</button>
 <p>Ünïcödé: «¿qué tal?» 你好</p>
 </body></html>
 '@
@@ -92,13 +94,34 @@ function Prove($app) {
     Must 'a link' (Run $app 'click' 'Go to the second part' '' '') 'clicked'
     Must 'after the link' (Run $app 'read' '' '' '') 'Second title'
     Must 'a disabled button' (Run $app 'click' 'Never' '' '') 'ERROR not clicked, it is disabled'
-    Must 'no such thing' (Run $app 'click' 'A button that is not there' '' '') 'ERROR not found'
+    # A command that finds nothing names what is close to its words, else what the page has.
+    $none = Run $app 'click' 'A button that is not there' '' ''
+    Must 'no such thing' $none 'ERROR not found: A button that is not there. The page has: '
+    Must 'what the page has' $none 'button «Press me»'
+    Must 'nearly its words' (Run $app 'click' 'Press the thing' '' '') 'ERROR not found: Press the thing. Close to it: button «Press me»'
+    Must 'no such field' (Run $app 'type' 'zzqx' 'x' '') 'ERROR not found: zzqx. The page has: field «'
+    # What can be pressed and typed into, with the words a click and typing take, and what holds some words.
+    $all = Run $app 'find' '' '' ''
+    Must 'find' $all 'button «Press me»'
+    Must 'find' $all 'link «Go to the second part»'
+    Must 'find' $all 'button «Never» (disabled)'
+    Must 'find' $all 'checkbox «Teams meeting» on'
+    Must 'find' $all 'field «Search here» holds «ñandú»'
+    Must 'find' $all 'list «Colour»'
+    Must 'find with words' (Run $app 'find' 'your NAME' '' $address) 'field «Your name» holds «Ada Lovelace»'
+    Must 'find some text' (Run $app 'find' 'hello from' '' '') '«Hello from the page»'
+    Must 'find nothing' (Run $app 'find' 'zzqx' '' '') 'ERROR nothing with «zzqx» on this page. The page has: '
+    # Waiting for what a page shows a moment later, and for what never comes.
+    Must 'wait for what is there' (Run $app 'wait' 'press me' '' '') 'there: button «Press me»'
+    Must 'start' (Run $app 'click' 'Start late' '' '') 'clicked'
+    Must 'wait for what comes' (Run $app 'wait' 'Late thing' '' '') 'there: button «Late thing»'
+    Must 'wait for nothing' (Run $app 'wait' 'zzqx never' '' '') 'ERROR not there after 15 s: zzqx never'
     Must 'another address' (Run $app 'read' '' '' 'https://nowhere.example/') 'ERROR no page'
     # A page opened by its address goes to the person's usual profile, in front: it is read by that address.
     Must 'open' (Run $app 'open' '' '' 'https://example.com/') 'opened https://example.com/'
     Start-Sleep -Seconds 6
     Must 'the opened page' (Run $app 'read' '' '' 'https://example.com') 'Example Domain'
-    Write-Host "${app}: read, click, type, a list, a link, a disabled button and a missing page all behave"
+    Write-Host "${app}: read, find, click, type, wait, a list, a link, a disabled button and a missing page all behave"
   } catch {
     Tree $app
     throw

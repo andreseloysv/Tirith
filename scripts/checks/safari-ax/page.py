@@ -26,6 +26,11 @@ html = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Hea
 <p id="draft"></p>
 <button type="button" onclick="say('sent '+document.getElementById('draft').textContent)">Send</button>
 <button type="button" disabled>Never</button>
+<label><input type="checkbox" checked onchange="say('teams '+this.checked)"> Teams meeting</label>
+<button type="button" onclick="later('Late thing', 900)">Start soon</button>
+<button type="button" onclick="later('Much later thing', 4000)">Start late</button>
+<script>function later(words, ms){{setTimeout(function(){{var b=document.createElement('button');b.textContent=words;b.onclick=function(){{say('pressed '+words)}};document.body.appendChild(b)}}, ms)}}</script>
+<iframe title="A frame" src="data:text/html,<button onclick=&quot;this.textContent='Framed done'&quot;>Inside frame</button><p>Words in a frame</p>"></iframe>
 </body></html>"""
 open(sys.argv[1], 'w').write(html)
 print(len(html), 'bytes')
