@@ -24,6 +24,7 @@ pub(super) fn serve() -> Result<(), String> {
         super::hooks_token::at_start(&app);
         metrics::born(&app);
         crate::setup::rehook::at_start(&app.home); // an update is an uninstall and an install
+        manager::prepare_shell(&app.home); // the owner's shell profile is read once, not by every bot's session
         start_workers(&app);
         println!(
             "neobot: http://127.0.0.1:{port}/ (home {})",
