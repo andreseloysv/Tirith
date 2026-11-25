@@ -661,3 +661,38 @@ fn a_fresh_slot_starts_with_no_old_temp() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[tokio::test]
+async fn a_lane_writes_in_its_own_temp_folder_and_in_no_other() {
+    let (app, _repo, _base) = cleanup_fixture("temprule").await;
+    let project = app.cfg().project("clnp").cloned().unwrap();
+    // Only compared, never written: a project's lanes folder is under the home every test shares.
+    let dir = project.lanes_dir();
+    let lane = crate::app::Lane {
+        id: "t-1".into(),
+        project: "clnp".into(),
+        workspace: dir.join("slot-1").display().to_string(),
+        status: "running".into(),
+        ..Default::default()
+    };
+    let write = |path: &str| {
+        let file = dir.join(path).display().to_string();
+        let asked = serde_json::json!({"file_path": file, "content": "x"});
+        let (tool, input) = crate::rules::normalize("Write", &asked, "");
+        crate::rules::check(&app, &tool, &input, Some(&lane), Some(&project), None)
+    };
+    assert_eq!(write("slot-1/src/a.rs"), None, "its worktree");
+    assert_eq!(
+        write("slot-1.tmp/agent-501/session/scratchpad/notes.md"),
+        None,
+        "its agent's scratch files, beside the worktree"
+    );
+    for other in [
+        "slot-2/src/a.rs",
+        "slot-2.tmp/agent-501/session/x",
+        "slot-10.tmp/x",
+    ] {
+        let why = write(other).unwrap_or_default();
+        assert!(why.contains("only inside its own copy"), "{other}: {why}");
+    }
+}
