@@ -261,6 +261,7 @@
  "off": "desactivada",
  "ok": "bien",
  "on": "activada",
+ "per 10 runs · 👎 {down}": "por cada 10 ejecuciones · 👎 {down}",
  "per 10 runs · 👎 {down} · corrected {fixed}": "por cada 10 ejecuciones · 👎 {down} · corregidas {fixed}",
  "phone": "móvil",
  "pts": "pts",

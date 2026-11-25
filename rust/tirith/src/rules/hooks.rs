@@ -1,6 +1,6 @@
-//! The rules about the turn itself: commit checks are never skipped, and a chat's turn never waits.
+//! The rules about the turn itself: commit checks are never skipped, NeoBot's hooks stay, and a chat's turn never waits.
 use super::call::Call;
-use super::patterns::{FOLLOW, GUARD, QUOTED, WAIT, WRITES};
+use super::patterns::{FOLLOW, GUARD, QUOTED, UNHOOK, WAIT, WRITES};
 
 /// Skipping the commit checks: `--no-verify`, `commit -n`, `core.hooksPath`, or writing `.git/hooks`.
 pub(super) fn skipped(call: &Call) -> Option<String> {
@@ -22,4 +22,10 @@ pub(super) fn waiting(call: &Call, in_lane: bool, role: Option<&str>) -> Option<
             && (WAIT.is_match(call.cmd) || FOLLOW.is_match(&QUOTED.replace_all(call.cmd, " "))))
             || call.tool == "clocksleep");
     waits.then(|| "do not wait inside the turn: answer and finish; NeoBot tells you when a lane lands, fails or asks".into())
+}
+
+/// `neobot hooks remove` (quoted text taken out first, so a message may name it): the hooks are how these rules hear a call, so only the owner takes them out.
+pub(super) fn unhooked(call: &Call) -> Option<String> {
+    let removes = call.bash && UNHOOK.is_match(&QUOTED.replace_all(call.cmd, " "));
+    removes.then(|| "NeoBot's hooks are how its rules hear you: only the owner removes them, never an agent.".into())
 }

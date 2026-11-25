@@ -261,6 +261,7 @@
  "off": "aus",
  "ok": "ok",
  "on": "an",
+ "per 10 runs · 👎 {down}": "pro 10 Läufe · 👎 {down}",
  "per 10 runs · 👎 {down} · corrected {fixed}": "pro 10 Läufe · 👎 {down} · korrigiert {fixed}",
  "phone": "Handy",
  "pts": "Pkt.",

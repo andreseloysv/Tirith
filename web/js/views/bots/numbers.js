@@ -2,8 +2,11 @@
 // By routine: runs, success, time, cost per good run, 👎 and corrections per 10, the judge's mean score and the trend
 // (the last 10 runs against the 10 before). By skill: uses, validated uses and its routine's tokens before against
 // after. Its memory: what loading it costs, the notes its last runs cited, the ones none cited and the misses.
+// Corrections and memory misses come from the judge that reads the owner's messages: with no project it sleeps
+// (app/solo.js), so neither is shown, never a zero nobody counted.
 import { html } from '../../../vendor/preact-htm.js';
-import { useFetch } from '../../store.js';
+import { useFetch, useStore } from '../../store.js';
+import { solo } from '../../app/solo.js';
 import { t } from '../../i18n.js';
 
 const n = (v) => typeof v === 'number' && isFinite(v);
@@ -27,11 +30,11 @@ function trendLine(tr) {
   return parts.length ? html`<span class="bcap">${t('last 10 vs the 10 before')} · ${parts.join(' · ')}</span>` : null;
 }
 
-function routine(r) {
+function routine(r, alone) {
   return html`<li key=${r.id || 'chat'} class="bnr"><b>${r.title}</b>
     ${r.runs ? html`<span class="bmut">${t('{runs} · {ok} ok · {time} each', { runs: r.runs === 1 ? t('1 run') : t('{n} runs', { n: r.runs }), ok: pct(r.success), time: secs(r.ms) })}</span>
       <span class="bmut">${t('{cost} per good run', { cost: money(r.cost_per_good) })}${n(r.score) ? ` · ${t('score {score}', { score: r.score.toFixed(2) })}` : ''}</span>
-      <span class="bmut">${t('per 10 runs · 👎 {down} · corrected {fixed}', { down: r.down_per_10, fixed: r.corrections_per_10 })}</span>
+      <span class="bmut">${alone ? t('per 10 runs · 👎 {down}', { down: r.down_per_10 }) : t('per 10 runs · 👎 {down} · corrected {fixed}', { down: r.down_per_10, fixed: r.corrections_per_10 })}</span>
       ${trendLine(r.trend)}` : html`<span class="bmut">${t('No run yet')}</span>`}</li>`;
 }
 
@@ -42,7 +45,7 @@ function skill(s) {
     ${n(s.tokens_before) ? html`<span class="bmut">${t('tokens per run {before} → {after}', { before: int(s.tokens_before), after: int(s.tokens_after) })}${saved}</span>` : html`<span class="bcap">${t("used from its routine's first run")}</span>`}</li>`;
 }
 
-function memory(m) {
+function memory(m, alone) {
   const cited = m.notes.filter((x) => x.cited).sort((a, b) => b.cited - a.cited);
   const unc = m.notes.filter((x) => !x.cited);
   return html`<ul class="bnm">
@@ -50,21 +53,22 @@ function memory(m) {
     <li><span class="bmut">${cited.length ? t('Cited in its last {runs} runs: {notes}', { runs: m.runs, notes: cited.map((x) => `[${x.id}] ×${x.cited}`).join(' · ') }) : t('No note cited in its last {runs} runs', { runs: m.runs })}</span></li>
     ${unc.length ? html`<li><span class="bmut">${t('Never cited, candidates to delete (NeoBot never deletes them):')}</span>
       ${unc.map((x) => html`<span key=${x.id} class="bnn"><b class="bmono">[${x.id}]</b> ${x.text}</span>`)}</li>` : null}
-    <li><span class="bmut">${m.misses ? t('Memory misses: {n} (you had to repeat yourself)', { n: m.misses }) : t('No memory miss: you never had to repeat yourself')}</span>
-      ${(m.missed || []).map((x, i) => html`<span key=${i} class="bnn">“${x}”</span>`)}</li>
+    ${alone ? null : html`<li><span class="bmut">${m.misses ? t('Memory misses: {n} (you had to repeat yourself)', { n: m.misses }) : t('No memory miss: you never had to repeat yourself')}</span>
+      ${(m.missed || []).map((x, i) => html`<span key=${i} class="bnn">“${x}”</span>`)}</li>`}
   </ul>`;
 }
 
 export function Numbers({ bot }) {
+  const alone = solo(useStore());
   const [num, , err] = useFetch(`/api/bots/${encodeURIComponent(bot.id)}/numbers`, ['turn', 'bots', 'library'], [bot.id]);
   if (!num) return html`<p class="bnote">${err ? t("Could not read {name}'s numbers: {error}", { name: bot.name, error: err.message }) : t('Loading…')}</p>`;
   return html`<div class="blib bnum">
     ${num.runs ? null : html`<p class="bnote">${t('No run yet. Each run of {name} (a routine or a chat turn) adds to these numbers.', { name: bot.name })}</p>`}
     <h4><span>${t('Routines')}</span></h4>
-    ${num.routines.length ? html`<ul class="brout">${num.routines.map(routine)}</ul>` : html`<p class="bnote">${t('No routine yet.')}</p>`}
+    ${num.routines.length ? html`<ul class="brout">${num.routines.map((r) => routine(r, alone))}</ul>` : html`<p class="bnote">${t('No routine yet.')}</p>`}
     <h4><span>${t('Skills')}</span></h4>
     ${num.skills.length ? html`<ul class="brout">${num.skills.map(skill)}</ul>` : html`<p class="bnote">${t('No skill used yet.')}</p>`}
     <h4><span>${t('Memory')}</span></h4>
-    ${memory(num.memory)}
+    ${memory(num.memory, alone)}
   </div>`;
 }

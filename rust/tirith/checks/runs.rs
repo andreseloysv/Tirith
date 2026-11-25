@@ -19,7 +19,7 @@ while read -r line; do
 done
 "#;
 
-/// A home whose bot «Corre» has the routines `uno` and `dos`, both due every day from midnight, and a fake agent for it and for the judge.
+/// A home whose bot «Corre» has the routines `uno` and `dos`, both due every day from midnight, a fake agent for it and for the judge, and a project (so the factory is awake and the judge reads the owner).
 fn app_with_two_routines(name: &str) -> (crate::app::Shared, std::path::PathBuf, String) {
     let key = format!("bot-{name}");
     let key = key.as_str();
@@ -32,7 +32,7 @@ fn app_with_two_routines(name: &str) -> (crate::app::Shared, std::path::PathBuf,
     let routine = |id: &str, title: &str| {
         format!("[[routes]]\non = \"schedule\"\nto = \"{key}\"\nmode = \"turn\"\nid = \"{id}\"\ntitle = \"{title}\"\ntask = \"look at {title}\"\ndays = [1, 2, 3, 4, 5, 6, 7]\nat = \"00:00\"\n\n")
     };
-    let config = format!("[agents.fake]\ncommand = \"{}\"\nchat_args = []\neffort_flag = \"--effort\"\n[network]\nsandbox = false\n\n[roles.{key}]\nextends = \"manager\"\nscope = \"own\"\nsession = \"chat\"\nname = \"Corre\"\n\n{}{}", agent.display(), routine("r1", "uno"), routine("r2", "dos"));
+    let config = format!("[agents.fake]\ncommand = \"{}\"\nchat_args = []\neffort_flag = \"--effort\"\n[network]\nsandbox = false\n\n[[projects]]\nid = \"p1\"\nrepo = \"/tmp\"\n\n[roles.{key}]\nextends = \"manager\"\nscope = \"own\"\nsession = \"chat\"\nname = \"Corre\"\n\n{}{}", agent.display(), routine("r1", "uno"), routine("r2", "dos"));
     std::fs::write(home.join("config.toml"), config).unwrap();
     let app = crate::app::App::open_at(home.clone());
     for role in [key, "judge"] {

@@ -48,9 +48,14 @@ impl Context {
 
     /// An agent's hooks file: config.toml's, else the catalog's.
     pub fn settings(&self, known: &Known) -> Option<PathBuf> {
-        let set = self.cfg().factory.agent::<String>(&known.alias, "settings");
-        set.or_else(|| Some(known.settings.clone()))
-            .filter(|s| !s.is_empty())
-            .map(|s| expand(&s))
+        settings_of(&self.cfg(), known)
     }
+}
+
+/// An agent's hooks file as `cfg` or the catalog names it.
+pub fn settings_of(cfg: &Config, known: &Known) -> Option<PathBuf> {
+    let set = cfg.factory.agent::<String>(&known.alias, "settings");
+    set.or_else(|| Some(known.settings.clone()))
+        .filter(|s| !s.is_empty())
+        .map(|s| expand(&s))
 }

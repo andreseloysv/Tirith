@@ -16,6 +16,7 @@ pub fn check(
     let call = Call::new(tool, input);
     let first = judge::refused(app, tool, role)
         .or_else(|| hooks::skipped(&call))
+        .or_else(|| hooks::unhooked(&call))
         .or_else(|| hooks::waiting(&call, lane.is_some(), role))
         .or_else(|| confined::refused(app, &call, role))
         .or_else(|| owned::guarded(app, &cfg, &call, role));

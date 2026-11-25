@@ -22,3 +22,6 @@ pub(super) static QUOTED: LazyLock<Regex> =
 pub(super) static FOLLOW: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?:^|[;&|(\n]|\b(?:do|then)\b)\s*(?:\S*/)?(?:(?:watch|fswatch|inotifywait|wait)(?:$|[\s;&|()])|tail\b[^;&|()\n]*?(?:\s--follow(?:[=\s]|$)|\s-[A-Za-z0-9]*[fF][A-Za-z0-9]*)|gh\s+run\s+watch(?:$|[\s;&|()]))|(?:^|\s)--watch(?:[=\s]|$)").unwrap()
 });
+/// `neobot hooks remove` in command position or after a path: taking NeoBot's hooks out of the agents.
+pub(super) static UNHOOK: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b(?:neobot|tirith)(?:\.exe)?\s+hooks\s+remove\b").unwrap());

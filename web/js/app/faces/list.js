@@ -1,4 +1,4 @@
-// The faces of the sidebar: every bot that shows, and the Project Manager — the agent of every project, one face
+// The faces of the sidebar: every bot that shows (solo.js: only the owner's while there is no project), and the Project Manager — the agent of every project, one face
 // for all of them (the boss of the helpers the Home lists). Each with its state, its unread answers and where it
 // opens; in the order the owner dragged them.
 import { useStore, useFetch } from '../../store.js';
@@ -8,6 +8,7 @@ import { lookOf } from '../../views/bots/face/face-map.js';
 import { go } from '../../common.js';
 import { pmProjects, lastProject } from './where.js';
 import { sorted } from './order.js';
+import { shownBots } from '../solo.js';
 import { t } from '../../i18n.js';
 
 export const PM = 'manager';
@@ -34,7 +35,7 @@ export function useFaces(r, order) {
   const s = useStore();
   const unread = useUnread();
   const [M] = useFetch('/api/models', ['models', 'bots']);
-  const bots = unread.bots.filter((b) => b.show !== false).map((b) => botFace(b, s, unread));
+  const bots = shownBots(unread.bots, s).map((b) => botFace(b, s, unread));
   const role = M && M.roles && M.roles[PM];
   const all = role && s.projects.length ? bots.concat(pmFace(role, s)) : bots;
   const inProject = r.view === 'overview' && s.projects.some((p) => p.id === r.project);

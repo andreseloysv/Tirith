@@ -5,7 +5,10 @@ use super::turn::run_turn;
 use crate::app::{now_iso, Shared};
 /// Every `[[evals]]` on this event, judged in the background by its judge role (a cheap turn role whose instructions are the rubric): the event with the conversation before it (and, for a card, the card itself) goes in, and a `scores` row — the label or score, one line why, the event, the eval and the judge's factory stamp — is kept. Nothing reaches the owner: the scores only feed the measures. A share of the events is judged (`sample`, by event id, so a restart judges no event twice for that share).
 pub(super) fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, event: i64) {
-    let evals = app.cfg().factory.evals_for(on, event);
+    let mut evals = app.cfg().factory.evals_for(on, event);
+    // While the factory sleeps only a routine's run is graded (the owner reads that); what feeds the measures waits.
+    let asleep = crate::metrics::asleep(app);
+    evals.retain(|eval| !asleep || eval.0 == crate::turns::GRADE);
     let Some(()) =
         (!evals.is_empty() && tokio::runtime::Handle::try_current().is_ok()).then_some(())
     else {

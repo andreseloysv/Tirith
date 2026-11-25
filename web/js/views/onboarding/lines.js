@@ -1,13 +1,14 @@
-// What the new assistant says in the welcome (view.js), in the owner's language: its structure is the owner's
+// What the first bot says in the welcome (view.js), in the owner's language: its structure is the owner's
 // example of 2026-11-24 (a greeting by name, "what would you like to call me?", a little about me, what I can do,
-// and an offer with its choices).
+// and an offer with its choices). It is NeoBot until the owner calls it something else.
 import { t } from '../../i18n.js';
 
 const list = (head, items) => [head, '', ...items.map((i) => `- ${i}`)].join('\n');
 
-export const hello = (name) => (name
-  ? t("Hi {name}! I'm your new personal assistant. I can help with your work and everyday life, and take things off your plate.", { name })
-  : t("Hi! I'm your new personal assistant. I can help with your work and everyday life, and take things off your plate."));
+/** `bot`: the name the first bot has (NeoBot, until the owner says another). */
+export const hello = (name, bot) => (name
+  ? t("Hi {name}! I'm {bot}, your new personal assistant. I can help with your work and everyday life, and take things off your plate.", { name, bot })
+  : t("Hi! I'm {bot}, your new personal assistant. I can help with your work and everyday life, and take things off your plate.", { bot }));
 
 export const askName = () => t('What would you like to call me? You can always change this later.');
 
@@ -34,5 +35,5 @@ export const choices = () => [['suggest', t('Suggest a task')], ['email', t('Che
 /** What the owner asks the assistant when they choose a suggestion. */
 export const suggestAsk = () => t('Suggest a few tasks you could take off my plate. Only look: send, delete or change nothing.');
 
-/** Every line the assistant said, in order, as its chat keeps them. */
-export const said = (owner, bot) => [hello(owner), askName(), met(bot, owner), about(), can(), offer()];
+/** Every line the assistant said, in order, as its chat keeps them: `was` its name when it greeted, `bot` its name now. */
+export const said = (owner, was, bot) => [hello(owner, was), askName(), met(bot, owner), about(), can(), offer()];

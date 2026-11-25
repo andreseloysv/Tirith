@@ -23,6 +23,7 @@ pub(super) fn serve() -> Result<(), String> {
         sandbox::prepare(&app);
         super::hooks_token::at_start(&app);
         metrics::born(&app);
+        crate::setup::rehook::at_start(&app.home); // an update is an uninstall and an install
         start_workers(&app);
         println!(
             "neobot: http://127.0.0.1:{port}/ (home {})",

@@ -435,6 +435,21 @@ async fn every_agent_obeys_the_rules() {
         deny(&windows),
         "Muse's powershell tool on Windows is a shell to the rules: {windows}"
     );
+    // Taking NeoBot's hooks out of the agents is the owner's: no agent runs it, though a message may name it.
+    for line in [
+        "neobot hooks remove",
+        "C:/Users/me/AppData/Local/NeoBot/neobot.exe hooks remove",
+        "cd /tmp && tirith  hooks remove",
+    ] {
+        let out = pre(&app, "", "lane-agents", ws, "bash", cmd(line)).await;
+        assert!(
+            deny(&out) && reason(&out).contains("only the owner removes them"),
+            "{line}: {out}"
+        );
+    }
+    let named = "echo 'run neobot hooks remove before deleting the app'";
+    let named = pre(&app, "", "lane-agents", ws, "bash", cmd(named)).await;
+    assert!(!deny(&named), "naming it in a message passes: {named}");
     let config = app.home.join("config.toml").display().to_string();
     for (what, tool, input) in [
         (

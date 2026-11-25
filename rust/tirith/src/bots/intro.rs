@@ -1,6 +1,6 @@
 //! The welcome a new owner gets once the first agent connects (web/js/views/onboarding/): the first bot's opening
 //! words written into its chat as its own, so the conversation goes on there with them as its context, and the
-//! owner's first name as the computer knows it, for the greeting.
+//! owner's first name as the computer knows it, for the greeting. `first.rs` says which bot owes it.
 use crate::app::{bad, Shared, R};
 use crate::server::Who;
 use axum::extract::{Path, State};
@@ -36,17 +36,20 @@ async fn intro(
     lines
         .iter()
         .for_each(|text| app.chat("manager", text, &project));
+    super::first::welcomed(&app, &id); // said, or skipped (no lines): it is not owed any more
     Ok(Json(json!({ "written": lines.len() })))
 }
 
-/// `{name}`: the owner's first name, or null.
-async fn me() -> R {
+/// `{name, welcome}`: the owner's first name, or null, and the id of the bot that still owes its welcome, or null.
+async fn me(State(app): State<Shared>) -> R {
     let name = tokio::task::spawn_blocking(crate::os::full_name)
         .await
         .ok()
         .flatten();
     let first = name.and_then(|n| n.split_whitespace().next().map(String::from));
-    Ok(Json(json!({ "name": first })))
+    Ok(Json(
+        json!({ "name": first, "welcome": super::first::welcome(&app) }),
+    ))
 }
 
 pub fn routes() -> Router<Shared> {

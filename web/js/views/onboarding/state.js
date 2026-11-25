@@ -1,17 +1,15 @@
-// How far the welcome got, kept in this browser: it shows while under way, or while the owner has no bot of their
-// own and never finished it (a system bot does not count). Done once a choice is made or it is skipped.
+// How far the welcome got, kept in this browser for the bot that owes it (the daemon says which, GET /api/me, and
+// forgets it once the welcome is said or skipped): whether the owner already said what to call it.
 const KEY = 'neobot.welcome';
 
-export function loadWelcome() {
-  try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; }
+/** The progress kept for bot `id`: `{bot, was, named}`. Another bot's progress is nobody's. */
+export function loadWelcome(id) {
+  try {
+    const v = JSON.parse(localStorage.getItem(KEY) || 'null');
+    return v && v.bot === id ? v : { bot: id };
+  } catch { return { bot: id }; }
 }
 
 export function saveWelcome(v) {
-  try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* private window: it shows again next time */ }
+  try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* private window: it asks the name again next time */ }
 }
-
-/** `bots` as GET /api/bots gives them; empty until it answered (a loaded list always has the system bots). */
-export const welcoming = (bots) => {
-  const st = loadWelcome();
-  return st ? st.step !== 'done' : Array.isArray(bots) && bots.length > 0 && !bots.some((b) => !b.system);
-};

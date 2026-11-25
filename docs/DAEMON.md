@@ -151,11 +151,13 @@ Files:
 - `cli.rs`: A bot's own commands, in its conversation.
 - `context.rs`: What a bot is handed at the start of every turn and routine, and the skill links laid before it.
 - `drafts.rs`: Draft skills (a taught task not yet approved): kept in the bot's `drafts/` folder (shared ones in `<home>/bots/drafts`), outside every folder an agent loads by itself; one found among the skills is moved there (by `context`, `versioned` and the Library's read). One activated in the Library is told to its bot with its next message.
+- `first.rs`: A new home starts with one bot, NeoBot (the app icon's look), made once when the home has no project and no bot of the owner's; an older home keeps what it has, and a first bot the owner deleted does not come back. It owes its welcome (kv `welcome`) until `intro.rs` writes it down or the owner skips it.
 - `folder.rs`: A bot's folder and skills: where its sessions run (the lab's worktree during a B run), where agents may write, and the skills a folder holds.
 - `grants.rs`: A bot's connector grants through a rewrite of config.toml: kept under each bot still there on a card save, gone with a deleted bot's role (`connectors/`); the one a card's Connectors changed (`connect.rs`) laid in, its keys set or taken off in place.
 - `fragment.rs`: The bots as a TOML fragment: the owner's bots' roles, and every written bot's routes and routines.
 - `handed.rs`: What a bot is handed with its next message, from the folder that turn runs in (an experiment's B: the branch's); a skill that changed is read again in a session of its own.
 - `from_template.rs`: A bot made from a template: its card, its routine, its skill and its first words.
+- `intro.rs`: The welcome a new owner gets once the first agent connects (`POST /api/bots/<id>/intro`: the first bot's opening words kept in its chat; no words: skipped) and `GET /api/me`: the owner's first name and the bot that still owes its welcome.
 - `hook.rs`: A bot's webhook as NeoBot keeps it (kv `webhook:<bot>`: the platform's id, url and from, and the room), and what arrives through it.
 - `hook_api.rs`: A bot's webhook from the page: its URL (made once on the platform), deleted, and «Probar».
 - `hook_clean.rs`: What a webhook event shows outside its data block: a label of name characters only, a title as one quoted line, and a value fenced inside a task.
@@ -860,6 +862,12 @@ Files:
 
 Health metrics, and the passes of the turn roles (the CEO, the Coach).
 
+The factory sleeps while the home has no project (`asleep`, mod.rs), as a new owner's home that has only its bot:
+nothing is computed, no role passes by itself (no daily CEO pass, no weekly Coach pass), and of the evals only a
+routine's run is still graded (`manager/evals.rs`), because the owner reads that; the judge reads no owner message.
+The page shows none of the factory's bots, its health or its roles' models then (`web/js/app/solo.js`). The first
+project wakes all of it.
+
 Every minute code computes the metrics from the daemon's own data (lanes, runs, plans, kv). The owner's measures
 come from the store too: `interruptions` counts, per item merged in 24 h, what reached the owner unasked — phone
 messages of turns no owner message started (the events and chat timeline, classified by the factory routes with
@@ -1552,6 +1560,7 @@ Files:
 - `terminal.rs`: Linux: the service's user, in root's terminal during the guide, cannot type into it (nor can what it starts).
 - `root.rs`: What the guide has root do through sudo: the system's own programs alone, and a file's text on stdin.
 - `prove.rs`: The connection check: one real turn by the same way work runs.
+- `rehook.rs`: The hooks an uninstall took out come back when NeoBot starts again in that home, pointed at the binary that runs now.
 - `why.rs`: Why a connection check failed: the telling lines of that turn's stderr.
 - `run.rs`: Running another program in the owner's sight, or quietly.
 - `secret.rs`: A secret read from stdin, not shown.
@@ -1559,6 +1568,7 @@ Files:
 - `summary.rs`: The guide's end: what is connected, what is left, how to open NeoBot.
 - `trust.rs`: NeoBot's hooks trusted in Codex through its app-server.
 - `trusted.rs`: Who signs in on a server whose NeoBot is another user's is added to `[server] users`, for their tunnel.
+- `unhook.rs`: `neobot hooks remove`, run by the uninstaller: NeoBot's hooks out of every agent's settings, and whose they were written down (`<home>/unhooked`). An update is an uninstall and an install, so the next start puts them back. No agent may run it (the rules refuse it): the hooks are how the rules hear a call.
 
 ## `status/`
 
