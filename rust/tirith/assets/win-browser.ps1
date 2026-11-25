@@ -7,6 +7,8 @@
 # NEOBOT_URL, else the front window's. A click presses the element named with the words (exactly, else the
 # shortest name holding them); typing focuses the field so named and sets its value, which the page sees as
 # typing; in a list the option with those words is chosen. It never reads cookies, storage or passwords.
+# An answer that starts with ERROR is the command's failure: whatever did nothing is one, so commands chained in
+# one shell call stop where a step did not happen.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
@@ -85,28 +87,28 @@ $doc, $at = Page
 if ($cmd -eq 'read') { Say "$at`n$($doc.Current.Name)`n$(Soon { Words $doc })" }
 if ($cmd -eq 'click') {
   $hit = Soon { Pick $doc $target @($C::Button, $C::Hyperlink, $C::CheckBox, $C::RadioButton, $C::MenuItem, $C::TabItem, $C::ComboBox, $C::SplitButton, $C::ListItem) }
-  if (-not $hit) { Say "not found: $target" }
+  if (-not $hit) { Say "ERROR not found: $target" }
   if (-not $hit.Current.IsEnabled) { Say "ERROR not clicked, it is disabled: $(Shown $hit)" }
-  if (Press $hit) { Say "clicked $(Shown $hit)" } else { Say "could not press $(Shown $hit)" }
+  if (Press $hit) { Say "clicked $(Shown $hit)" } else { Say "ERROR could not press $(Shown $hit)" }
 }
 if ($cmd -eq 'type') {
   $hit = Soon { Pick $doc $target @($C::Edit, $C::ComboBox) }
-  if (-not $hit) { Say "not found: $target" }
+  if (-not $hit) { Say "ERROR not found: $target" }
   $list = if ($hit.Current.ControlType -eq $C::ComboBox) { Pattern $hit ([System.Windows.Automation.ExpandCollapsePattern]) }
   if ($list) {
     # a list shows its options only while it is open: opened (it may be already), the option pressed, and shut again
     $shut = { try { if ("$($list.Current.ExpandCollapseState)" -ne 'Collapsed') { $list.Collapse() } } catch { } }
     try { if ("$($list.Current.ExpandCollapseState)" -ne 'Expanded') { $list.Expand() } } catch { }
     $option = Soon { Pick $hit $text @($C::ListItem) }
-    if (-not $option) { & $shut; Say "no option «$text» in $(Shown $hit)" }
+    if (-not $option) { & $shut; Say "ERROR no option «$text» in $(Shown $hit)" }
     $chosen = "$($option.Current.Name)"
-    if (-not (Press $option)) { & $shut; Say "could not choose «$text» in $(Shown $hit)" }
+    if (-not (Press $option)) { & $shut; Say "ERROR could not choose «$text» in $(Shown $hit)" }
     Start-Sleep -Milliseconds 300
     & $shut
     Say "chose «$chosen» in $(Shown $hit); it now says «$(Value $hit)»"
   }
   $field = Pattern $hit ([System.Windows.Automation.ValuePattern])
-  if (-not $field -or $field.Current.IsReadOnly) { Say "could not type into $(Shown $hit)" }
+  if (-not $field -or $field.Current.IsReadOnly) { Say "ERROR could not type into $(Shown $hit)" }
   try { $hit.SetFocus() } catch { }
   $field.SetValue($text)
   Start-Sleep -Milliseconds 300

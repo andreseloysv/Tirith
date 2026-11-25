@@ -23,7 +23,7 @@ STEPS = [
     ('click', 'React to message 1499', '', 'clicked AXButton', 'status: reacted 1499'),
     ('type', 'Search', 'hola', 'it now says «hola»', 'status: searched hola'),
     ('click', 'Never', '', 'ERROR not clicked, it is disabled', 'status: searched hola'),
-    ('click', 'zzqx nothing here 7731', '', 'not found', 'status: searched hola'),
+    ('click', 'zzqx nothing here 7731', '', 'ERROR not found', 'status: searched hola'),
 ]
 
 def osa(src, *words):
