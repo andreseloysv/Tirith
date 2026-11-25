@@ -88,6 +88,9 @@ fn what_is_not_a_click_or_a_typing_is_refused() {
         ("click", "a", "", "https://x/\n"),
         ("type", "a", "b\u{1b}", ""),
         ("eval", "a", "", ""),
+        ("wait", "", "", ""),
+        ("wait", " ", "", "https://x/"),
+        ("find", "a\u{7}", "", ""),
     ] {
         assert_eq!(
             act_args(cmd, target, text, url),
@@ -201,6 +204,15 @@ fn chrome_and_edge_get_the_words_as_variables_never_as_code() {
         "the words as they are, each in its own variable"
     );
     assert!(vars("chrome", &json!({"cmd": "read"})).is_ok());
+    assert!(
+        vars("chrome", &json!({"cmd": "find"})).is_ok(),
+        "find needs no words"
+    );
+    assert!(vars("edge", &json!({"cmd": "wait", "target": "Sent"})).is_ok());
+    assert!(
+        vars("edge", &json!({"cmd": "wait"})).is_err(),
+        "wait needs its words"
+    );
     assert!(vars(
         "chrome",
         &json!({"cmd": "open", "url": "https://youtube.com/watch?v=1"})
@@ -240,10 +252,11 @@ fn the_scripts_error_is_the_commands_error_with_the_browsers_name() {
     );
     assert_eq!(
         how("chrome"),
-        "chrome: act in the owner's Chrome with neobot chrome open|read|click|type; a sign-in is theirs, in their Chrome: open the page with neobot chrome open <url> and give them its link"
+        "chrome: act in the owner's Chrome with neobot chrome open|read|find|click|type|wait; a sign-in is theirs, in their Chrome: open the page with neobot chrome open <url> and give them its link"
     );
-    assert!(how("safari")
-        .starts_with("safari: act in the owner's Safari with neobot safari open|read|click|type;"));
+    assert!(how("safari").starts_with(
+        "safari: act in the owner's Safari with neobot safari open|read|find|click|type|wait;"
+    ));
     let own = super::choice::OWN;
     assert_eq!(
         own,
@@ -254,4 +267,64 @@ fn the_scripts_error_is_the_commands_error_with_the_browsers_name() {
         },
         "each system has its own"
     );
+}
+
+#[test]
+fn find_and_wait_only_look_with_the_same_fixed_script() {
+    let all = act_args("find", "", "", "").unwrap();
+    assert_eq!(
+        &all[4..],
+        ["find", "", "", ""],
+        "with no words: what the page has"
+    );
+    let some = act_args("find", "Senden", "", "https://outlook.example/").unwrap();
+    assert_eq!(
+        &some[4..],
+        ["find", "Senden", "", "https://outlook.example/"]
+    );
+    let wait = act_args("wait", "Titel hinzufügen", "", "").unwrap();
+    assert_eq!(&wait[4..], ["wait", "Titel hinzufügen", "", ""]);
+    let script = &all[3];
+    assert_eq!(script, &wait[3], "one script for every command");
+    for part in [
+        "function find(web, want)",
+        "function wait(page, words)",
+        "function near(web, want, keys)",
+        "function soon(look, seconds)",
+    ] {
+        assert!(script.contains(part), "the script holds {part}");
+    }
+    assert!(
+        script.contains("'ERROR not found: ' + target + close"),
+        "a click or typing that finds nothing names what is close to its words"
+    );
+    assert!(
+        script.contains("soon(look, 2)") && script.contains("soon(() => look(page()), 15)"),
+        "a click and typing look again for two seconds, wait for fifteen"
+    );
+    // The words `find` is given alone: an address is the page, anything else the words to look for.
+    use super::thin::{asked, hinted};
+    assert_eq!(
+        asked("find", "https://x.example/a", ""),
+        ("", "https://x.example/a")
+    );
+    assert_eq!(asked("find", "Senden", ""), ("Senden", ""));
+    assert_eq!(
+        asked("find", "https", "https://x.example/"),
+        ("https", "https://x.example/")
+    );
+    assert_eq!(
+        asked("click", "https://x.example/", ""),
+        ("https://x.example/", ""),
+        "a click's words stay its words"
+    );
+    // A read that shows almost no text says where the rest is; one with text is left as it is.
+    let thin = hinted("https://teams.example/\n(3) Calendar | Teams\n\n3\n\nA\n".to_string());
+    assert!(
+        thin.starts_with("https://teams.example/\n(3) Calendar | Teams\n")
+            && thin.contains("neobot safari find"),
+        "{thin}"
+    );
+    let full = format!("https://x.example/\nTitle\n{}", "words ".repeat(60));
+    assert_eq!(hinted(full.clone()), full);
 }

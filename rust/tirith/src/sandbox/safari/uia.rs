@@ -1,4 +1,4 @@
-//! `neobot chrome|edge open|read|click|type` on Windows: the owner's own Chrome or Edge, the one they have open,
+//! `neobot chrome|edge open|read|find|click|type|wait` on Windows: the owner's own Chrome or Edge, the one they have open,
 //! as Safari is on a Mac. The daemon runs its own fixed script (assets/win-browser.ps1) through Windows UI
 //! Automation, out of sight; the agent's words go in as environment variables, never as code. Nothing is
 //! installed in the browser, and no permission is asked: UI Automation is every Windows program's to use.
@@ -22,14 +22,14 @@ pub fn vars(process: &str, b: &Value) -> Result<Vec<(&'static str, String)>, Str
     let web = url.starts_with("https://") || url.starts_with("http://");
     let fits = match cmd.as_str() {
         "open" => web && !url.chars().any(|c| c.is_whitespace() || c == '"'),
-        "read" => true,
-        "click" | "type" => !target.trim().is_empty(),
+        "read" | "find" => true,
+        "click" | "type" | "wait" => !target.trim().is_empty(),
         _ => false,
     };
     let clean =
         !control(&url) && !control(&target) && text.chars().all(|c| c == '\n' || !c.is_control());
     (fits && clean).then_some(()).ok_or_else(|| {
-        "open <url> | read [<url>] | click <target> [<url>] | type <target> <text> [<url>]"
+        "open <url> | read [<url>] | find [<words>] [<url>] | click <target> [<url>] | type <target> <text> [<url>] | wait <words> [<url>]"
             .to_string()
     })?;
     let named = [cmd, process.to_string(), url, target, text];

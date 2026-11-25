@@ -287,6 +287,17 @@ async fn chat_roles_may_not_wait() {
         !deny(&pre_bash(&app, "manager", "", "sleep 4; echo ok").await),
         "a manager's sleep 4 passes"
     );
+    // A short sleep after a loop has ended is no part of the loop (a bot's own command of 2026-11-25, refused then); one inside a loop within a loop still is.
+    let after = "for t in \"New event\" \"Today\"; do neobot safari click \"$t\" | head -n 2; done; sleep 3; neobot safari read";
+    assert!(
+        !deny(&pre_bash(&app, "bot-abc", "", after).await),
+        "a short sleep after a loop passes"
+    );
+    let nested = "for a in 1 2; do for b in 1 2; do echo $b; done; sleep 1; done";
+    assert!(
+        deny(&pre_bash(&app, "bot-abc", "", nested).await),
+        "the outer loop's sleep is a loop's sleep"
+    );
     // Reading a log's tail, git's own `--follow`, the word as a mere argument and the quoted text of a message are no wait: they pass.
     for cmd in [
         "tail -n 50 /tmp/x.log",
