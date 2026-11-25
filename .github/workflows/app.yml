@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version the daemon inside says (empty: the crate's)"
+        description: "Version the installers, the app and the daemon inside say (empty: the tag's, else the crate's)"
         required: false
         default: ""
       agents:
@@ -49,6 +49,15 @@ jobs:
       - name: Install
         working-directory: app
         run: npm ci
+      # What everything built here says it is: the dispatch's version, else the tag's (v0.2.2 -> 0.2.2), else the crate's.
+      - name: Version
+        shell: bash
+        env:
+          WANTED: ${{ inputs.version }}
+        run: |
+          version="${WANTED#v}"
+          case "$GITHUB_REF" in refs/tags/v*) version="${version:-${GITHUB_REF_NAME#v}}" ;; esac
+          echo "NEOBOT_VERSION=$version" >> "$GITHUB_ENV"
       - name: Import macOS certificate
         if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
         env:
@@ -70,12 +79,11 @@ jobs:
       - name: Daemon sidecar
         shell: bash
         env:
-          WANTED: ${{ inputs.version }}
           AGENTS: ${{ inputs.agents }}
         run: |
           # a daemon to hand out: it carries its page and factory (TIRITH_DIST), its version and the catalog overlay
           export TIRITH_DIST=1
-          if [ -n "$WANTED" ]; then export TIRITH_RELEASE="$WANTED"; fi
+          if [ -n "$NEOBOT_VERSION" ]; then export TIRITH_RELEASE="$NEOBOT_VERSION"; fi
           if [ -n "$AGENTS" ]; then
             printf '%s\n' "$AGENTS" > "$RUNNER_TEMP/agents.toml"
             export TIRITH_AGENTS_FILE="$RUNNER_TEMP/agents.toml"
@@ -93,6 +101,16 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
+          # The bundle says that version too: without it the installer's name, the app's properties and
+          # Windows' list of installed apps all say the crate's.
+          args=()
+          if [ -n "$NEOBOT_VERSION" ]; then
+            printf '{"version":"%s"}\n' "$NEOBOT_VERSION" > version.json # a file: quotes do not survive npm on Windows
+            args+=(--config version.json)
+          fi
+          # Windows: only the NSIS installer, the one handed out. Its hooks (src-tauri/windows/hooks.nsh) end the
+          # daemon and take NeoBot's hooks out of the agents; an MSI has none, and refuses a version like 0.2.2-rc.9.
+          if [ "$RUNNER_OS" = Windows ]; then args+=(--bundles nsis); fi
           # An absent secret comes as an empty variable, and Tauri signs with any identity it is given, "" too.
           for name in $(compgen -e APPLE_ || true); do
             [ -n "${!name}" ] || unset "$name"
@@ -103,9 +121,9 @@ jobs:
               printf '%s' "$APPLE_API_KEY_CONTENT" > "$RUNNER_TEMP/api_key.p8"
               export APPLE_API_KEY_PATH="$RUNNER_TEMP/api_key.p8"
             fi
-            ../scripts/package.sh
+            ../scripts/package.sh "${args[@]}"
           else
-            npm run tauri build
+            npm run tauri build -- "${args[@]}"
           fi
       - uses: actions/upload-artifact@v4
         with:
