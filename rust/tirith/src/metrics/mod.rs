@@ -24,6 +24,10 @@ mod unapproved;
 mod work;
 mod worse;
 pub use api::{routes, start};
+/// The factory sleeps while the home has no project, as a new one that has only its bot: nothing is measured, no role of it (the CEO, the Coach) passes by itself, and the page shows none of its bots. A project wakes it.
+pub fn asleep(app: &crate::app::Shared) -> bool {
+    app.cfg().projects.is_empty()
+}
 pub use owed::owed_pass;
 pub use pass::born;
 pub use roles::heard;

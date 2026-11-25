@@ -4,7 +4,7 @@
 // Inside a project: its name, its questions, its helpers, what is up next in its plan (next.js) and its chat on the
 // right. Nothing that is done shows; the factory's health is in Settings; nothing at all: the agents asleep.
 import { html } from '../../../vendor/preact-htm.js';
-import { useStore } from '../../store.js';
+import { useStore, useFetch } from '../../store.js';
 import { useUnread } from '../../unread.js';
 import { keyOf } from '../bots.js';
 import { Chat } from '../chat.js';
@@ -19,7 +19,7 @@ import { Next } from './next.js';
 import { Quiet } from './quiet.js';
 import { Setup } from './setup.js';
 import { Onboarding } from '../onboarding/view.js';
-import { welcoming } from '../onboarding/state.js';
+import { shownBots } from '../../app/solo.js';
 
 const newest = (a, b) => String(b.at).localeCompare(String(a.at));
 
@@ -27,9 +27,10 @@ export function Overview({ project }) {
   const s = useStore();
   const who = useWho();
   const every = useUnread().bots;
-  const bots = every.filter((b) => b.show !== false);
+  const bots = shownBots(every, s);
   const q = String(s.q || '').trim().toLowerCase();
   const p = s.projects.find((x) => x.id === project);
+  const [me, , meErr] = useFetch(p ? '' : '/api/me', ['bots']); /* which bot still owes its welcome */
   const cards = openCards(s);
   const asks = cards.filter((o) => (!p || o.project === p.id || (!o.project && o.kind === 'device')) && hit(q, o.question, o.kind, o.project)).sort(newest);
   const shown = new Set(bots.map(keyOf));
@@ -37,7 +38,9 @@ export function Overview({ project }) {
   const helpers = groups.reduce((n, g) => n + g.helpers.length, 0);
   const lanes = p ? Object.values(s.lanes).filter((l) => l.project === p.id) : [];
   const calm = !asks.length && !groups.length;
-  if (!p && welcoming(every)) return html`<${Onboarding} />`; /* the first bot is still to be made: the welcome, not "All quiet" */
+  if (!p && !me && !meErr) return null; /* not known yet: never "All quiet" first and the welcome after */
+  const first = !p && me && every.find((b) => b.id === me.welcome);
+  if (first) return html`<${Onboarding} bot=${first} owner=${me.name || ''} />`; /* the first bot's welcome, not "All quiet" */
   const main = html`<div class="home">
     <${Hello} place=${p ? p.name || p.id : ''} asks=${asks.length} helpers=${helpers} bosses=${groups.length} line=${!(calm && !p && !q)} />
     ${p ? html`<${Setup} project=${p.id} name=${p.name} />` : null}

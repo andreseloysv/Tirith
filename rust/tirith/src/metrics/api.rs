@@ -16,7 +16,9 @@ pub(super) fn payload(app: &Shared) -> Value {
 pub fn start(app: Shared) {
     tokio::spawn(async move {
         loop {
-            tick(&app);
+            if !super::asleep(&app) {
+                tick(&app);
+            }
             tokio::time::sleep(Duration::from_secs(60)).await;
         }
     });

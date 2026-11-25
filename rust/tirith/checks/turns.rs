@@ -273,11 +273,12 @@ done
     std::fs::write(
         home.join("config.toml"),
         format!(
-            "[agents.fake]\ncommand = \"{}\"\nchat_args = []\n[network]\nsandbox = false\n",
+            "[agents.fake]\ncommand = \"{}\"\nchat_args = []\n[network]\nsandbox = false\n[[projects]]\nid = \"p1\"\nrepo = \"/tmp\"\n",
             agent.display()
         ),
     )
     .unwrap();
+    // a project: without one the factory sleeps and nothing but a routine's run is judged
     let app = crate::app::App::open_at(home.clone());
     let bot = crate::bots::save(&app, json!({"name": "Votos", "shape": "drop", "color": "#22d3ee", "session": "chat", "access": "read"})).unwrap();
     let key = format!("bot-{}", bot["id"].as_str().unwrap());
@@ -391,6 +392,40 @@ done
     assert_eq!(row(second)["reaction"], serde_json::Value::Null);
     crate::manager::end_session(&key);
     drop(app);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[tokio::test]
+async fn without_a_project_the_factory_sleeps_and_no_judge_reads_the_owner() {
+    // The same bot and judge as above, in a home with no project: a new owner's home. Their message gets its answer and nothing else runs.
+    let home = home("turn-asleep");
+    let agent = home.join("fake-agent.sh");
+    std::fs::write(&agent, "#!/bin/sh\necho '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"fake-3\"}'\nwhile read -r line; do\n  echo '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"correction — no\"}]}}'\n  echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}'\ndone\n").unwrap();
+    std::fs::set_permissions(&agent, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let config = format!(
+        "[agents.fake]\ncommand = \"{}\"\nchat_args = []\n[network]\nsandbox = false\n",
+        agent.display()
+    );
+    std::fs::write(home.join("config.toml"), config).unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    assert!(crate::metrics::asleep(&app));
+    let bot = crate::bots::save(&app, json!({"name": "Sola", "shape": "drop", "color": "#22d3ee", "session": "chat", "access": "read"})).unwrap();
+    let key = format!("bot-{}", bot["id"].as_str().unwrap());
+    app.set_kv(&format!("models:{key}"), Some(r#"{"agent":"fake"}"#));
+    app.set_kv("models:judge", Some(r#"{"agent":"fake"}"#));
+    crate::manager::say(&app, &key, "apunta esto", "").unwrap();
+    until("the turn", || own_rows(&app, &key).len() == 1).await;
+    crate::manager::say(&app, &key, "esto no es lo que pedí", "").unwrap();
+    until("the second turn", || own_rows(&app, &key).len() == 2).await;
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    let scores = app.query("SELECT COUNT(*) FROM scores", [], |r| r.get::<_, i64>(0))[0];
+    let all = super::turns(&app, &key, 50);
+    assert_eq!(
+        (scores, all.len()),
+        (0, 2),
+        "no judge's turn beside the bot's two: {all:?}"
+    );
+    assert!(all.iter().all(|r| r["corrected"] == 0));
     let _ = std::fs::remove_dir_all(&home);
 }
 

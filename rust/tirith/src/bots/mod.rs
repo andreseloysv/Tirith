@@ -5,6 +5,7 @@ mod cli;
 mod connect;
 mod context;
 mod drafts;
+mod first;
 mod folder;
 mod fragment;
 mod from_template;
@@ -51,7 +52,11 @@ pub use hook::{hook_from, webhook};
 #[cfg(test)]
 pub(crate) use library::{learn, library};
 pub use list::{all, bot, key_for};
-pub use migrate::start;
+/// At start: a new home's first bot (`first.rs`), then every bot's folder and the old bots moved (`migrate.rs`).
+pub fn start(app: crate::app::Shared) {
+    first::start(&app);
+    migrate::start(app);
+}
 pub use run::tick;
 #[cfg(test)]
 pub(crate) use run::tick_at;

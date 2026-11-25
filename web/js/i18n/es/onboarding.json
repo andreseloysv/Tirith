@@ -1,6 +1,7 @@
 {
- "Hi {name}! I'm your new personal assistant. I can help with your work and everyday life, and take things off your plate.": "¡Hola, {name}! Soy tu nuevo asistente personal. Puedo ayudarte con tu trabajo y tu día a día, y quitarte cosas de encima.",
- "Hi! I'm your new personal assistant. I can help with your work and everyday life, and take things off your plate.": "¡Hola! Soy tu nuevo asistente personal. Puedo ayudarte con tu trabajo y tu día a día, y quitarte cosas de encima.",
+ "Keep {name}": "Dejar {name}",
+ "Hi {name}! I'm {bot}, your new personal assistant. I can help with your work and everyday life, and take things off your plate.": "¡Hola, {name}! Soy {bot}, tu nuevo asistente personal. Puedo ayudarte con tu trabajo y tu día a día, y quitarte cosas de encima.",
+ "Hi! I'm {bot}, your new personal assistant. I can help with your work and everyday life, and take things off your plate.": "¡Hola! Soy {bot}, tu nuevo asistente personal. Puedo ayudarte con tu trabajo y tu día a día, y quitarte cosas de encima.",
  "What would you like to call me? You can always change this later.": "¿Cómo quieres llamarme? Siempre podrás cambiarlo después.",
  "{bot} it is! Nice to meet you, {name}.": "¡{bot}, entonces! Encantado de conocerte, {name}.",
  "{bot} it is! Nice to meet you.": "¡{bot}, entonces! Encantado de conocerte.",
