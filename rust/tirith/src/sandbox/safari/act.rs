@@ -1,6 +1,6 @@
 //! `neobot safari click <target> [<url>]` and `type <target> <text> [<url>]`: the owner lets the chat roles click
 //! and type in their Safari without asking (their choice of 2026-11-23), and nobody turns on a Safari setting for
-//! it: the daemon runs its own fixed script (assets/safari-ax.js, JavaScript for Automation) through macOS
+//! it: the daemon runs its own fixed script (assets/safari-ax-find.js and safari-ax.js, JavaScript for Automation) through macOS
 //! Accessibility, the agent's words as the script's arguments, never as code. The first time, macOS asks the
 //! person to let NeoBot use Accessibility. A URL first brings that tab forward with Safari's own scripting, as
 //! Accessibility sees only the page a window shows. The script never reads cookies, storage or passwords.
@@ -9,8 +9,12 @@
 pub const USAGE: &str =
     "neobot safari click <target> [<url>] | neobot safari type <target> <text> [<url>]";
 
-/// The fixed script.
-const AX: &str = include_str!("../../../assets/safari-ax.js");
+/// The fixed script: finding the element the words name (WebKit's own search, not a walk of the whole page), then acting on it.
+const AX: &str = concat!(
+    include_str!("../../../assets/safari-ax-find.js"),
+    "\n",
+    include_str!("../../../assets/safari-ax.js")
+);
 
 /// The osascript arguments that run the fixed script for `cmd` with the agent's words.
 pub fn act_args(cmd: &str, target: &str, text: &str, url: &str) -> Result<Vec<String>, String> {

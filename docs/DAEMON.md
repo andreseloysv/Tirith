@@ -1257,7 +1257,7 @@ Files:
 - `replay.rs`: Whether a replay's turn can run with the network closed: the sandbox must be in force for the processes NeoBot starts.
 - `routes.rs`: The sandbox's HTTP routes: its status, the block list, the destinations seen and Safari.
 - `rules.rs`: The shape of a block rule: a domain, an address or a CIDR range.
-- `safari/act.rs`: `neobot safari click <target> [<url>]` / `type <target> <text> [<url>]`: osascript's arguments for the fixed Accessibility script (`assets/safari-ax.js`), and the AppleScript that brings a tab forward.
+- `safari/act.rs`: `neobot safari click <target> [<url>]` / `type <target> <text> [<url>]`: osascript's arguments for the fixed Accessibility script (`assets/safari-ax-find.js` + `assets/safari-ax.js`), and the AppleScript that brings a tab forward. The script asks WebKit itself for the buttons, links or fields with the words (`AXUIElementsForSearchPredicate`) and walks the page only where that search is missing: on a page of 12,000 elements a command went from 4-16 s to 0.1-1.7 s (`scripts/checks/safari-ax/run.py`, by hand: it needs Accessibility).
 - `safari/choice.rs`: `neobot browser [use <name> | login <url>]`: the browser the owner chose for the agents (kv `browser`): NeoBot's own, or their own one (`safari` on a Mac, `chrome` or `edge` on Windows).
 - `safari/login.rs`: `neobot browser login <url>`: NeoBot's own browser shown on the owner's screen at a page, to sign in once.
 - `safari/mod.rs`: Declares the folder's files and re-exports what other modules use.
