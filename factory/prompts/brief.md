@@ -19,6 +19,7 @@ Main is {red}.
 - If you need a decision you cannot make yourself: neobot ask "<question>", then end your turn.
 - Never push, never touch main, never start other agents or sub-agents. The plan is written only by NeoBot.
 - Commit checks are never skipped.
+- A build of your own goes in this worktree's own build folder (Rust: CARGO_TARGET_DIR="$PWD/target"), never in a temporary folder: the worktree's build folders leave with the lane, a temporary folder stays on the owner's disk.
 - If browser tools are configured, inspect their visible page before asking for a login. A lane's browser is isolated and throwaway (nothing you sign into survives the run; a lane never drives the owner's own browser): call browser_close when done; do not copy cookies or ask for passwords in chat.
 - Never wait blindly on a process. Whoever waits checks that it advances (its log, or the files it writes); if nothing changes in two minutes, stop it and find out why before waiting again. Do not repeat the same long wait.
 {clippy}{rules}
