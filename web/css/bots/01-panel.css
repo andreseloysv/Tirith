@@ -75,6 +75,10 @@
 .bform textarea { resize: vertical; line-height: 1.5; }
 .bform input:focus, .bform textarea:focus, .bnamein:focus { outline: none; border-color: var(--b-ink); }
 .bform input[type=time] { width: 9em; color-scheme: inherit; font-variant-numeric: tabular-nums; }
+/* a routine's own model and effort: two quiet lists side by side */
+.bown { display: flex; flex-wrap: wrap; gap: 8px; }
+.bown select { flex: 1 1 12em; min-width: 0; font: inherit; font-size: 14px; font-weight: 300; color: var(--b-ink); background: transparent; border: 1px solid var(--b-hair); border-radius: 12px; padding: 9px 12px; color-scheme: inherit; }
+.bown select:focus { outline: none; border-color: var(--b-ink); }
 .bdays { display: flex; gap: 4px; }
 .bdays button { flex: 1; height: 32px; text-align: center; color: var(--b-mut); border: 1px solid var(--b-hair); border-radius: 999px; }
 .bdays button:hover { border-color: var(--b-ink); } .bdays button.on { background: var(--b-ink); border-color: var(--b-ink); color: var(--b-bg); }

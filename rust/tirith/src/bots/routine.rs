@@ -92,5 +92,5 @@ pub(super) fn routine(app: &Shared, id: String, b: Value) -> Result<Value, Strin
         .then(|| app.set_kv(&format!("routine:{id}:{changed}"), Some(&now_iso())));
     let _ = (!said.is_empty())
         .then(|| app.chat("routine", &said, &key_for(app, &id).unwrap_or_default()));
-    Ok(json!({"ok": true}))
+    Ok(json!({"ok": true, "id": changed}))
 }

@@ -171,6 +171,7 @@ Files:
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `notes.rs`: Numbered memory notes: `[m<N>]` and `[s<N>]` put before every note line that has none.
 - `routine.rs`: A routine made, changed or removed from a bot's card or its own commands.
+- `routine_model.rs`: A routine's own model and effort, chosen on its card (the form's «Runs with»): checked before anything is saved (one word each, the model one the bot's agent runs), kept in the bot's `routines.toml` (`tuning.rs`, the file the Coach's experiments change too) and committed in the bot's repository, shown with each routine in `GET /api/bots`, gone with a deleted routine.
 - `run.rs`: Routines run: one now, or every one due on the scheduler's tick (which also decides the lab's experiments that are due); each run is handed to the bot as a turn of its own (`manager::run_routine`).
 - `schedule.rs`: When a routine runs: its days of the week, whether it is due now, and how late.
 - `store.rs`: Keeping the bots: one change at a time, written into config.toml and reloaded.

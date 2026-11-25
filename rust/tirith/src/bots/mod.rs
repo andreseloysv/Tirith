@@ -28,6 +28,7 @@ mod notes;
 mod owner;
 mod package;
 mod routine;
+mod routine_model;
 mod run;
 mod schedule;
 mod store;

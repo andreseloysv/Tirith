@@ -24,6 +24,7 @@ pub use credits::{fallback, out_of_credits};
 pub use gateway_args::gateway_args_for;
 pub use http::{cli, routes};
 pub use lane_argv::lane_argv;
+pub use owners::mismatch;
 pub use phone::phone_response;
 pub use roles::{lane_role, role};
 pub use start::start;

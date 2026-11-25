@@ -3,7 +3,6 @@ use super::card::save;
 use super::folder::folder;
 use super::library::{learn, library};
 use super::list::{all, bot, key_for};
-use super::routine::routine;
 use super::run::fire;
 use super::store::with;
 use crate::app::{bad, Shared, R};
@@ -47,7 +46,7 @@ async fn list(State(app): State<Shared>, Path(id): Path<String>) -> R {
     )
 }
 async fn change(State(app): State<Shared>, Path(id): Path<String>, Json(b): Json<Value>) -> R {
-    reply(routine(&app, id, b))
+    reply(super::routine_model::saved(&app, id, b))
 }
 async fn run(State(app): State<Shared>, Path((id, rid)): Path<(String, String)>) -> R {
     reply(fire(&app, &id, &rid, "run-now", "").map(|_| json!({"ok": true})))
