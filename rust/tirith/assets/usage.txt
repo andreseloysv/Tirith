@@ -40,6 +40,7 @@ neobot teach stop                              (a bot) end the rehearsal
 neobot net allow                               (Linux, with sudo, once) let this binary make the network sandbox where AppArmor forbids it
 neobot hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E); sends the agent's TIRITH_TOKEN, and without one only refuses
 neobot hooks install                           point the agents' hooks at the daemon over HTTP, each sending TIRITH_TOKEN
+neobot hooks remove                            (the owner, or an uninstaller) take NeoBot's hooks out of every agent's settings; they come back when NeoBot next starts
 neobot safari open <url>                       (the managers and bots) open the page in the owner's Safari, through the daemon
 neobot safari read [<url>]                     (the managers and bots) URL, title and text of Safari's current tab (or of the tab whose URL starts with <url>)
 neobot safari click <target> [<url>]          (the managers and bots) click in Safari's shown page (or that tab) the element with those words, through Accessibility

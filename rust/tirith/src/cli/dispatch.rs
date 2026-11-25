@@ -41,6 +41,7 @@ fn daemon(pos: &[&str], flag: Flag, project: &str) -> Result<(), String> {
             flag("--agent").unwrap_or_default(),
         ),
         ["hooks", "install"] => install_hooks(),
+        ["hooks", "remove"] => crate::setup::unhook::cli(),
         ["open"] => open::open(),
         ["open", "link"] => open::print(),
         ["status"] => status(project),

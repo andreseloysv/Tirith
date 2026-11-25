@@ -1,4 +1,4 @@
-//! An agent's hooks pointed at NeoBot, in its own settings file: everything else there stays, and the first change keeps a copy.
+//! An agent's hooks pointed at NeoBot, in its own settings file: everything else there stays, and the first change keeps a copy. And taken out again, when NeoBot is uninstalled.
 use super::catalog::Known;
 use super::hook_lines::{command, others, EVENTS};
 use serde_json::{json, Value};
@@ -51,6 +51,37 @@ pub fn install(
     kept.push(".before-tirith");
     if text.is_some() && !Path::new(&kept).exists() {
         std::fs::copy(file, &kept).map_err(failed)?;
+    }
+    let out = serde_json::to_string_pretty(&now).map_err(|e| e.to_string())?;
+    std::fs::write(file, out + "\n").map_err(failed)?;
+    Ok(true)
+}
+
+/// Takes NeoBot's hooks out of `file`, everything else there staying as it is; whether it changed.
+pub fn remove(file: &Path) -> Result<bool, String> {
+    let failed = |e: std::io::Error| format!("{}: {e}", file.display());
+    let text = match std::fs::read_to_string(file) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(failed(e)),
+    };
+    let Ok(was) = serde_json::from_str::<Value>(&text) else {
+        return Ok(false); // no JSON: nothing in it is NeoBot's
+    };
+    let mut now = was.clone();
+    if let Some(events) = now["hooks"].as_object_mut() {
+        events.retain(|_, groups| {
+            let Some(had) = groups.as_array().map(Vec::len) else {
+                return true;
+            };
+            let kept = others(groups);
+            let emptied = kept.is_empty() && had > 0; // an event that held only NeoBot's goes
+            *groups = json!(kept);
+            !emptied
+        });
+    }
+    if now == was {
+        return Ok(false);
     }
     let out = serde_json::to_string_pretty(&now).map_err(|e| e.to_string())?;
     std::fs::write(file, out + "\n").map_err(failed)?;

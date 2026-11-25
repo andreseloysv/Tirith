@@ -1552,6 +1552,7 @@ Files:
 - `terminal.rs`: Linux: the service's user, in root's terminal during the guide, cannot type into it (nor can what it starts).
 - `root.rs`: What the guide has root do through sudo: the system's own programs alone, and a file's text on stdin.
 - `prove.rs`: The connection check: one real turn by the same way work runs.
+- `rehook.rs`: The hooks an uninstall took out come back when NeoBot starts again in that home, pointed at the binary that runs now.
 - `why.rs`: Why a connection check failed: the telling lines of that turn's stderr.
 - `run.rs`: Running another program in the owner's sight, or quietly.
 - `secret.rs`: A secret read from stdin, not shown.
@@ -1559,6 +1560,7 @@ Files:
 - `summary.rs`: The guide's end: what is connected, what is left, how to open NeoBot.
 - `trust.rs`: NeoBot's hooks trusted in Codex through its app-server.
 - `trusted.rs`: Who signs in on a server whose NeoBot is another user's is added to `[server] users`, for their tunnel.
+- `unhook.rs`: `neobot hooks remove`, run by the uninstaller: NeoBot's hooks out of every agent's settings, and whose they were written down (`<home>/unhooked`). An update is an uninstall and an install, so the next start puts them back. No agent may run it (the rules refuse it): the hooks are how the rules hear a call.
 
 ## `status/`
 
