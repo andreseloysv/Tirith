@@ -37,8 +37,11 @@ function Run($app, $cmd, $target, $text, $url) {
   $env:NEOBOT_APP = $app; $env:NEOBOT_CMD = $cmd; $env:NEOBOT_TARGET = $target; $env:NEOBOT_TEXT = $text; $env:NEOBOT_URL = $url
   $run = '& ([ScriptBlock]::Create([IO.File]::ReadAllText($env:NEOBOT_SCRIPT, [Text.Encoding]::UTF8)))'
   $file = Join-Path $temp 'neobot-out.txt'
-  $done = Start-Process powershell.exe -ArgumentList @('-NoProfile', '-NonInteractive', '-Command', $run) -Wait -PassThru -NoNewWindow `
+  # Its own end is waited for, not its children's: `open` leaves a browser running (-Wait would wait for that too).
+  $done = Start-Process powershell.exe -ArgumentList @('-NoProfile', '-NonInteractive', '-Command', $run) -PassThru -NoNewWindow `
     -RedirectStandardOutput $file -RedirectStandardError "$file.err"
+  $null = $done.Handle
+  if (-not $done.WaitForExit(120000)) { $done.Kill(); throw "$app ${cmd}: no answer in two minutes" }
   $out = [IO.File]::ReadAllText($file, [Text.Encoding]::UTF8)
   $err = [IO.File]::ReadAllText("$file.err")
   Write-Host "--- $app $cmd '$target' '$text' '$url' -> exit $($done.ExitCode)`n$out$err"
