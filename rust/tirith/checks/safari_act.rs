@@ -159,6 +159,30 @@ fn typing_reaches_webkit_editors_and_a_disabled_button_is_never_clicked() {
 }
 
 #[test]
+fn webkit_finds_the_element_and_the_page_is_walked_only_without_its_search() {
+    // Measured 2026-11-25 on a page of 12,000 elements (scripts/checks/safari-ax/): seven commands took 55 s
+    // walking the page for each, 3.3 s asking WebKit; a miss went from 16 s to 0.3 s.
+    let script = &act_args("click", "Send", "", "").unwrap()[3];
+    assert!(
+        script.contains("AXUIElementsForSearchPredicate") && script.contains("function run(argv)"),
+        "both halves of the script are there, and WebKit is asked for the candidates"
+    );
+    assert!(
+        script.contains("if (!got) return best(below(web, 20000), want, roles);"),
+        "the walk stays only for a page whose search is missing"
+    );
+    assert!(
+        script.contains("const [cmd, target, text, url, pid] = argv;"),
+        "a fifth word names a check's own window"
+    );
+    assert_eq!(
+        act_args("click", "Send", "", "").unwrap().len(),
+        8,
+        "and the daemon never gives it: four words after the script"
+    );
+}
+
+#[test]
 fn chrome_and_edge_get_the_words_as_variables_never_as_code() {
     assert_eq!(browser("chrome"), Some(("chrome", "Chrome")));
     assert_eq!(browser("edge"), Some(("msedge", "Edge")));

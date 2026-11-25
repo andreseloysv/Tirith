@@ -171,6 +171,7 @@ Files:
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `notes.rs`: Numbered memory notes: `[m<N>]` and `[s<N>]` put before every note line that has none.
 - `routine.rs`: A routine made, changed or removed from a bot's card or its own commands.
+- `routine_model.rs`: A routine's own model and effort, chosen on its card (the form's «Runs with»): checked before anything is saved (one word each, the model one the bot's agent runs), kept in the bot's `routines.toml` (`tuning.rs`, the file the Coach's experiments change too) and committed in the bot's repository, shown with each routine in `GET /api/bots`, gone with a deleted routine.
 - `run.rs`: Routines run: one now, or every one due on the scheduler's tick (which also decides the lab's experiments that are due); each run is handed to the bot as a turn of its own (`manager::run_routine`).
 - `schedule.rs`: When a routine runs: its days of the week, whether it is due now, and how late.
 - `store.rs`: Keeping the bots: one change at a time, written into config.toml and reloaded.
@@ -810,6 +811,7 @@ Files:
 - `progress.rs`: The short line a tool call shows on the phones.
 - `prompt.rs`: What a conversation's agent is told besides its messages: its role's instructions and the recent chat.
 - `queue.rs`: Reports and events for a conversation that wait for its next turn: the newest 30 kept, the older ones counted.
+- `quick_shell.rs`: A bot's agent is spared the owner's shell profile at every session, where the owner's own shell takes a second or more to start: the catalog names the agent's two variables (`shell_var`, `env_file_var`), and the bot's agent gets the other shell (bash for a zsh owner) with the owner's environment from a capture taken once (`os/login_env.rs`, `os/login_run.rs`: `<home>/shell-env.sh`, 0600, what the login shell exports as `export` lines, the profile's folders in front of the reader's PATH, old as soon as a profile file changes; never the exports of the interactive profile, where keys often live: an agent's shell is a login shell, not the owner's terminal). Measured with the real agent on a profile that loads nvm: a session's first shell call 5 s -> 0.3 s. The profile's functions and aliases are not carried, so a quick profile, a project's manager and the lanes keep the owner's shell.
 - `unheard.rs`: A note for a conversation's next message, in the store until a message hands it over, so a restart loses none.
 - `run.rs`: A conversation's sessions, one after another while messages wait, started again more slowly when they fail young.
 - `commands.rs`: The owner's commands that NeoBot answers itself, with no turn (`/status`, `/models`, `/model`).
@@ -1257,7 +1259,7 @@ Files:
 - `replay.rs`: Whether a replay's turn can run with the network closed: the sandbox must be in force for the processes NeoBot starts.
 - `routes.rs`: The sandbox's HTTP routes: its status, the block list, the destinations seen and Safari.
 - `rules.rs`: The shape of a block rule: a domain, an address or a CIDR range.
-- `safari/act.rs`: `neobot safari click <target> [<url>]` / `type <target> <text> [<url>]`: osascript's arguments for the fixed Accessibility script (`assets/safari-ax.js`), and the AppleScript that brings a tab forward.
+- `safari/act.rs`: `neobot safari click <target> [<url>]` / `type <target> <text> [<url>]`: osascript's arguments for the fixed Accessibility script (`assets/safari-ax-find.js` + `assets/safari-ax.js`), and the AppleScript that brings a tab forward. The script asks WebKit itself for the buttons, links or fields with the words (`AXUIElementsForSearchPredicate`) and walks the page only where that search is missing: on a page of 12,000 elements a command went from 4-16 s to 0.1-1.7 s (`scripts/checks/safari-ax/run.py`, by hand: it needs Accessibility).
 - `safari/choice.rs`: `neobot browser [use <name> | login <url>]`: the browser the owner chose for the agents (kv `browser`): NeoBot's own, or their own one (`safari` on a Mac, `chrome` or `edge` on Windows).
 - `safari/login.rs`: `neobot browser login <url>`: NeoBot's own browser shown on the owner's screen at a page, to sign in once.
 - `safari/mod.rs`: Declares the folder's files and re-exports what other modules use.

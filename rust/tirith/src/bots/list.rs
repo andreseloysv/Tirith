@@ -64,10 +64,11 @@ pub(super) fn bots_of(raw: &Value, last: &dyn Fn(&str, &str) -> String) -> Vec<V
         .collect()
 }
 pub fn all(app: &App) -> Vec<Value> {
-    bots_of(
-        &serde_json::to_value(&app.cfg().factory.raw).unwrap_or_default(),
-        &|id, rid| app.kv(&format!("routine:{id}:{rid}")).unwrap_or_default(),
-    )
+    let raw = serde_json::to_value(&app.cfg().factory.raw).unwrap_or_default();
+    let last = |id: &str, rid: &str| app.kv(&format!("routine:{id}:{rid}")).unwrap_or_default();
+    let bots = bots_of(&raw, &last).into_iter();
+    bots.map(|bot| super::routine_model::shown(app, bot))
+        .collect() // each routine's own model and effort
 }
 /// The bot whose conversation is `key` (`bot-<id>`, or a system bot's key).
 pub fn bot(app: &App, key: &str) -> Option<Value> {

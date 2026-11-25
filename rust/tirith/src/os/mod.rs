@@ -1,6 +1,10 @@
 //! What differs between Unix and Windows, in one place: file modes and links, how a child is started and ended, the terminal's echo, the shell and the machine's own facts. On Unix each call does what the code did before; on Windows the nearest thing, or nothing where Windows has none. Signalling processes stays in `app/process.rs`.
 mod echo;
 mod links;
+#[cfg(unix)]
+pub mod login_env;
+#[cfg(unix)]
+pub mod login_run;
 mod modes;
 mod open;
 mod person;
