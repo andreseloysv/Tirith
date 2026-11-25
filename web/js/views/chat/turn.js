@@ -6,11 +6,11 @@ import { pure } from './util.js';
 import { answerOf, quiet } from './turns.js';
 import { bubble, words } from './bubble.js';
 import { mdOf, FileChip } from './files.js';
-import { Reactions, turnOf } from './react.js';
+import { Reactions, Made, turnOf } from './react.js';
 import { cited } from './cite.js';
 import { t } from '../../i18n.js';
 
-/** One answer of an ended turn: a quiet line, or a bubble with who said it (and a bot's 👍 / 👎 under the turn's last one; its memory citations as small marks). */
+/** One answer of an ended turn: a quiet line, or a bubble with who said it (and under a bot's last one its 👍 / 👎 and how it was made: model, effort, time; its memory citations as small marks). */
 function answer(r, { who, turn, notes, cls }) {
   if (quiet(r.text)) return html`<div class="mc-ev quiet" key=${r.id} title=${clockTime(r.at)}><span>${r.text.replace(/^\s*∅\s*/, '')}</span></div>`;
   return bubble({
@@ -18,7 +18,7 @@ function answer(r, { who, turn, notes, cls }) {
     cls,
     from: who || t('Manager'),
     time: clockTime(r.at),
-    meta: turn ? html`<${Reactions} turn=${turn} />` : null,
+    meta: turn ? html`<${Reactions} turn=${turn} /><${Made} turn=${turn} />` : null,
     body: words(cited(mdOf(r.id, r.text), notes)),
   });
 }
