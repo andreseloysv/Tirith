@@ -42,7 +42,7 @@ fn idle_now(app: &Shared) -> Idle {
         ),
     }
 }
-/// The pass at startup and then every few minutes, applying the same rules to everything that already meets them: a merged, stopped or failed lane still holding a worktree loses it now, the logs and brief of one stopped or failed more than 24 h ago go, what earlier cleanups moved into a project but git still sees as new (a `\`, space or `[` in its name broke its per-file exclude line) gets its folder excluded, and a project's build cache and merge folder go after `limits.build_idle_minutes` with no lane, stage or manager of it working.
+/// The pass at startup and then every few minutes, applying the same rules to everything that already meets them: a merged, stopped or failed lane still holding a worktree loses it now, a lane's temporary folder whose worktree is gone goes, the logs and brief of one stopped or failed more than 24 h ago go, what earlier cleanups moved into a project but git still sees as new (a `\`, space or `[` in its name broke its per-file exclude line) gets its folder excluded, and a project's build cache and merge folder go after `limits.build_idle_minutes` with no lane, stage or manager of it working.
 pub(super) async fn sweep_cleanups(app: &Shared, lanes: &[Lane]) {
     for l in lanes
         .iter()
@@ -52,6 +52,7 @@ pub(super) async fn sweep_cleanups(app: &Shared, lanes: &[Lane]) {
     }
     let idle = idle_now(app);
     for p in &app.cfg().projects {
+        super::temp::sweep(&p.lanes_dir());
         let (repo, Ok(gitdir)) = (
             p.repo(),
             git(&p.repo(), &["rev-parse", "--git-common-dir"]).await,

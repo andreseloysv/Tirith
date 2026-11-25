@@ -29,6 +29,7 @@ mod stamp;
 mod start;
 mod stop;
 mod sweep;
+mod temp;
 mod watch;
 mod worktree;
 

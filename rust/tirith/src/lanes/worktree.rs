@@ -17,8 +17,8 @@ pub(super) async fn remove_worktree(repo: &Path, ws: &Path) {
         git(repo, &["worktree", "prune"]).await,
     ));
 }
-/// The next free `slot-<n>` folder: one past the highest there.
-fn next_slot(dir: &Path) -> PathBuf {
+/// The next free `slot-<n>` folder: one past the highest there, with no temporary folder of an older lane beside it.
+pub(super) fn next_slot(dir: &Path) -> PathBuf {
     let mut nums: Vec<u32> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
@@ -26,7 +26,9 @@ fn next_slot(dir: &Path) -> PathBuf {
         .filter_map(|e| e.file_name().to_str()?.strip_prefix("slot-")?.parse().ok())
         .collect();
     nums.sort();
-    dir.join(format!("slot-{}", nums.last().map_or(1, |n| n + 1)))
+    let slot = dir.join(format!("slot-{}", nums.last().map_or(1, |n| n + 1)));
+    super::temp::remove(&slot);
+    slot
 }
 /// A fresh worktree slot of the project for this lane alone, checked out on its `lane/<id>` branch: at main for a new branch, where the branch stands when a lane continues after its old worktree went. No slot is kept free or reused: a finished lane's slot is already gone (see `cleanup_lane`).
 pub(super) async fn take_slot(
