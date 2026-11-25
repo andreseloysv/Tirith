@@ -46,6 +46,7 @@ pub use send_back::send_back;
 pub use skip::is_autopilot_skipped;
 pub use start::{slug, start};
 pub use stop::stop;
+pub use temp::of as temp_of;
 
 #[cfg(test)]
 #[path = "../../checks/lanes.rs"]
