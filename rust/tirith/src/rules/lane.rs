@@ -1,10 +1,12 @@
-//! A lane's rules: it writes only in its own copy, never touches main and never starts agents.
+//! A lane's rules: it writes only in its own copy (its worktree, and its temporary folder beside it), never touches main and never starts agents.
 use super::{call::Call, owned::in_lanes, patterns::MAIN};
 use crate::app::{Lane, Shared};
 use crate::config::Config;
 use regex::Regex;
 
 pub(super) fn refused(app: &Shared, cfg: &Config, call: &Call, l: &Lane) -> Option<String> {
+    // its agent's scratch files live beside the worktree (`lanes/temp.rs`): they are the lane's own too
+    let temp = crate::lanes::temp_of(std::path::Path::new(&l.workspace));
     let outside = call
         .files
         .iter()
@@ -13,6 +15,7 @@ pub(super) fn refused(app: &Shared, cfg: &Config, call: &Call, l: &Lane) -> Opti
         .any(|path| {
             (in_lanes(app, cfg, path) || cfg.projects.iter().any(|p| path.starts_with(p.repo())))
                 && !path.starts_with(&l.workspace)
+                && !path.starts_with(&temp)
         });
     if call.edit && outside {
         return Some(format!(

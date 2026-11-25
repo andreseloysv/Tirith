@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 const END: &str = ".tmp";
 
 /// The temporary folder of the lane whose worktree is `ws`.
-pub(super) fn of(ws: &Path) -> PathBuf {
+pub fn of(ws: &Path) -> PathBuf {
     let mut name = ws.file_name().unwrap_or_default().to_os_string();
     name.push(END);
     ws.with_file_name(name)
