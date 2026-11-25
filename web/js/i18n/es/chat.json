@@ -1,4 +1,5 @@
 {
+ "The model and effort this answer was made with, the tokens it used ({read} read, {written} written) and how long it took": "El modelo y el esfuerzo con que se hizo esta respuesta, los tokens que usó ({read} leídos, {written} escritos) y cuánto tardó",
  "The model and effort this answer was made with, and how long it took": "El modelo y el esfuerzo con que se hizo esta respuesta, y cuánto tardó",
  "30m, 1h, 24 h, 2 days…": "30m, 1h, 24 h, 2 días…",
  "Answered": "Respondida",
