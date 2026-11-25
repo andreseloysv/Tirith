@@ -20,7 +20,7 @@ static TOLD: LazyLock<Regex> = LazyLock::new(|| {
 });
 /// Before those: itself, or what it started.
 static OURS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)(^|\W)(i|we|yo|codex|muse|copilot|agente|ayudante|herramienta|script|orden|comando|navegador|safari|browser|helper|agent|tool|command|cli|error|sandbox)(\W|$)").unwrap()
+    Regex::new(r"(?i)(^|\W)(i|we|yo|codex|muse|copilot|agente|ayudante|herramienta|script|orden|comando|navegador|safari|chrome|browser|helper|agent|tool|command|cli|error|sandbox)(\W|$)").unwrap()
 });
 
 /// The answer's own words: a clause a line, without what it quotes or tells of someone.

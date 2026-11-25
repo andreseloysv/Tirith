@@ -71,7 +71,7 @@ async fn osascript(args: &[String]) -> Result<String, String> {
 }
 
 /// URL and title as they are, the page text cut at 20,000 characters.
-fn cut_page(text: &str) -> String {
+pub(super) fn cut_page(text: &str) -> String {
     let cut = |s: &str| s.chars().take(20_000).collect::<String>();
     text.split_once('\n')
         .and_then(|(u, rest)| {

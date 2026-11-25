@@ -27,6 +27,12 @@ Set-Content -Path $page -Encoding UTF8 -Value @'
 '@
 $address = 'file:///' + ($page -replace '\\', '/')
 
+# This machine's usual profiles have never run: no welcome page in front of the page that is opened.
+New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\Google\Chrome\User Data", "$env:LOCALAPPDATA\Microsoft\Edge\User Data" | Out-Null
+Set-Content -Path "$env:LOCALAPPDATA\Google\Chrome\User Data\First Run", "$env:LOCALAPPDATA\Microsoft\Edge\User Data\First Run" -Value ''
+New-Item -Force 'HKCU:\Software\Policies\Microsoft\Edge' | Out-Null
+Set-ItemProperty 'HKCU:\Software\Policies\Microsoft\Edge' -Name HideFirstRunExperience -Value 1 -Type DWord
+
 function Run($app, $cmd, $target, $text, $url) {
   $env:NEOBOT_APP = $app; $env:NEOBOT_CMD = $cmd; $env:NEOBOT_TARGET = $target; $env:NEOBOT_TEXT = $text; $env:NEOBOT_URL = $url
   $run = '& ([ScriptBlock]::Create([IO.File]::ReadAllText($env:NEOBOT_SCRIPT, [Text.Encoding]::UTF8)))'
@@ -81,6 +87,10 @@ function Prove($app) {
     Must 'a disabled button' (Run $app 'click' 'Never' '' '') 'ERROR not clicked, it is disabled'
     Must 'no such thing' (Run $app 'click' 'A button that is not there' '' '') 'not found'
     Must 'another address' (Run $app 'read' '' '' 'https://nowhere.example/') 'ERROR no page'
+    # A page opened by its address goes to the person's usual profile, in front: it is read by that address.
+    Must 'open' (Run $app 'open' '' '' 'https://example.com/') 'opened https://example.com/'
+    Start-Sleep -Seconds 6
+    Must 'the opened page' (Run $app 'read' '' '' 'https://example.com') 'Example Domain'
     Write-Host "${app}: read, click, type, a list, a link, a disabled button and a missing page all behave"
   } catch {
     Tree $app

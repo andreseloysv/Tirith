@@ -15,6 +15,10 @@ pub(super) fn browser_server(app: &Shared, lane: bool) -> Option<(String, Vec<St
             .collect(),
     ))
 }
+/// Whether NeoBot's own browser can run here at all (its helper is in this home and there is a Node).
+pub fn own_browser(app: &Shared) -> bool {
+    browser_server(app, false).is_some()
+}
 /// Lanes always `--isolated`; the others NeoBot's persistent profile, `--isolated` while another live session holds it, or `--extension` with `[browser] use = "mine"`.
 fn profile_mode(app: &Shared, lane: bool) -> Option<&'static str> {
     let busy = profile_busy(app);
