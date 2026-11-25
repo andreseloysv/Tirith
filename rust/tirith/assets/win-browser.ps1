@@ -94,13 +94,16 @@ if ($cmd -eq 'type') {
   if (-not $hit) { Say "not found: $target" }
   $list = if ($hit.Current.ControlType -eq $C::ComboBox) { Pattern $hit ([System.Windows.Automation.ExpandCollapsePattern]) }
   if ($list) {
-    # a list shows its options only while it is open: opened, the option pressed, and closed again if there is none
-    $list.Expand()
+    # a list shows its options only while it is open: opened (it may be already), the option pressed, and shut again
+    $shut = { try { if ("$($list.Current.ExpandCollapseState)" -ne 'Collapsed') { $list.Collapse() } } catch { } }
+    try { if ("$($list.Current.ExpandCollapseState)" -ne 'Expanded') { $list.Expand() } } catch { }
     $option = Soon { Pick $hit $text @($C::ListItem) }
-    if (-not $option) { $list.Collapse(); Say "no option «$text» in $(Shown $hit)" }
-    if (-not (Press $option)) { $list.Collapse(); Say "could not choose «$text» in $(Shown $hit)" }
+    if (-not $option) { & $shut; Say "no option «$text» in $(Shown $hit)" }
+    $chosen = "$($option.Current.Name)"
+    if (-not (Press $option)) { & $shut; Say "could not choose «$text» in $(Shown $hit)" }
     Start-Sleep -Milliseconds 300
-    Say "chose «$($option.Current.Name)» in $(Shown $hit); it now says «$(Value $hit)»"
+    & $shut
+    Say "chose «$chosen» in $(Shown $hit); it now says «$(Value $hit)»"
   }
   $field = Pattern $hit ([System.Windows.Automation.ValuePattern])
   if (-not $field -or $field.Current.IsReadOnly) { Say "could not type into $(Shown $hit)" }
