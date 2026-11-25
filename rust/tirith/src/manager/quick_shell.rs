@@ -50,6 +50,10 @@ pub fn prepare(home: &Path) {
         let taken = crate::os::login_run::capture(&home);
         // Only an owner whose shell is slow to start is spared it: a quick one keeps its functions for the bots too.
         let slow = began.elapsed() >= SLOW;
+        if taken && !slow {
+            // Nothing to spare, so no copy of the owner's environment is kept: emptied, it still says the look was made.
+            let _ = std::fs::write(crate::os::login_env::file(&home), "");
+        }
         *READY.lock().unwrap() = (taken && slow).then(quick).flatten();
         BUSY.store(false, Ordering::SeqCst);
     });
