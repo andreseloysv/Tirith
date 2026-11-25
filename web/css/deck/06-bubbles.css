@@ -32,6 +32,8 @@
 .mc-time { margin-left: auto; opacity: .6; text-align: right; }
 .mc-meta .mc-react { margin: 0 0 -1px -4px; }
 .mc-meta .mc-react button { opacity: .5; } .mc-meta .mc-react button.on { opacity: 1; }
+/* how the answer was made: model · effort · time, as quiet as the hour */
+.mc-made { opacity: .6; white-space: nowrap; }
 
 /* on its way, and refused */
 .mc-m.local .mc-b { opacity: .6; }
