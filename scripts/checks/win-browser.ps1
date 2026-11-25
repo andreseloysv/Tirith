@@ -33,19 +33,23 @@ Set-Content -Path "$env:LOCALAPPDATA\Google\Chrome\User Data\First Run", "$env:L
 New-Item -Force 'HKCU:\Software\Policies\Microsoft\Edge' | Out-Null
 Set-ItemProperty 'HKCU:\Software\Policies\Microsoft\Edge' -Name HideFirstRunExperience -Value 1 -Type DWord
 
+# One command, run as the daemon runs it: no console window, the answer read from pipes until they close (a
+# browser that `open` started must not hold them) and the script's own end, never its children's.
 function Run($app, $cmd, $target, $text, $url) {
   $env:NEOBOT_APP = $app; $env:NEOBOT_CMD = $cmd; $env:NEOBOT_TARGET = $target; $env:NEOBOT_TEXT = $text; $env:NEOBOT_URL = $url
-  $run = '& ([ScriptBlock]::Create([IO.File]::ReadAllText($env:NEOBOT_SCRIPT, [Text.Encoding]::UTF8)))'
-  $file = Join-Path $temp 'neobot-out.txt'
-  # Its own end is waited for, not its children's: `open` leaves a browser running (-Wait would wait for that too).
-  $done = Start-Process powershell.exe -ArgumentList @('-NoProfile', '-NonInteractive', '-Command', $run) -PassThru -NoNewWindow `
-    -RedirectStandardOutput $file -RedirectStandardError "$file.err"
-  $null = $done.Handle
-  if (-not $done.WaitForExit(120000)) { $done.Kill(); throw "$app ${cmd}: no answer in two minutes" }
-  $out = [IO.File]::ReadAllText($file, [Text.Encoding]::UTF8)
-  $err = [IO.File]::ReadAllText("$file.err")
-  Write-Host "--- $app $cmd '$target' '$text' '$url' -> exit $($done.ExitCode)`n$out$err"
-  if ($done.ExitCode -ne 0) { throw "$app ${cmd}: the script ended with $($done.ExitCode): $err" }
+  $start = New-Object System.Diagnostics.ProcessStartInfo
+  $start.FileName = 'powershell.exe'
+  $start.Arguments = '-NoProfile -NonInteractive -Command "& ([ScriptBlock]::Create([IO.File]::ReadAllText($env:NEOBOT_SCRIPT, [Text.Encoding]::UTF8)))"'
+  $start.UseShellExecute = $false; $start.CreateNoWindow = $true
+  $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
+  $start.StandardOutputEncoding = [Text.Encoding]::UTF8
+  $run = [System.Diagnostics.Process]::Start($start)
+  $said = $run.StandardOutput.ReadToEndAsync(); $failed = $run.StandardError.ReadToEndAsync()
+  if (-not [System.Threading.Tasks.Task]::WaitAll(@($said, $failed), 120000)) { $run.Kill(); throw "$app ${cmd}: its answer never ended" }
+  $run.WaitForExit()
+  $out = $said.Result; $err = $failed.Result
+  Write-Host "--- $app $cmd '$target' '$text' '$url' -> exit $($run.ExitCode)`n$out$err"
+  if ($run.ExitCode -ne 0) { throw "$app ${cmd}: the script ended with $($run.ExitCode): $err" }
   $out
 }
 function Must($what, $out, $want) { if (-not $out.Contains($want)) { throw "$what should say «$want», said: $out" } }
