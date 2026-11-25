@@ -16,6 +16,7 @@ mod start;
 mod state;
 mod updated;
 mod validate;
+pub use browser::own_browser;
 pub use browser_args::browser_args_for;
 pub use chat_argv::chat_argv;
 pub use command::command;

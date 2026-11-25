@@ -3,7 +3,14 @@ use super::{list::list, status::status};
 use crate::{client::Flag, sandbox::tunnel::tunnel};
 use serde_json::json;
 
-/// `neobot net …`, `neobot safari …` and `neobot browser …` commands; `None` when `pos` is not one of this module's commands.
+/// The owner's own browsers, as the commands name them.
+macro_rules! OWN {
+    () => {
+        "safari" | "chrome" | "edge"
+    };
+}
+
+/// `neobot net …`, `neobot safari|chrome|edge …` and `neobot browser …` commands; `None` when `pos` is not one of this module's commands.
 pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
     Some(match pos {
         ["net", "status"] => status(),
@@ -16,23 +23,27 @@ pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
             "neobot net status|list|block <domain|ip|cidr>|unblock <rule>|tunnel <host> <port>|allow"
                 .into(),
         ),
-        ["safari", cmd @ ("open" | "read"), rest @ ..] => safari(json!({"cmd": cmd, "url": rest.join(" ")})),
-        ["safari", "click", target, rest @ ..] => {
-            safari(json!({"cmd": "click", "target": target, "url": rest.join(" ")}))
+        [app @ OWN!(), cmd @ ("open" | "read"), rest @ ..] => {
+            own(app, json!({"cmd": cmd, "url": rest.join(" ")}))
         }
-        ["safari", "type", target, text, rest @ ..] => safari(
+        [app @ OWN!(), "click", target, rest @ ..] => own(
+            app,
+            json!({"cmd": "click", "target": target, "url": rest.join(" ")}),
+        ),
+        [app @ OWN!(), "type", target, text, rest @ ..] => own(
+            app,
             json!({"cmd": "type", "target": target, "text": text, "url": rest.join(" ")}),
         ),
-        ["safari", ..] => Err(
-            "neobot safari open <url> | read [<url>] | click <target> [<url>] | type <target> <text> [<url>]"
+        [app @ OWN!(), ..] => Err(format!(
+            "neobot {app} open <url> | read [<url>] | click <target> [<url>] | type <target> <text> [<url>]"
+        )),
+        ["browser"] => own("", json!({"cmd": "browser"})),
+        ["browser", "use", which] => own("", json!({"cmd": "use", "target": which})),
+        ["browser", "login", rest @ ..] => own("", json!({"cmd": "login", "url": rest.join(" ")})),
+        ["browser", ..] => Err(
+            "neobot browser | neobot browser use <neobot or the owner's own browser> | neobot browser login <url>"
                 .into(),
         ),
-        ["browser"] => safari(json!({"cmd": "browser"})),
-        ["browser", "use", which] => safari(json!({"cmd": "use", "target": which})),
-        ["browser", "login", rest @ ..] => safari(json!({"cmd": "login", "url": rest.join(" ")})),
-        ["browser", ..] => {
-            Err("neobot browser | neobot browser use neobot|safari | neobot browser login <url>".into())
-        }
         _ => return None,
     })
 }
@@ -43,7 +54,8 @@ fn change(method: &str, rule: &str, done: &str) -> Result<(), String> {
         .map(|v| println!("{done} {}", v["rule"].as_str().unwrap_or("")))
 }
 
-/// Asks the daemon to drive the owner's Safari and says what it answered.
-fn safari(body: serde_json::Value) -> Result<(), String> {
+/// Asks the daemon to act in the owner's own browser `app` (Safari on a Mac; Chrome or Edge on Windows) and says what it answered.
+fn own(app: &str, mut body: serde_json::Value) -> Result<(), String> {
+    body["app"] = json!(app);
     crate::client::call("POST", "/api/safari", Some(body)).map(|b| println!("{b}"))
 }

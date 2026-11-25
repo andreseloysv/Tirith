@@ -1,6 +1,8 @@
 use super::act::{act_args, show_script, USAGE};
 use super::choice::how;
 use super::login::login_args;
+use super::uia::{answer, browser, vars};
+use serde_json::json;
 
 #[test]
 fn a_click_runs_the_fixed_script_with_the_words_as_arguments() {
@@ -153,5 +155,79 @@ fn typing_reaches_webkit_editors_and_a_disabled_button_is_never_clicked() {
     assert!(
         script.contains("'AXEnabled'") && script.contains("it is disabled"),
         "a disabled button is reported, not «clicked»"
+    );
+}
+
+#[test]
+fn chrome_and_edge_get_the_words_as_variables_never_as_code() {
+    assert_eq!(browser("chrome"), Some(("chrome", "Chrome")));
+    assert_eq!(browser("edge"), Some(("msedge", "Edge")));
+    assert_eq!(browser("safari"), None, "Safari has its own way");
+    let typed = json!({"cmd": "type", "target": "Your name", "text": "$(calc) `whoami`\nsecond line", "url": "https://example.com/a b"});
+    let got = vars("msedge", &typed).unwrap();
+    assert_eq!(
+        got,
+        [
+            ("NEOBOT_CMD", "type".to_string()),
+            ("NEOBOT_APP", "msedge".to_string()),
+            ("NEOBOT_URL", "https://example.com/a b".to_string()),
+            ("NEOBOT_TARGET", "Your name".to_string()),
+            ("NEOBOT_TEXT", "$(calc) `whoami`\nsecond line".to_string()),
+        ],
+        "the words as they are, each in its own variable"
+    );
+    assert!(vars("chrome", &json!({"cmd": "read"})).is_ok());
+    assert!(vars(
+        "chrome",
+        &json!({"cmd": "open", "url": "https://youtube.com/watch?v=1"})
+    )
+    .is_ok());
+    for bad in [
+        json!({"cmd": "open", "url": "--remote-debugging-port=9222"}),
+        json!({"cmd": "open", "url": "https://a.example/ --incognito"}),
+        json!({"cmd": "open", "url": "file:///C:/Windows/win.ini"}),
+        json!({"cmd": "click", "target": " "}),
+        json!({"cmd": "click", "target": "Send\u{0}"}),
+        json!({"cmd": "type", "target": "Name", "text": "a\u{1b}[2J"}),
+        json!({"cmd": "run", "target": "x"}),
+    ] {
+        assert!(vars("chrome", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn the_scripts_error_is_the_commands_error_with_the_browsers_name() {
+    assert_eq!(
+        answer("Chrome", true, "clicked button «Press me»\r\n", ""),
+        Ok("clicked button «Press me»".into())
+    );
+    assert_eq!(
+        answer("Chrome", true, "ERROR Chrome is not open", ""),
+        Err("Chrome: Chrome is not open".into())
+    );
+    assert_eq!(
+        answer(
+            "Edge",
+            false,
+            "",
+            "Start-Process : This command cannot be run\nAt line:1"
+        ),
+        Err("Edge: Start-Process : This command cannot be run".into())
+    );
+    assert_eq!(
+        how("chrome"),
+        "chrome: act in the owner's Chrome with neobot chrome open|read|click|type; a sign-in is theirs, in their Chrome: open the page with neobot chrome open <url> and give them its link"
+    );
+    assert!(how("safari")
+        .starts_with("safari: act in the owner's Safari with neobot safari open|read|click|type;"));
+    let own = super::choice::OWN;
+    assert_eq!(
+        own,
+        if cfg!(windows) {
+            &["chrome", "edge"][..]
+        } else {
+            &["safari"][..]
+        },
+        "each system has its own"
     );
 }
