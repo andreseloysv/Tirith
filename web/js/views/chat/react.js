@@ -1,7 +1,10 @@
 // The owner's 👍 / 👎 under each answer of a bot: the answer's turn (its row in /api/turns) is found by its words
 // and time, and a click calls POST /api/turns/<id>/reaction (the same one again takes it back); the choice stays marked.
+// Beside them, how the answer was made (`Made`): the model and effort that turn really ran with and how long it
+// took. The chip in the box says what the next turn will use; a turn already running keeps what it started with.
 import { html, useState, useEffect } from '../../../vendor/preact-htm.js';
 import { useFetch, api } from '../../store.js';
+import { readable, effortName } from '../../model-controls.js';
 import { t } from '../../i18n.js';
 
 /** The turns of a bot's conversation (`on`: it is a bot's), under its own role, the last first; none elsewhere. */
@@ -37,4 +40,12 @@ export function Reactions({ turn }) {
   const btn = (v, face, label) => html`<button type="button" class=${mine === v ? 'on' : ''} aria-pressed=${mine === v}
       aria-label=${label} title=${err || label} onClick=${() => set(v)}>${face}</button>`;
   return html`<span class="mc-react">${btn(1, '👍', t('Good answer'))}${btn(-1, '👎', t('Bad answer'))}</span>`;
+}
+
+const took = (ms) => (ms < 1000 ? t('under 1 s') : ms < 60000 ? t('{n} s', { n: Math.round(ms / 1000) }) : t('{n} min', { n: Math.round(ms / 6000) / 10 }));
+
+/** The model, the effort and the time of the turn that gave this answer, in a few quiet words. */
+export function Made({ turn }) {
+  const parts = [turn.model ? readable(turn.model) : '', effortName(turn.effort), turn.ms ? took(turn.ms) : ''].filter(Boolean);
+  return parts.length ? html`<span class="mc-made" title=${t('The model and effort this answer was made with, and how long it took')}>${parts.join(' · ')}</span>` : null;
 }
