@@ -10,7 +10,7 @@ What request or routine sets it going, and when it does not apply.
 What it needs to start: request data, accounts, pages, files and permissions.
 
 ## Pasos
-The numbered steps, in order, with where to look, what to filter and what to skip.
+The numbered steps, in order, with where to look, what to filter and what to skip. When the steps are commands that already worked together, end with them as one shell call (joined with &&, their checks in it), so the next run is one call and not one per step.
 
 ## Cómo validar
 How to check that the result is right before giving it: each check on one line.

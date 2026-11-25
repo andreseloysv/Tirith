@@ -11,6 +11,7 @@ pub fn spawn_chat(
     project: &str,
     argv: Vec<String>,
 ) -> Result<(Child, ChildStdin, ChildStdout), String> {
+    let quick = super::quick_shell::env(app, project, argv.first().map_or("", |p| p)); // a bot's shell starts without the owner's profile
     let launch = sandbox::wrap(app, &format!("{role}@{project}"), argv);
     let dir = if app.cfg().factory.role::<String>(role, "scope").as_deref() == Some("own") {
         app.home.join("manager").join(role)
@@ -34,6 +35,7 @@ pub fn spawn_chat(
             crate::lanes::shared_target(app, if project.is_empty() { role } else { project }),
         ) // managers, bots and the CEO build into the shared cache: a cargo of theirs in a project folder leaves no target/ there
         .env("TIRITH_HOME", &app.home)
+        .envs(quick)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(log)

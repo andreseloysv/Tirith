@@ -39,6 +39,9 @@ pub struct Known {
     pub check_effort: String,
     /// The models the page offers for it while config.toml's `[models] choices` lists none of its own.
     pub models: Vec<String>,
+    /// Its variable for the shell its commands run in, and its variable for a file that shell reads before each command (`manager/quick_shell.rs`).
+    pub shell_var: String,
+    pub env_file_var: String,
 }
 
 /// Every agent, in the guide's order.

@@ -10,6 +10,8 @@
 #   npm_on_musl  its maker's npm package, installed instead on Alpine (the script brings a glibc build there)
 #   check_*  the cheap setting of its connection check
 #   models   the models the page offers for it while config.toml's [models] choices names none of its own
+#   shell_var, env_file_var   its variables for the shell its commands run in and for a file that shell reads
+#            before each command: with both, a bot's agent is spared the owner's shell profile at every session
 
 [anthropic]
 name = "Anthropic CLI"

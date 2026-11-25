@@ -1,4 +1,8 @@
 {
+ "Runs with": "Läuft mit",
+ "{name}'s model · {model}": "Das Modell von {name} · {model}",
+ "{name}'s effort · {effort}": "Der Aufwand von {name} · {effort}",
+ "For this routine alone: a quick model for a simple task, a careful one for a hard one.": "Nur für diese Routine: ein schnelles Modell für eine einfache Aufgabe, ein gründliches für eine schwere.",
  "+ Hear an event": "+ Auf ein Ereignis hören",
  "+ New routine": "+ Neue Routine",
  "+ New skill": "+ Neue Fähigkeit",

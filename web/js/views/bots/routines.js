@@ -1,10 +1,12 @@
 // The Routines tab's pieces: one routine with its switch, Run now (or, on an event, Test), Edit and Delete, and the
-// form for a new or changed one: at a time on some days, or on an event from outside that reaches its webhook.
+// form for a new or changed one: at a time on some days, or on an event from outside that reaches its webhook, and
+// with the bot's model or one of its own (routine-model.js).
 import { html, useState } from '../../../vendor/preact-htm.js';
 import { api } from '../../store.js';
 import { ICON, Icon } from '../../common.js';
 import { DAY, WEEKDAYS, DAILY, isOn, daysLabel, timeLabel, nextRun, whenLabel } from './when.js';
 import { Webhook } from './webhook.js';
+import { RoutineModel, ownWords } from './routine-model.js';
 import { t } from '../../i18n.js';
 
 const TRIGGERS = [['schedule', t('At a time')], ['webhook', t('On an event from outside')]];
@@ -31,13 +33,15 @@ export function RoutineForm({ bot, r, onDone }) {
   const [when, setWhen] = useState(r.when || 'github:pull_request.opened');
   const [days, setDays] = useState(r.days && r.days.length ? r.days : WEEKDAYS);
   const [at, setAt] = useState(r.at || '08:00');
+  const [model, setModel] = useState(r.model || '');
+  const [effort, setEffort] = useState(r.effort || '');
   const [err, setErr] = useState('');
   const hook = trigger === 'webhook';
   const ok = title.trim() && prompt.trim() && (hook ? when.trim() : days.length && at);
   const save = (e) => {
     e.preventDefault();
     if (!ok) return;
-    const body = { id: r.id, title: title.trim(), prompt: prompt.trim(), trigger, ...(hook ? { when: when.trim() } : { days, at }) };
+    const body = { id: r.id, title: title.trim(), prompt: prompt.trim(), trigger, model, effort, ...(hook ? { when: when.trim() } : { days, at }) };
     api('POST', `/api/bots/${encodeURIComponent(bot.id)}/routines`, body).then(onDone, (x) => setErr(x.message));
   };
   return html`<form class="bform" onSubmit=${save}>
@@ -47,6 +51,7 @@ export function RoutineForm({ bot, r, onDone }) {
     <div class="bfield"><span class="bcap">${t('Runs')}</span><div class="btrig" role="radiogroup">${TRIGGERS.map(([k, label]) => html`<button type="button" key=${k} role="radio"
       aria-checked=${trigger === k} class=${trigger === k ? 'on' : ''} onClick=${() => setTrigger(k)}>${label}</button>`)}</div></div>
     ${hook ? html`<${OnEvent} bot=${bot} when=${when} setWhen=${setWhen} />` : html`<${Timed} days=${days} setDays=${setDays} at=${at} setAt=${setAt} />`}
+    <${RoutineModel} bot=${bot} model=${model} effort=${effort} setModel=${setModel} setEffort=${setEffort} />
     ${err ? html`<p class="berr">${err}</p>` : null}
     <div class="bfoot"><button type="button" class="bbtn" onClick=${onDone}>${t('Cancel')}</button><button type="submit" class="bbtn pri" disabled=${!ok}>${t('Save routine')}</button></div>
   </form>`;
@@ -63,7 +68,8 @@ export function Routine({ bot, r, onEdit }) {
   /* Test: a sample GitHub pull request opened, straight to this routine */
   const run = () => post(hook ? `/webhook/test/${encodeURIComponent(r.id)}` : `/run/${encodeURIComponent(r.id)}`).then((ok) => { if (ok) { setRan(true); setTimeout(() => setRan(false), 4000); } });
   const next = hook ? null : nextRun(r);
-  const said = hook ? t('On an event · {when}', { when: r.when }) : t('{days} around {time}', { days: daysLabel(r.days), time: timeLabel(r.at) });
+  const timed = hook ? t('On an event · {when}', { when: r.when }) : t('{days} around {time}', { days: daysLabel(r.days), time: timeLabel(r.at) });
+  const said = [timed, ownWords(r)].filter(Boolean).join(' · '); /* and its own model or effort, when it has one */
   const state = hook ? t('Waits for its webhook') : next ? t('Next · {when}', { when: whenLabel(next) }) : '';
   return html`<li class=${`brr${isOn(r) ? '' : ' off'}`}>
     <span class="brico"><${Icon} d=${hook ? ICON.rooms : ICON.clock} size=${18} w=${1.4} /></span>
