@@ -12,6 +12,8 @@
 #   models   the models the page offers for it while config.toml's [models] choices names none of its own
 #   shell_var, env_file_var   its variables for the shell its commands run in and for a file that shell reads
 #            before each command: with both, a bot's agent is spared the owner's shell profile at every session
+#   tmp_var  its variable for the folder its own temporary files go under: a lane's agent gets one beside the
+#            lane's worktree, which goes with it
 
 [anthropic]
 name = "Anthropic CLI"
