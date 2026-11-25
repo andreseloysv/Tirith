@@ -34,6 +34,7 @@ pub(super) fn spawn_agent(
     ws: &Path,
     argv: Vec<String>,
 ) -> Result<(), String> {
+    let own_tmp = super::temp::env(app, argv.first().map_or("", String::as_str), ws);
     let launch = sandbox::wrap(app, &lane.id, argv);
     let log = open_log(app, &lane.id)?;
     let mut command = launch.command(app);
@@ -43,6 +44,7 @@ pub(super) fn spawn_agent(
         .env("TIRITH_PROJECT", &lane.project)
         .env("CARGO_TARGET_DIR", shared_target(app, &lane.project))
         .env("TIRITH_HOME", &app.home)
+        .envs(own_tmp) // its temporary files beside the worktree, to go with it
         .stdin(Stdio::null())
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
         .stderr(log)

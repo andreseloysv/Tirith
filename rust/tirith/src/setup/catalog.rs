@@ -42,6 +42,8 @@ pub struct Known {
     /// Its variable for the shell its commands run in, and its variable for a file that shell reads before each command (`manager/quick_shell.rs`).
     pub shell_var: String,
     pub env_file_var: String,
+    /// Its variable for the folder its own temporary files go under (`lanes/temp.rs`).
+    pub tmp_var: String,
 }
 
 /// Every agent, in the guide's order.

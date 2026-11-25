@@ -578,3 +578,86 @@ fn a_lanes_next_agent_does_not_inherit_out_of_credits() {
     );
     assert_eq!(super::logscan::this_run("no mark"), "no mark");
 }
+
+#[tokio::test]
+async fn lane_done_leaves_no_temp() {
+    let (app, repo, _base) = cleanup_fixture("temp").await;
+    // What an agent keeps outside its worktree lives beside it and goes with it: a merged lane's, and a stopped one's.
+    for (id, merged) in [("temp-1", true), ("temp-2", false)] {
+        let lane = cleanup_lane_fixture(&app, &repo, id).await;
+        let ws = std::path::PathBuf::from(&lane.workspace);
+        let given = super::temp::given("AGENT_TMP", &ws);
+        let tmp = super::temp::of(&ws);
+        assert_eq!(
+            given,
+            vec![("AGENT_TMP".to_string(), tmp.display().to_string())]
+        );
+        assert_eq!(
+            tmp.parent(),
+            ws.parent(),
+            "beside the worktree, where agents may write"
+        );
+        assert!(
+            tmp.is_dir() && !tmp.starts_with(&ws),
+            "made, and no part of the worktree"
+        );
+        let scratch = tmp.join("agent-501/session/scratchpad/target/debug");
+        std::fs::create_dir_all(&scratch).unwrap();
+        std::fs::write(scratch.join("big"), "a gigabyte").unwrap();
+        super::cleanup::cleanup_lane(&app, &lane, merged).await;
+        assert!(
+            !ws.exists() && !tmp.exists(),
+            "{id}: the temporary folder goes with the worktree"
+        );
+    }
+    assert!(
+        super::temp::given("", std::path::Path::new("/nowhere/slot-1")).is_empty(),
+        "an agent the catalog names no variable for keeps the system's folder"
+    );
+}
+
+#[test]
+fn a_temp_folder_without_its_worktree_goes_at_the_sweep() {
+    let dir = std::env::temp_dir().join(format!("tirith-lane-temp-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    for name in [
+        "slot-1",
+        "slot-1.tmp/kept",
+        "slot-2.tmp/gone",
+        "merge",
+        "notes.tmp",
+        "slot-9",
+    ] {
+        std::fs::create_dir_all(dir.join(name)).unwrap();
+    }
+    super::temp::sweep(&dir);
+    let left = |name: &str| dir.join(name).exists();
+    assert!(left("slot-1.tmp/kept"), "a living lane keeps its own");
+    assert!(!left("slot-2.tmp"), "one whose worktree is gone goes");
+    assert!(
+        left("merge") && left("notes.tmp") && left("slot-9") && left("slot-1"),
+        "nothing else is touched"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_fresh_slot_starts_with_no_old_temp() {
+    // A folder of the test's own: a project's real lanes folder is under the home every test shares.
+    let dir = std::env::temp_dir().join(format!("tirith-fresh-slot-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("slot-1.tmp/old")).unwrap();
+    assert_eq!(super::worktree::next_slot(&dir), dir.join("slot-1"));
+    assert!(
+        !dir.join("slot-1.tmp").exists(),
+        "a slot number used again does not inherit an older lane's files"
+    );
+    std::fs::create_dir_all(dir.join("slot-1")).unwrap();
+    std::fs::create_dir_all(dir.join("slot-1.tmp/mine")).unwrap();
+    assert_eq!(super::worktree::next_slot(&dir), dir.join("slot-2"));
+    assert!(
+        dir.join("slot-1.tmp/mine").exists(),
+        "a living lane's stays"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

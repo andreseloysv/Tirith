@@ -40,7 +40,7 @@ async fn save_uncommitted(app: &Shared, lane: &Lane, ws: &Path) {
             }),
     );
 }
-/// A lane that merged, stopped or failed for good leaves nothing behind: first its uncommitted work is committed on its branch (a merged lane's work is on main already, and its branch goes below), the git-ignored files of its worktree that are no build cache move to the same path in the project (kept ignored there, never overwriting), then the worktree goes with its caches (`git worktree remove` and prune). A merged lane's branch, logs and brief go at once; a stopped or failed one keeps its branch, and its logs go after 24 h (the sweep).
+/// A lane that merged, stopped or failed for good leaves nothing behind: first its uncommitted work is committed on its branch (a merged lane's work is on main already, and its branch goes below), the git-ignored files of its worktree that are no build cache move to the same path in the project (kept ignored there, never overwriting), then the worktree goes with its caches (`git worktree remove` and prune) and with the lane's temporary folder (`temp.rs`). A merged lane's branch, logs and brief go at once; a stopped or failed one keeps its branch, and its logs go after 24 h (the sweep).
 pub async fn cleanup_lane(app: &Shared, lane: &Lane, merged: bool) {
     let Some(project) = app
         .cfg()
@@ -57,6 +57,7 @@ pub async fn cleanup_lane(app: &Shared, lane: &Lane, merged: bool) {
         }
         keep_ignored(&ws, &repo, &lane.id).await;
         remove_worktree(&repo, &ws).await;
+        super::temp::remove(&ws);
     }
     if merged && !lane.branch.is_empty() {
         drop(git(&repo, &["branch", "-D", &lane.branch]).await);
