@@ -60,13 +60,13 @@ pub fn forget(home: &Path, alias: &str, var: &str) -> Result<bool, String> {
     Ok(true)
 }
 
-/// The variables of the agent whose command `program` is; none for any other program.
-pub fn for_program(app: &Shared, program: &str) -> Vec<(String, String)> {
+/// The alias and the variables of the agent whose command `program` is; none for any other program.
+pub fn for_agent(app: &Shared, program: &str) -> (String, Vec<(String, String)>) {
     let agents = app.cfg().factory.commands();
     let same = agents.iter().find(|(_, c)| c == program);
     let named = || agents.iter().find(|(_, c)| base(c) == base(program));
     same.or_else(named)
-        .map(|(alias, _)| env(&app.home, alias))
+        .map(|(alias, _)| (alias.clone(), env(&app.home, alias)))
         .unwrap_or_default()
 }
 

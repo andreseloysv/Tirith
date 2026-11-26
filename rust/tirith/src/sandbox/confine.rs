@@ -29,13 +29,17 @@ pub(super) fn argv(app: &Shared, program: String, args: Vec<String>) -> (String,
             ports.push(port);
         }
     }
-    let hidden = crate::app::kept(&app.home).map(|f| f.display().to_string());
+    let hidden: Vec<String> = crate::app::kept(&app.home)
+        .iter()
+        .map(|f| f.display().to_string())
+        .collect();
     super::linux::argv(&ports, &hidden, program, args)
 }
 
 #[cfg(not(target_os = "linux"))]
 pub(super) fn argv(app: &Shared, program: String, args: Vec<String>) -> (String, Vec<String>) {
-    let hidden = super::hidden::rules(&crate::app::kept(&app.home));
+    let hidden = super::hidden::rules(&crate::app::kept(&app.home))
+        + &super::hidden::folder(&app.home.join("auth"));
     let args = [
         "-p".to_string(),
         format!("{}{hidden}", super::profile::PROFILE),

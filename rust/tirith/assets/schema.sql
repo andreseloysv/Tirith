@@ -50,6 +50,13 @@ CREATE TABLE IF NOT EXISTS lane_runs (id INTEGER PRIMARY KEY, lane TEXT, project
     source TEXT);
 CREATE INDEX IF NOT EXISTS lane_runs_lane ON lane_runs (lane);
 CREATE INDEX IF NOT EXISTS lane_runs_project ON lane_runs (project, ended_at);
+-- Every call the model door forwarded (docs/DAEMON.md, `modeldoor/`): when, the alias whose key it used, who called
+-- (a lane id or `<role>@<conversation>`) and its role, the model, the HTTP status, the tokens and the dollars (NULL
+-- without a price in config.toml).
+CREATE TABLE IF NOT EXISTS door_calls (id INTEGER PRIMARY KEY, at TEXT, alias TEXT, who TEXT, role TEXT, model TEXT,
+    status INTEGER, ms INTEGER, tokens_in INTEGER, tokens_out INTEGER, tokens_cache_read INTEGER,
+    tokens_cache_write INTEGER, cost_usd REAL);
+CREATE INDEX IF NOT EXISTS door_calls_at ON door_calls (at);
 CREATE INDEX IF NOT EXISTS turns_conv ON turns (conv, id);
 -- What was due (docs/DAEMON.md, `expected/`): one row for each occurrence of a routine or scheduled pass, written
 -- before anything starts: when it was due (UTC), its task, waiting | running | ok | failed, why, and its turn.

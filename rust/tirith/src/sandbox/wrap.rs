@@ -11,8 +11,9 @@ pub fn wrap(app: &Shared, who: &str, argv: Vec<String>) -> Result<Launch, String
     }
     let mut it = argv.into_iter();
     let (program, args): (String, Vec<String>) = (it.next().unwrap_or_default(), it.collect());
-    let signed = crate::setup::for_program(app, &program); // a token of this agent's own (neobot connect --token)
     let caller = crate::lab::proxy_caller(who); // a replay's turn reaches nothing outside
+    let (alias, signed) = crate::setup::for_agent(app, &program); // a token of this agent's own (neobot connect --token)
+    let signed = crate::modeldoor::given(app, &caller, &alias, signed); // its provider key stays with the daemon
     if let Err(why) = enabled(app) {
         let (program, args) = super::quiet::argv(&signed, program, args);
         let mut launch = unsandboxed(app, who, &why, program, args);

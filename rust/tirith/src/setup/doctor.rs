@@ -36,7 +36,7 @@ pub(super) fn doctor() -> Result<bool, String> {
         );
     }
     let cfg = cx.cfg();
-    super::server_line::line(&cfg, up, &mut line);
+    super::server_line::line(&cfg, &cx.home, up, &mut line);
     if let Some(error) = &cfg.error {
         line(false, "config.toml", error);
     }

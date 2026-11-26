@@ -146,3 +146,26 @@ fn the_daemon_starts_git_only_through_the_sandbox() {
         "an agent's repository would run code outside the sandbox: {found:?}"
     );
 }
+
+#[test]
+fn the_profile_hides_every_auth_file_and_the_folder_they_are_made_in() {
+    let home = std::env::temp_dir().join(format!("tirith-hide-{}", std::process::id()));
+    std::fs::create_dir_all(home.join("auth")).unwrap();
+    std::fs::write(
+        home.join("auth/copilot.env"),
+        "COPILOT_PROVIDER_API_KEY=x\n",
+    )
+    .unwrap();
+    let kept = crate::app::kept(&home);
+    assert!(kept.contains(&home.join("auth/copilot.env")), "{kept:?}");
+    let rules = super::hidden::rules(&kept) + &super::hidden::folder(&home.join("auth"));
+    assert!(
+        rules.contains("(literal") && rules.contains("copilot.env"),
+        "{rules}"
+    );
+    assert!(
+        rules.contains("(deny file-read* file-write* file-link file-clone (subpath"),
+        "{rules}"
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}

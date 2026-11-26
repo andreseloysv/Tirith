@@ -37,6 +37,7 @@ pub(super) const ROLE_KEYS: &[&str] = &[
     "writes",
     "connectors",
     "net",
+    "door_budget",
 ];
 pub(super) const ROUTE_KEYS: &[&str] = &[
     "on",

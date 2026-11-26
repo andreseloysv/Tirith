@@ -32,3 +32,21 @@ pub(super) fn rules(files: &[PathBuf]) -> String {
     }
     lines
 }
+
+/// The profile's line for a folder and all under it, as named and as the kernel names it: files made in it later are covered too (`auth/`, where an agent's provider key is kept).
+pub(super) fn folder(dir: &Path) -> String {
+    let real = dir
+        .parent()
+        .and_then(|up| up.canonicalize().ok())
+        .zip(dir.file_name())
+        .map(|(up, name)| up.join(name));
+    BTreeSet::from([dir.to_path_buf(), real.unwrap_or_else(|| dir.to_path_buf())])
+        .iter()
+        .map(|p| {
+            format!(
+                "(deny file-read* file-write* file-link file-clone (subpath {}))\n",
+                quoted(p)
+            )
+        })
+        .collect()
+}

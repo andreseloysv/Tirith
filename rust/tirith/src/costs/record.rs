@@ -55,7 +55,7 @@ pub fn run_ended(app: &Shared, lane: &Lane) {
         .then(|| fresh(app, &lane.id));
     share(app, (&key, &lane.session), false, &mut u);
     if u.input_has_cache {
-        u.input = fresh_input(&u);
+        (u.input, u.input_has_cache) = (fresh_input(&u), false);
     }
     let model = Some(std::mem::take(&mut u.model))
         .filter(|m| !m.is_empty())

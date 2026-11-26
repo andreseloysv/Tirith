@@ -2,11 +2,13 @@
 use super::who::{sent, Agent};
 use crate::app::Shared;
 use axum::http::HeaderMap;
+use std::ops::Not;
 
 /// The agent whose token the request carries.
 pub(super) fn agent(app: &Shared, headers: &HeaderMap) -> Option<Agent> {
     let who = crate::sandbox::who_of(app, sent(headers)?)?;
-    // `replay:<experiment>:<who>` is that who, its network closed (`lab/replay.rs`).
+    who.starts_with("door:").not().then_some(())?; // the door's token opens the door alone
+                                                   // `replay:<experiment>:<who>` is that who, its network closed (`lab/replay.rs`).
     let own = who
         .strip_prefix("replay:")
         .and_then(|rest| rest.split_once(':'))

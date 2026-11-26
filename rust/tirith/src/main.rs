@@ -22,6 +22,7 @@ mod lanes;
 mod manager;
 mod merge;
 mod metrics;
+mod modeldoor;
 mod models;
 mod numbers;
 mod oauth;

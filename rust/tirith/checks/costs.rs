@@ -128,3 +128,32 @@ fn copilots_resumed_session_counts_only_the_new_run() {
         "{total}"
     );
 }
+
+#[test]
+fn a_copilot_runs_cost_counts_its_fresh_input_once() {
+    let app = app("fresh");
+    let ws = app.home.join("lanes/p/slot-1");
+    let l = lane("l3", "no key", &ws.display().to_string());
+    fresh(&app, "l3");
+    std::fs::write(
+        app.home.join("logs/lanes/l3.log"),
+        format!("{}now\n", crate::lanes::RUN_START),
+    )
+    .unwrap();
+    // Copilot's input holds its cache: 14 fresh, 124810 read, 27404 written.
+    let usage = json!({"inputTokens": 152228, "outputTokens": 2154, "cacheReadTokens": 124810, "cacheWriteTokens": 27404});
+    let path = counted("copilot", vec![], &ws, 0)[1].clone();
+    std::fs::write(
+        path,
+        json!({"modelMetrics": {"model-a": {"usage": usage}}}).to_string(),
+    )
+    .unwrap();
+    run_ended(&app, &l);
+    let row = &report(&app, "p", "", "run")["rows"][0];
+    assert_eq!(row["tokens_in"], 14);
+    let dollars = (14.0 * 0.10 + 27404.0 * 0.10 + 124810.0 * 0.01 + 2154.0 * 0.50) / 1e6;
+    assert!(
+        (row["cost_usd"].as_f64().unwrap() - dollars).abs() < 1e-6,
+        "{row}"
+    );
+}

@@ -40,7 +40,7 @@ pub use caller::confined;
 pub use check::check_command;
 pub use cli::cli;
 pub use closed::{needs_mac, refusal as closed_for, server_mode};
-pub use egress::{allow as net_allow, settled as net_settled};
+pub use egress::{allow as net_allow, role_of, settled as net_settled};
 pub use git::{git, prepare};
 #[cfg(target_os = "macos")]
 pub use nested::inside;
@@ -55,7 +55,7 @@ pub use start::start;
 pub use tags::tags;
 #[cfg(test)]
 pub use token::issued;
-pub use token::who_of;
+pub use token::{issued as caller_token, who_of};
 pub use wrap::wrap;
 
 #[cfg(test)]

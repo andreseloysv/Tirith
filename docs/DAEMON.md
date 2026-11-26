@@ -987,6 +987,57 @@ Files:
 - `worse.rs`: A bot's routine gone worse (its last 5 runs 30 % dearer than the 10 before, or 2 failed): `routine.worse`, once per episode.
 - `work.rs`: The work there is and what of it reached main: the autopilot projects with and without startable items, and the lanes merged in 24 h.
 
+## `modeldoor/`
+
+The model door: an agent never holds the provider key. An agent's auth file (`<home>/auth/<alias>.env`, 0600) may hold
+a provider key: `COPILOT_PROVIDER_API_KEY` (with `COPILOT_PROVIDER_BASE_URL` and `COPILOT_PROVIDER_TYPE`, Copilot's
+BYOK: `anthropic`, `openai` or `azure`), `ANTHROPIC_API_KEY` (`ANTHROPIC_BASE_URL`) or `OPENAI_API_KEY`
+(`OPENAI_BASE_URL`). With the door on (`[door] enabled = true`; on by default in server mode), `sandbox::wrap` gives
+that agent's processes, in place of the key, a token and, in place of the base URL, the daemon's own
+`http://127.0.0.1:<port>/door/<alias>` (plus the base URL's own path, so an SDK that adds `/chat/completions` still
+lands). The token is a caller token (`sandbox/token.rs`) for `door:<alias>:<who>`: it opens that alias's door for that
+caller alone, and nothing else (`server/identify.rs` knows no agent of it). The real key is read from the auth file at
+each call and goes nowhere else.
+
+`/door/<alias>/<path>` (`route.rs`) takes the token as the SDK's key (`x-api-key`, `api-key` or `Authorization:
+Bearer`; it stands outside `server/admit.rs`'s gate and checks its own), then forwards only to that alias's
+configured base URL and only a provider's model paths: `/v1/messages` (and `count_tokens`), `/v1/chat/completions`,
+`/v1/completions`, `/v1/responses`, `/v1/embeddings`, `GET /v1/models` (also without `/v1`, and Azure's
+`/openai/deployments/<d>/...`); any other path or method is 403. It sets the key header of the provider's style
+(`x-api-key` for Anthropic, `Authorization: Bearer` for OpenAI, `api-key` for Azure), drops the caller's own auth,
+cookies and `accept-encoding`, and streams the answer back unchanged, server-sent events included. Counting reads the
+answer as it passes (`tally.rs`: Anthropic's `message_start` and `message_delta` or `usage`, OpenAI's `usage`, the
+Responses API's `response.completed`) and never alters it.
+
+Each call is a row in `door_calls`: when, the alias, who (a lane id or `<role>@<conversation>`), its role, the model
+the request names, the HTTP status, the tokens and the dollars (`[prices."<model>"]`; none without a price). An
+optional daily budget (UTC day) refuses further calls with 429 and the reason: `[door] budget_usd` for the machine and
+`door_budget` (dollars) in `[roles.<role>]` for one role; a call that is in flight when the budget is reached
+finishes, and a call with no price counts for nothing. `neobot door` and `GET /api/door` (the owner's) show whether it
+is on, today's spend and the last calls. `neobot doctor` says for each auth file with a provider key whether the door
+keeps it or its agents hold it. With the door on an agent needs no provider host in its egress (`net`, `[network]
+allow`): the daemon reaches the provider, not the sandbox.
+
+The auth files are unreadable inside the sandbox: on Linux `/dev/null` is bound over each (`sandbox/linux/hide.rs`,
+the list is `app::kept`), on macOS the profile denies reading, writing, linking and cloning the files and everything
+under `<home>/auth` (`sandbox/hidden.rs`, `sandbox/confine.rs`). Nothing the agent needs is read from there: the
+daemon hands each agent its variables.
+
+Files:
+
+- `api.rs`: The routes and `neobot door`.
+- `back.rs`: The provider's answer on its way back, counted as it passes.
+- `build.rs`: The request to the provider: what of the caller's goes on, and how the real key signs it.
+- `doctor.rs`: What `neobot doctor` says of each provider key.
+- `env.rs`: The token and the door's address an agent gets in place of its key and its base URL.
+- `forward.rs`: One call to the provider with the real key.
+- `on.rs`: Whether the door is on, and the budgets.
+- `paths.rs`: The paths and methods the door forwards.
+- `record.rs`: `door_calls`, the day's spend and the budgets.
+- `route.rs`: `/door/<alias>/<path>`: the token, the path, the budget.
+- `spec.rs`: Which variables are a provider key, and where its base URL is.
+- `tally.rs`: What a call used, from its answer.
+
 ## `models/`
 
 Models per role and the fallback chain.

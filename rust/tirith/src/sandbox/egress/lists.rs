@@ -28,7 +28,7 @@ pub(super) fn home(app: &Shared) -> Option<Vec<String>> {
 }
 
 /// The role `who` is: a lane's is the lane role's, a conversation's (`<role>@<conversation>`) its part, `merge:<lane>` its lane's; any other name is itself (`git`, the daemon's own).
-pub(super) fn role_of(app: &Shared, who: &str) -> String {
+pub fn role_of(app: &Shared, who: &str) -> String {
     let who = who.strip_prefix("merge:").unwrap_or(who);
     if let Some((role, _)) = who.split_once('@') {
         return role.to_string();

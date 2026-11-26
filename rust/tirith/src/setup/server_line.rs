@@ -2,7 +2,15 @@
 use crate::config::{get, Config};
 
 /// A line for server mode, when this home is a server's; none otherwise.
-pub(super) fn line(cfg: &Config, up: bool, line: &mut impl FnMut(bool, &str, &str)) {
+pub(super) fn line(
+    cfg: &Config,
+    home: &std::path::Path,
+    up: bool,
+    line: &mut impl FnMut(bool, &str, &str),
+) {
+    for (good, what, fix) in crate::modeldoor::lines(cfg, home) {
+        line(good, &what, &fix);
+    }
     let own_edge = get::<String>(&cfg.raw, &["browser", "use"]).as_deref() == Some("mine");
     if own_edge && cfg!(target_os = "linux") {
         let what = "[browser] use = \"mine\" (the owner's own Edge)";

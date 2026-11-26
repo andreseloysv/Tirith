@@ -5,6 +5,7 @@ mod matcher;
 mod permit;
 
 pub use ask::settled;
+pub use lists::role_of;
 pub use permit::allow;
 
 use crate::app::Shared;

@@ -16,6 +16,7 @@ pub(super) fn refused(agent: &Agent, method: &Method, path: &str) -> Option<&'st
         ["api", "rooms", .., "qr" | "qr.svg"] => true,
         ["api", "net", "blocks"] => method == Method::DELETE,
         ["api", "net", "allow"] => true,
+        ["api", "door"] => true,
         ["api", "turns", .., "reaction"] => true,
         ["api", "page"] => true,
         // an agent is never the teach extension

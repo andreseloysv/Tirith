@@ -18,9 +18,14 @@ pub struct Keys {
     pub retired: Option<String>,
 }
 
-/// The files no confined process may read.
-pub fn kept(home: &Path) -> [PathBuf; 3] {
-    [OWNER, SECRET, PAGE].map(|name| home.join(name))
+/// The files no confined process may read: the keys of who calls, and what an agent is signed in with (`auth/<alias>.env`: its provider key stays with the daemon, `modeldoor/`).
+pub fn kept(home: &Path) -> Vec<PathBuf> {
+    let auth = std::fs::read_dir(home.join("auth"))
+        .into_iter()
+        .flatten()
+        .flatten();
+    let own = [OWNER, SECRET, PAGE].map(|name| home.join(name));
+    own.into_iter().chain(auth.map(|f| f.path())).collect()
 }
 
 impl Keys {

@@ -8,6 +8,9 @@ use axum::middleware::Next;
 use axum::response::Response;
 
 pub(super) async fn admit(State(app): State<Shared>, mut req: Request, next: Next) -> Response {
+    if req.uri().path().starts_with("/door/") {
+        return next.run(req).await; // the model door asks for its own token (modeldoor/route.rs)
+    }
     let (method, path) = (req.method().clone(), req.uri().path().to_string());
     let (from, headers) = (caller::of(&req), req.headers().clone());
     let who = if is_hook(&method, &path) {

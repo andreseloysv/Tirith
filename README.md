@@ -301,6 +301,9 @@ max_load = 2.0                      # 1-minute load per core above which no new 
 inactivity_minutes = 20
 [merge]
 push = true
+[door]                              # the model door: an agent holds a token, never the provider key in auth/<alias>.env
+# enabled = true                    # on by default in server mode
+# budget_usd = 20.0                 # per day, the whole machine; door_budget = 5.0 in [roles.<role>] for one role
 [network]
 sandbox = true
 proxy_port = 47812
