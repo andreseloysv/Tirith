@@ -5,7 +5,7 @@
 # 16 s a command here (55 s for the first six), asking WebKit takes well under 4.
 # The terminal it runs from needs Accessibility (System Settings > Privacy & Security). No CI machine grants that.
 #   python3 scripts/checks/safari-ax/run.py
-import pathlib, subprocess, sys, tempfile, time
+import atexit, pathlib, shutil, subprocess, sys, tempfile, time
 
 here = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(here))
@@ -27,6 +27,7 @@ def osa(src, *words):
     return (out.stdout or out.stderr).strip()
 
 work = pathlib.Path(tempfile.mkdtemp(prefix='neobot-ax-'))
+atexit.register(shutil.rmtree, work, ignore_errors=True)  # the page and the window's program go when this ends
 subprocess.run([sys.executable, str(here / 'page.py'), str(work / 'page.html')], check=True, stdout=subprocess.DEVNULL)
 subprocess.run(['swiftc', '-O', '-o', str(work / 'host'), str(here / 'host.swift')], check=True)
 host = subprocess.Popen([str(work / 'host'), str(work / 'page.html')], stdout=subprocess.PIPE, text=True)
