@@ -39,6 +39,10 @@ mod status;
 mod teach;
 mod turns;
 
+#[cfg(all(test, unix))]
+#[path = "../checks/tidy.rs"]
+mod tidy;
+
 fn main() {
     cli::main()
 }
