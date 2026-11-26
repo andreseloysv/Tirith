@@ -1,4 +1,5 @@
 //! What never reaches a log, an event or an answer: the values kept for the agents (`auth.rs`), their tokens and an enterprise's GitHub host.
+use super::kind::Kind;
 use regex::Regex;
 use std::path::Path;
 
@@ -15,14 +16,14 @@ pub struct Hidden {
 }
 
 impl Hidden {
-    /// What to hide for `vars`: a variable that names a host (`…_HOST`), else a secret.
+    /// What to hide for `vars`: a variable that names a host (`…_HOST`) or holds a private URL, a secret (by its name or its look), nothing for a model id, a flag or a public provider's URL.
     pub fn of(vars: &[(String, String)]) -> Hidden {
         let mut hidden = Hidden::default();
         for (var, value) in vars {
-            if var.ends_with("_HOST") {
-                hidden.host(value);
-            } else if value.len() >= 12 {
-                hidden.secrets.push(value.clone());
+            match super::kind::of(var, value) {
+                Kind::Host(host) => hidden.host(&host),
+                Kind::Secret => hidden.secrets.push(value.clone()),
+                Kind::Open => {}
             }
         }
         hidden

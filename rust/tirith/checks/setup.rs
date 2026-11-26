@@ -439,3 +439,35 @@ fn reinstalling_replaces_the_lines_of_the_old_command_name() {
     assert!(text.contains("mine"));
     std::fs::remove_dir_all(&d).unwrap();
 }
+
+#[test]
+fn only_secrets_are_hidden_in_a_byok_agent_env() {
+    let v = |k: &str, x: &str| (k.to_string(), x.to_string());
+    let open = [
+        v("COPILOT_OFFLINE", "true"),
+        v("COPILOT_PROVIDER_TYPE", "anthropic"),
+        v("COPILOT_PROVIDER_BASE_URL", "https://api.anthropic.com"),
+        v("COPILOT_MODEL", "model-a-with-a-long-name"),
+    ];
+    assert!(super::private::Hidden::of(&open).none(), "no secret there");
+    let key = "sk-madeup-0123456789abcdef";
+    let mut all = open.to_vec();
+    all.push(v("COPILOT_PROVIDER_API_KEY", key));
+    let hidden = super::private::Hidden::of(&all);
+    let line = format!("model-a-with-a-long-name via https://api.anthropic.com with {key}");
+    assert_eq!(
+        hidden.hide(&line),
+        "model-a-with-a-long-name via https://api.anthropic.com with [redacted]"
+    );
+    let own = [v(
+        "COPILOT_PROVIDER_BASE_URL",
+        "https://llm.made-up-corp.example/v1",
+    )];
+    let shown = super::private::Hidden::of(&own).hide("POST https://llm.made-up-corp.example/v1");
+    assert!(!shown.contains("made-up-corp"), "{shown}");
+    let unknown = [v("SOMETHING_ELSE", "abcdefghijklmnop")];
+    assert!(
+        !super::private::Hidden::of(&unknown).none(),
+        "unknown names stay hidden"
+    );
+}

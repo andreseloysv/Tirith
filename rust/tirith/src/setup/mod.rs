@@ -17,6 +17,7 @@ mod hook_lines;
 mod hooks;
 mod host;
 mod install;
+mod kind;
 mod login;
 mod needs;
 mod npm;
