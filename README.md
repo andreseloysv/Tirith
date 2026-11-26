@@ -61,6 +61,7 @@ neobot service status | restart | logs | uninstall
   folder must be that user's to read and write. With systemd it starts at boot with nobody signed in; without it
   (a container) `neobot service start` starts it by hand. The network sandbox needs no root; where Ubuntu's
   AppArmor forbids it, `neobot doctor` says so and `sudo neobot net allow` allows it.
+  In Docker (also on a Mac too old for Copilot CLI): [scripts/docker/](scripts/docker/README.md).
 - **macOS.** A launchd service that starts when you log in, or with nobody logged in with `--boot`. The binaries
   are signed ad hoc unless `TIRITH_SIGN_IDENTITY` was set when the release was built.
 - **The page.** It never listens on the network. From your computer:

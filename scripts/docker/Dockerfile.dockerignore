@@ -1,0 +1,4 @@
+*
+!scripts/release/release.pub
+!scripts/docker/start.sh
+!dist/

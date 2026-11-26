@@ -118,6 +118,20 @@ project, also of those you add later, and works from any network, **with nothing
 Do not forward port 7717 and do not put a reverse proxy in front of it: whatever reaches that port can give your
 agents orders. If a phone is lost, `neobot room forget <phone key id>` cuts it off.
 
+## A Mac older than macOS 13.5: in Docker
+
+GitHub Copilot CLI's native binary needs macOS 13.5. On an older Intel Mac mini NeoBot runs, with Copilot as its
+agent, in a Linux container of Docker Desktop; the image is `scripts/docker/` (its README has the commands).
+
+- The agent is Copilot with BYOK: the model provider's key in the volume, no GitHub sign-in. State, config and the
+  key live in the volume `neobot-home`, so an upgrade replaces the container and keeps them.
+- Publish the page on the Mac's loopback only (`-p 127.0.0.1:7801:7802`) and reach it from your computer with
+  `ssh -N -L 7801:127.0.0.1:7801 <you>@<mac>`. Nothing is opened to the network.
+- `--restart unless-stopped` brings it back with Docker. Docker Desktop itself starts when someone is logged in
+  (step 4 above), so this guide's steps 2 to 4 apply to it too.
+- Docker's default seccomp profile blocks NeoBot's network sandbox; use `scripts/docker/seccomp.json`.
+- Give Docker Desktop's VM enough memory and CPUs (Settings > Resources) for the container's limits.
+
 ## Try it before you leave
 
 1. When no lane is working, restart the Mac and do not open NeoBot. With FileVault, log in.
