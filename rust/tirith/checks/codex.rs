@@ -481,6 +481,7 @@ fn copilot_chat_turn_is_an_exec_run() {
         (Some("m"), Some("low")),
         Some("s-1"),
         usage,
+        &[],
     );
     let has = |x: &str| a.iter().any(|y| y == x);
     assert!(

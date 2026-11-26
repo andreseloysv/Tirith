@@ -12,6 +12,11 @@ pub fn spawn_chat(
     argv: Vec<String>,
 ) -> Result<(Child, ChildStdin, ChildStdout), String> {
     let quick = super::quick_shell::env(app, project, argv.first().map_or("", |p| p)); // a bot's shell starts without the owner's profile
+    let copilot = argv.first().is_some_and(|p| {
+        p.rsplit('/')
+            .next()
+            .is_some_and(|n| n.starts_with("copilot"))
+    });
     let launch = sandbox::wrap(app, &format!("{role}@{project}"), argv)?;
     let dir = if app.cfg().factory.role::<String>(role, "scope").as_deref() == Some("own") {
         app.home.join("manager").join(role)
@@ -25,8 +30,11 @@ pub fn spawn_chat(
         .append(true)
         .open(app.home.join(format!("logs/{role}.log")))
         .map_err(|e| e.to_string())?;
-    let mut child = launch
-        .command(app)
+    let mut command = launch.command(app);
+    if copilot {
+        command.env_remove("GITHUB_TOKEN"); // a bring-your-own-key Copilot reads it as a GitHub login and refuses the key
+    }
+    let mut child = command
         .current_dir(&dir)
         .env("TIRITH_ROLE", role)
         .env("TIRITH_PROJECT", project)

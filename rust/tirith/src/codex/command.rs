@@ -25,11 +25,8 @@ pub(super) fn command_line(
         None => format!("{instructions}\n\n{input}"),
     };
     let mut browser = models::browser_args_for(app, agent.kind.alias(), false);
-    browser.extend(models::gateway_args_for(
-        app,
-        agent.kind.alias(),
-        &setup.role,
-    )); // a bot's role alone
+    let gateway = models::gateway_args_for(app, agent.kind.alias(), &setup.role); // a bot's role alone
+    browser.extend(gateway.iter().cloned());
     browser.extend(crate::lab::replay_args(app, agent.kind.alias()));
     let (argv, stdin, usage) = match agent.kind {
         Exec::Codex => {
@@ -47,7 +44,7 @@ pub(super) fn command_line(
         }
         Exec::Copilot => {
             let usage = scratch.path(&setup.dir, "usage.json");
-            let a = copilot_argv(&agent.command, read_only, model, resume, &usage);
+            let a = copilot_argv(&agent.command, read_only, model, resume, &usage, &gateway);
             (a, Some(first), Some(usage))
         }
         Exec::Muse => {

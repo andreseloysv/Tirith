@@ -443,7 +443,7 @@ async fn gateway_hides_secrets() {
     let mut seen = vec![serde_json::to_string(&out).unwrap(), opened, w.calls()];
     seen.push(serde_json::to_string(&w.rows()).unwrap());
     seen.push(serde_json::to_string(&hits.iter().map(|(_, b)| b).collect::<Vec<_>>()).unwrap());
-    for alias in ["anthropic", "codex", "muse"] {
+    for alias in ["anthropic", "codex", "muse", "copilot"] {
         let args = crate::models::gateway_args_for(&w.app, alias, "bot-mail");
         let line = args.join(" ");
         assert!(

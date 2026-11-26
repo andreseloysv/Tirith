@@ -515,7 +515,7 @@ The connector gateway: `neobot mcp --bot <id>`, the one MCP server a bot's run c
 (`connectors/`). `models/gateway_args.rs` adds it, as `tirith_connectors`, to the runs of a `bot-<id>` role granted at
 least one connector, in the anthropic (`--mcp-config=` and `--allowedTools=mcp__tirith_connectors__*`), Codex
 (`-c mcp_servers.tirith_connectors={…}`, `env_vars = ["TIRITH_TOKEN"]`) and Muse (`-c mcpServers.tirith_connectors=…`,
-optional) dialects, where the browser's flags go (`models/browser_args.rs`): stream-json chat sessions and turns
+optional) and GitHub Copilot's (`--additional-mcp-config <json>`, a `type = "local"` server with `tools = ["*"]`; the exec turn's own `--allow-all` lets its tools run, and `GITHUB_TOKEN` is taken out of a Copilot process's environment, since a bring-your-own-key Copilot reads it as a GitHub login and refuses the key) dialects, where the browser's flags go (`models/browser_args.rs`): stream-json chat sessions and turns
 (`models/chat_argv.rs`) and exec turns (`codex/command.rs`). A lane, a manager, the CEO and every other role get none.
 Its env names only `TIRITH_HOME` and the run's own `TIRITH_TOKEN`; no secret is in it or in its arguments.
 

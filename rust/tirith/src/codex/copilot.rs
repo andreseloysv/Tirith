@@ -9,6 +9,7 @@ pub(super) fn copilot_argv(
     model: (Option<&str>, Option<&str>),
     resume: Option<&str>,
     usage: &Path,
+    extra: &[String],
 ) -> Vec<String> {
     let mut a: Vec<String> = [
         command,
@@ -35,6 +36,7 @@ pub(super) fn copilot_argv(
         );
     }
     a.extend(resume.map(|id| format!("--resume={id}")));
+    a.extend(extra.iter().cloned()); // a bot's connector gateway
     a
 }
 
