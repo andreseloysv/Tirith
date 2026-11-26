@@ -17,9 +17,9 @@ function route(r, i, { EVENTS, setRoute, routes, setRoutes }) {
           </div>`;
 }
 
-/** f: {bot, session, setSession, access, setAccess, routes, setRoutes, EVENTS}. */
+/** f: {bot, session, setSession, access, setAccess, judge, setJudge, routes, setRoutes, EVENTS}. */
 export function factorySection(f) {
-  const { bot, session, setSession, access, setAccess, routes, setRoutes, EVENTS } = f;
+  const { bot, session, setSession, access, setAccess, judge, setJudge, routes, setRoutes, EVENTS } = f;
   const setRoute = (i, patch) => setRoutes(routes.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return html`<details class="bmodel bfactory"><summary><span class="bcap">${t('Factory')}</span> ${factoryLine({ session, access, routes })}</summary>
           <p class="bnote">${[t('All that makes a bot a CEO or a judge is this configuration.'), bot.system ? t('This is a system bot, changed like any other.') : '', t("It is saved in config.toml, where its routes replace the factory's for it. Its routines stay its schedule routes, under Routines.")].filter(Boolean).join(' ')}</p>
@@ -27,6 +27,7 @@ export function factorySection(f) {
             <option value="chat">${t('chat — a long-lived conversation')}</option><option value="turn">${t('turn — one fresh run, like the CEO')}</option></select></label>
           <label class="bfrow"><span class="bcap">${t('Access')}</span><select class="bsel" aria-label=${t('Access')} value=${access} onChange=${(e) => setAccess(e.target.value)}>
             <option value="">${t('can write')}</option><option value="read">${t('read-only, like the CEO and the judge')}</option></select></label>
+          <label class="bchk"><input type="checkbox" checked=${judge} onChange=${(e) => setJudge(e.target.checked)} />${t('Judge its answers (costs a model turn each; off saves that)')}</label>
           <div class="bfrow"><span class="bcap">${t('Heard events')}</span></div>
           ${routes.map((r, i) => route(r, i, { EVENTS, setRoute, routes, setRoutes }))}
           <button type="button" class="blink" onClick=${() => setRoutes([...routes, { on: EVENTS.includes('lane.failed') ? 'lane.failed' : EVENTS[0], mode: 'turn', chat: true, phone: false }])}>${t('+ Hear an event')}</button>

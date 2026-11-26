@@ -31,7 +31,7 @@ pub fn ended(
         .flatten();
     let run = oldest(app, conv, routine, RUNNING);
     if let Some(text) = held {
-        match run.is_some() && status == "ok" {
+        match run.is_some() && status == "ok" && app.cfg().factory.judged(conv) {
             true => news::keep(app, conv, turn, &text), // before it closes: a failure may claim it from then on
             false => crate::rooms::to_phones(app, conv, &text),
         }

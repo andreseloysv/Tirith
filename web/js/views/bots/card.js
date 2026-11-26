@@ -47,6 +47,7 @@ export function BotCard({ bot, onClose, onSaved }) {
   const [session, setSession] = useState(bot.session || 'chat');
   const [access, setAccess] = useState(bot.access === 'read' ? 'read' : '');
   const [routes, setRoutes] = useState(bot.routes || []);
+  const [judge, setJudge] = useState(bot.judge !== false);
   const [material, setMaterial] = useState(bot.material || 'solid');
   const [eye, setEye] = useState(bot.eye || '#161616');
   const [gradient, setGradient] = useState(bot.gradient || 'ocean-signal');
@@ -66,7 +67,7 @@ export function BotCard({ bot, onClose, onSaved }) {
   const save = async () => {
     if (!name.trim() || !valid) return;
     try {
-      const b = await api('POST', '/api/bots', { id: bot.id, name: name.trim(), shape, color, session, access, routes, material, eye,
+      const b = await api('POST', '/api/bots', { id: bot.id, name: name.trim(), shape, color, session, access, judge, routes, material, eye,
         gradient: material === 'gradient' ? gradient : '', gstart: gradient === 'custom' ? gstart : '', gend: gradient === 'custom' ? gend : '',
         gangle: material === 'gradient' && gradient === 'custom' ? Number(gangle) : null, glass: material === 'rainbow-glass' ? glass : '' });
       await cm.persist(b);
@@ -84,7 +85,7 @@ export function BotCard({ bot, onClose, onSaved }) {
         ${pickers(shape, setShape, color, setColor, look)}
         ${materialSection(look, setLook)}
         ${M ? modelSection(M, cm) : null}
-        ${M ? factorySection({ bot, session, setSession, access, setAccess, routes, setRoutes, EVENTS }) : null}
+        ${M ? factorySection({ bot, session, setSession, access, setAccess, judge, setJudge, routes, setRoutes, EVENTS }) : null}
         ${connectorsSection(bot)}
         ${err ? html`<p class="berr">${err}</p>` : null}
       </div>

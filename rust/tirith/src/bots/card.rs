@@ -67,6 +67,9 @@ fn change(bot: &mut Value, b: &Value, name: String, color: String) {
         routes,
         json!(true),
     ); // `dirty`: a system bot's change is written as a layer in config.toml
+    let _ = b["judge"]
+        .is_boolean()
+        .then(|| bot["judge"] = b["judge"].clone());
     super::look::lay(bot, b);
 }
 /// A new bot (no `id`), or a change to one's card: its name, shape and colour, its `session` and `access`, and its routes (each on an event of the closed list but `schedule` — those are its routines — as a turn or a note, with its chat line and phones as written). What the body does not carry stays as it was.

@@ -11,6 +11,11 @@ impl Factory {
         get(&self.raw, &["roles", name, key])
     }
 
+    /// False when the owner switched the judge off for the conversation `conv` (`judge = false` in its bot's role): its turns are not graded, which saves their cost. On by default, and always for a system role.
+    pub fn judged(&self, conv: &str) -> bool {
+        !conv.starts_with("bot-") || self.role::<bool>(conv, "judge") != Some(false)
+    }
+
     /// Every role of the factory, in name order.
     pub fn roles(&self) -> Vec<String> {
         self.raw["roles"]

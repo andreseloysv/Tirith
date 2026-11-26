@@ -109,6 +109,8 @@ gets its text in place of `{skill_template}` (as a role's prompt gets `{name}`);
 A bot may have a model of its own (role `bot-<id>` of `models/`, chosen in its card); without one it has the managers'. A routine answer that starts with ∅ (nothing new)
 stays on the page and never reaches the phones (`rooms::to_phones`), so only news does.
 
+The judge of a bot's turns can be switched off for that bot to save their cost (in a trial the judge was about 30% of a bot's cost): `judge = false` in `[roles.bot-<id>]`, or the card's Factory section («Judge its answers»), `judge` in `GET`/`POST /api/bots`. It is on by default and always on for a system bot. A bot without its judge has no evals on its conversation (no `turn-quality` score, no `unapproved` verdict, no `owner-mood`; `factory/evals/` runs skip it, `Factory::judged`), its routine's news go to the phones when the run ends instead of waiting for a judge, and only the lab's `ab-compare` (an experiment the Coach started) still reads it.
+
 Routines on an event from outside. A routine is either timed (`schedule`) or waits for its bot's webhook: a `[[routes]]` with `on = "webhook"` and
 `when` — the event's `<source>:<kind>` (`github:pull_request.opened`), a pattern of it with `*` (`github:issues.*`), or `*` for every call —
 made on the page (Routines: "At a time" or "On an event from outside") or by the bot (`neobot routine hook "<title>" "<when>" "<task>"`); its

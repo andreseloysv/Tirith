@@ -9,6 +9,8 @@ pub(super) fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, ev
     // While the factory sleeps only a routine's run is graded (the owner reads that); what feeds the measures waits.
     let asleep = crate::metrics::asleep(app);
     evals.retain(|eval| !asleep || eval.0 == crate::turns::GRADE);
+    let graded = app.cfg().factory.judged(app.conv(project)); // a bot without its judge: only a lab's comparison (the Coach's) still reads
+    evals.retain(|eval| graded || eval.0 == "ab-compare");
     let Some(()) =
         (!evals.is_empty() && tokio::runtime::Handle::try_current().is_ok()).then_some(())
     else {

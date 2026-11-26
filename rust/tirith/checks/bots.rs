@@ -799,3 +799,22 @@ fn a_bots_net_list_survives_a_rewrite() {
         "a deleted bot's list goes with it:\n{gone}"
     );
 }
+
+#[test]
+fn a_bots_judge_is_on_unless_written_off() {
+    let bots = json!([
+        {"id": "aaa111", "name": "A", "shape": "hex", "color": "#22d3ee", "judge": false, "routines": []},
+        {"id": "bbb222", "name": "B", "shape": "hex", "color": "#22d3ee", "routines": []}
+    ]);
+    let text = super::written::written("", bots.as_array().unwrap()).unwrap();
+    assert!(text.contains("judge = false"), "{text}");
+    assert_eq!(
+        text.matches("judge").count(),
+        1,
+        "the default stays unwritten"
+    );
+    let raw = serde_json::to_value(text.parse::<toml::Table>().unwrap()).unwrap();
+    let read = super::list::bots_of(&raw, &|_, _| String::new());
+    let by = |id: &str| read.iter().find(|b| b["id"] == id).unwrap()["judge"].clone();
+    assert_eq!((by("aaa111"), by("bbb222")), (json!(false), json!(true)));
+}
