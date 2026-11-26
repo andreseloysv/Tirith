@@ -12,7 +12,7 @@ pub(super) async fn changed_files(t: &Train) -> Vec<String> {
         .map(String::from)
         .collect()
 }
-/// The project's non-deploy stages the change asks for (none when only ticks ride), then each merged lane's item check.
+/// The project's non-deploy stages the change asks for, and the one main is red on (none when only ticks ride), then each merged lane's item check.
 pub(super) fn stages_to_run(
     app: &Shared,
     t: &Train,
@@ -20,13 +20,17 @@ pub(super) fn stages_to_run(
     riders: &Riders,
     changed: &[String],
 ) -> Vec<(String, String)> {
+    // On a red main the red stage always runs: a green train then proves main green.
+    let red = app
+        .kv(&format!("main_red:{}", t.project.id))
+        .and_then(|w| Some(w.rsplit_once(" at ")?.0.to_string()));
     let mut stages: Vec<(String, String)> = if riders.merged.is_empty() {
         vec![]
     } else {
         manifest
             .stages
             .iter()
-            .filter(|s| !deploys(s) && wanted(s, changed))
+            .filter(|s| !deploys(s) && (wanted(s, changed) || red.as_deref() == Some(&s.name)))
             .map(|s| (s.name.clone(), s.run.clone()))
             .collect()
     };
