@@ -1554,6 +1554,7 @@ Files:
 - `hooks.rs`: An agent's hooks pointed at NeoBot, the rest of its settings kept.
 - `host.rs`: An agent that may live on an enterprise's GitHub host (Copilot): asked, kept with its token, given to its login and all its processes, never shown.
 - `install.rs`: An agent installed with its maker's installer.
+- `kind_look.rs`: How a value looks: a public provider's URL, a private host's, a key by its prefix or shape.
 - `kind.rs`: What one kept variable is: a secret (by its name, or because the value looks like a key), a private host (a `*_HOST`, or the URL of a host that is no known public provider's), or nothing to hide (a model id, a provider type, a flag, `https://api.anthropic.com`). A name it does not know keeps the conservative default: hidden.
 - `login.rs`: An agent's own login on the owner's terminal, and how to do it later.
 - `mod.rs`: The commands' way in from the command line.

@@ -18,6 +18,7 @@ mod hooks;
 mod host;
 mod install;
 mod kind;
+mod kind_look;
 mod login;
 mod needs;
 mod npm;
