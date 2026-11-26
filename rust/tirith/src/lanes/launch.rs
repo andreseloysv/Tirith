@@ -59,7 +59,8 @@ pub(super) async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     let brief_path = app.home.join(format!("briefs/{}.md", lane.id));
     let resume = (!lane.session.is_empty() && !msg.is_empty())
         .then_some((lane.session.as_str(), msg.as_str()));
-    if resume.is_none() {
+    let new_session = resume.is_none();
+    if new_session {
         write_brief(app, &lane, &msg, &brief_path)?;
     }
     let role = models::role(app, &models::lane_role(&cfg));
@@ -67,5 +68,7 @@ pub(super) async fn launch(app: &Shared, mut lane: Lane) -> Result<(), String> {
     let cmd = models::lane_argv(app, over, lane.model.as_deref(), &brief_path, &ws, resume)?;
     let overridden = over.is_some();
     note_model(&mut lane, &role.agent, role.model, overridden, &cmd.alias);
-    spawn_agent(app, lane, &ws, cmd.argv)
+    let _ = new_session.then(|| crate::costs::fresh(app, &lane.id)); // a new session has spent nothing
+    let argv = crate::costs::counted(&cmd.alias, cmd.argv, &ws, lane.attempts);
+    spawn_agent(app, lane, &ws, argv)
 }

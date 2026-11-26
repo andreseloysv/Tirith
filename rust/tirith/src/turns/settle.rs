@@ -31,7 +31,7 @@ pub(super) fn settle(app: &App, t: &mut Turn) {
 }
 
 /// The input no cache gave or took: where an agent's input holds its cache, it holds what was read from it and what was written to it (Copilot bills both apart, and so do its own `tokenDetails`).
-pub(super) fn fresh(u: &Usage) -> i64 {
+pub fn fresh(u: &Usage) -> i64 {
     match u.input_has_cache {
         true => (u.input - u.cache_read - u.cache_write).max(0),
         false => u.input,

@@ -1,4 +1,5 @@
 //! `neobot plan show` (each step with its open items and their lanes) and `neobot plan step`.
+use super::spent::spent;
 use crate::client;
 use serde_json::{json, Value};
 
@@ -15,6 +16,16 @@ pub(super) fn plan_show(project: &str) -> Result<(), String> {
             items.len() - open.len()
         );
         open.iter().for_each(|it| print_item(it));
+        let done = items
+            .iter()
+            .filter(|i| i["done"] == true && i["spent"].is_object());
+        done.for_each(|it| {
+            println!(
+                "  - [x] {}{}",
+                it["text"].as_str().unwrap_or(""),
+                spent(&it["spent"])
+            )
+        });
     });
     Ok(())
 }
@@ -39,5 +50,6 @@ fn print_item(it: &Value) {
                 l["id"].as_str().unwrap_or("")
             ))
             .unwrap_or_default()
+            + &spent(&it["spent"])
     )
 }

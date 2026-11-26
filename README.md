@@ -168,6 +168,7 @@ neobot setup [--server] [--boot] [--port N] [--agents a,b] [--yes] | connect [<a
 neobot service install [--boot] | status | start | stop | restart | uninstall | logs
 neobot serve | open [link] | status [--project P]
 neobot plan show <project> | plan add <project> <step> "<text>"
+neobot costs [--project P] [--since DATE] [--by item|lane|run|issue|model|day|project] [--format csv|json]   tokens and dollars of every lane run, per finished item too
 neobot plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
 neobot plan step delete <project> <number>   remove that step and its items (refused while one of its lanes is not merged)
 neobot lane start <project> <step> "<item>" [--agent <alias>] | lane stop <lane> | lane log <lane>

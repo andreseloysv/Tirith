@@ -1,4 +1,5 @@
 //! `neobot status`: the lanes working now and the last ones that ended.
+use super::spent::spent;
 use crate::client;
 use serde_json::Value;
 
@@ -28,12 +29,13 @@ fn print_working(lanes: &[Value]) {
         .collect();
     working.iter().for_each(|l| {
         println!(
-            "{:<14} {:<40} {}:{} {}",
+            "{:<14} {:<40} {}:{} {}{}",
             l["status"].as_str().unwrap_or(""),
             l["id"].as_str().unwrap_or(""),
             l["project"].as_str().unwrap_or(""),
             l["step"].as_str().unwrap_or(""),
-            l["item"].as_str().unwrap_or("")
+            l["item"].as_str().unwrap_or(""),
+            spent(&l["spent"])
         )
     });
     let _ = working.is_empty().then(|| println!("no lane is working"));
@@ -51,10 +53,11 @@ fn print_ended(lanes: &[Value]) {
     ended.sort_by_key(|l| l["ended_at"].as_str().unwrap_or("").to_string());
     ended.iter().rev().take(8).for_each(|l| {
         println!(
-            "{:<14} {:<40} {}",
+            "{:<14} {:<40} {}{}",
             l["status"].as_str().unwrap_or(""),
             l["id"].as_str().unwrap_or(""),
-            l["note"].as_str().unwrap_or("")
+            l["note"].as_str().unwrap_or(""),
+            spent(&l["spent"])
         )
     });
 }

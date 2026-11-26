@@ -6,7 +6,8 @@ neobot --version                               the version of this binary
 neobot serve                                   run the daemon (page on http://127.0.0.1:<port>/)
 neobot open [link]                             (the owner) open the page signed in as you; link: print a link that does it once, within 10 minutes
 neobot status [--project P]                    lanes and the merge queue (of one project)
-neobot plan show <project>                     the plan with what works on each item
+neobot plan show <project>                     the plan with what works on each item, and what each done item cost
+neobot costs [--project P] [--since DATE] [--by item|lane|run|issue|model|day|project] [--format csv|json]   what the lanes spent: tokens and dollars, per finished item too (team level, never a person)
 neobot plan add <project> <step> "<text>"      add an item to a step
 neobot plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
 neobot plan step delete <project> <number>     remove that step with all its items (refused while a lane of it is not merged)

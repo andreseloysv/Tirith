@@ -9,6 +9,7 @@ mod login_path;
 mod open;
 mod plan;
 mod serve;
+mod spent;
 mod status;
 
 /// Runs the command of this process's arguments; a failed one prints why and exits 1.

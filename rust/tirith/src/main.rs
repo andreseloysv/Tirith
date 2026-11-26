@@ -12,6 +12,7 @@ mod codex;
 mod config;
 mod connector_page;
 mod connectors;
+mod costs;
 mod expected;
 mod factory;
 mod gateway;

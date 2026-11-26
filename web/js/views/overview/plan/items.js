@@ -5,6 +5,7 @@ import { api, onMessage, useStore } from '../../../store.js';
 import { openCards } from '../../need.js';
 import { laneLabel } from '../../../common.js';
 import { Svg, OK, OPEN, Rich } from '../bits.js';
+import { dollars, spentText } from '../../../common.js';
 import { t } from '../../../i18n.js';
 
 const CHECK = /\s*\(check:\s*`[^`]*`\)\s*/i;
@@ -51,6 +52,7 @@ export function Item({ i, lane }) {
     <${Svg} cls="pi" s=${i.done ? OK : OPEN} />
     <span class="pit"><${Rich} t=${text} /></span>
     ${i.check ? html`<span class="pwhen pchk" title=${t('The command that proves this item is done')}><code>${i.check}</code></span>` : null}
+    ${i.spent ? html`<span class="pwhen pspent" title=${spentText(i.spent)}>${dollars(i.spent)}</span>` : null}
     ${i.done ? null : html`<${LaneChip} lane=${lane} />`}
   </li>`;
 }

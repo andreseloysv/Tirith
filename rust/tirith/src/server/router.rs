@@ -18,6 +18,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         crate::connector_page::routes(),
         crate::oauth::routes(),
         models::routes(),
+        crate::costs::routes(),
         guard::routes(),
         metrics::routes(),
         attach::routes(),

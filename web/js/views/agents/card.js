@@ -4,6 +4,7 @@ import { MdInline } from '../boards/md.js';
 import { intentOf } from '../../intent.js';
 import { itemText, live, forYou } from './lanes.js';
 import { Avatar, Clock, StopBtn } from './stop.js';
+import { dollars, spentText } from '../../common.js';
 import { t } from '../../i18n.js';
 
 /** The card's "now" line: the question for the owner, the tool call it runs, or its note when working or failed. */
@@ -22,6 +23,7 @@ export function LaneCard({ a, sel, color, projName, onOpen, doing, q }) {
     ${head}<span class="afeat">${itemText(a.item)}</span>${now}
     <span class="afoot">${a.attempts ? html`<span class="chip atry" title=${t('Sent back by the merge checks')}>${t('Try {n}', { n: a.attempts + 1 })}</span>` : null}
       ${a.step && work ? html`<span class="chip astep" title=${t('Plan step')}>${t('Step {n}', { n: a.step })}</span>` : null}
+      ${a.spent && a.spent.runs ? html`<span class="chip aspent" title=${spentText(a.spent)}>${dollars(a.spent)}</span>` : null}
       <span class="aproj"><i class="pdot" style=${`background:${color};animation:none`}></i>${projName}</span><${Clock} a=${a} /></span>
     ${work ? html`<${StopBtn} a=${a} where="card" />` : null}
   </button>`;

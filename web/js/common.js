@@ -4,4 +4,5 @@ export { ICON, STAGE_ICON, stageIcon, Icon } from './common/icons.js';
 export { ms, dur, ago, agoText, clockTime, elapsed } from './common/time.js';
 export { Span, Empty } from './common/parts.js';
 export { LANE, laneLabel, laneClass, ACTIVE, projectColor } from './common/lanes.js';
+export { dollars, spentText } from './common/spent.js';
 export { route, go } from './common/route.js';

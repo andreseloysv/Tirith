@@ -25,6 +25,11 @@ pub fn same(a: &str, b: &str) -> bool {
     a == b || CHECK.replace(a, "").trim() == CHECK.replace(b, "").trim()
 }
 
+/// The item's text without its `(check: ...)`: what names it for as long as it lives.
+pub fn plain(text: &str) -> String {
+    CHECK.replace(text, "").trim().to_string()
+}
+
 pub fn find(app: &Shared, project: &str, step: &str, item: &str) -> Option<Item> {
     read(app, project)
         .ok()?

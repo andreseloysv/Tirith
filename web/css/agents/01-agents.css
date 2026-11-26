@@ -15,6 +15,8 @@
 .lboard .acard .afoot .aproj { flex: 1 0 auto; }
 .lboard .aproj .pdot, .lv .pdot { width: 7px; height: 7px; }
 .avatar.lava { color: #fff; font-weight: 650; letter-spacing: -.01em; text-shadow: 0 1px 1px rgba(0,0,0,.18); }
+.aspent { font-size: 11.5px; line-height: 18px; padding: 0 8px; color: var(--mut); font-variant-numeric: tabular-nums; }
+.pspent { color: var(--mut); margin-left: 8px; }
 .atry { font-size: 11.5px; line-height: 18px; padding: 0 8px; color: var(--warn-fg); background: var(--warn-bg); border-color: var(--warn-line, rgba(232,163,23,.35)); }
 .anow.ask { background: rgba(232,163,23,.1); border-color: rgba(232,163,23,.3); } .anow.ask .pdot2 { background: var(--amber); animation: none; }
 .anow.bad { background: rgba(229,72,77,.07); border-color: rgba(229,72,77,.22); } .anow.bad .pdot2 { background: var(--red); animation: none; }

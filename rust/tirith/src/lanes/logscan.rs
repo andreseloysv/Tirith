@@ -21,9 +21,9 @@ pub(super) fn quiet_s(
     now.saturating_sub(e.1)
 }
 /// Written into a lane's log at every launch: the log is appended across attempts, so `run_completed` only counts a terminal after the last launch line (or, for a run started before these lines existed, after its last `run.lifecycle.started`).
-pub(super) const RUN_START: &str = "--- tirith: lane run started ";
+pub const RUN_START: &str = "--- tirith: lane run started ";
 /// What the current run wrote: the log goes on across runs, and what an agent before this one said (out of credits) is not this one's.
-pub(super) fn this_run(tail: &str) -> &str {
+pub fn this_run(tail: &str) -> &str {
     tail.rfind(RUN_START).map_or(tail, |at| &tail[at..])
 }
 /// Whether the lane's current run already ended in its log: a `run.terminal.completed` event (the top-level `payload_type` of its own stream line, so a mention inside a file or command output the agent read never counts). The process may still be alive.

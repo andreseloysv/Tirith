@@ -2,7 +2,7 @@
 // the lane's facts, its log, its live activity and its pipelines.
 import { html } from '../../../vendor/preact-htm.js';
 import { useStore } from '../../store.js';
-import { Span, agoText, clockTime } from '../../common.js';
+import { Span, agoText, clockTime, spentText } from '../../common.js';
 import { Md } from '../boards/md.js';
 import { LogView } from '../boards/logview.js';
 import { Need } from '../need.js';
@@ -27,7 +27,7 @@ function facts(a, projName, color) {
   return [
     [t('Project'), html`<span><i class="pdot" style=${`background:${color};animation:none;display:inline-block;margin-right:6px`}></i>${projName}</span>`],
     [t('Step'), a.step], [t('Branch'), a.branch && html`<code>${a.branch}</code>`], [t('Worktree'), a.workspace && html`<code title=${a.workspace}>${a.workspace}</code>`],
-    [t('Agent'), a.agent], [t('Model'), a.model], [t('Session'), a.session && html`<code>${a.session}</code>`], [t('Attempts'), String(a.attempts || 0)],
+    [t('Agent'), a.agent], [t('Model'), a.model], [t('Session'), a.session && html`<code>${a.session}</code>`], [t('Attempts'), String(a.attempts || 0)], [t('Spent'), spentText(a.spent)],
     [t('Created'), clockTime(a.created_at)], [t('Started'), clockTime(a.started_at)], [t('Ended'), clockTime(a.ended_at)], [t('Merged'), clockTime(a.merged_at)],
     [t('Lane'), html`<code>${a.id}</code>`],
   ];

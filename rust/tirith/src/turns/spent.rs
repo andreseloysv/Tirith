@@ -1,5 +1,6 @@
 //! The turn's own numbers from an agent that gives its session's so far: Anthropic's cost, Codex's and Copilot's tokens. What a conversation's session had spent before is kept in kv `spent:<conversation>`.
 use super::record::Turn;
+use super::usage::Usage;
 use crate::app::App;
 use serde::{Deserialize, Serialize};
 
@@ -29,12 +30,17 @@ pub fn fresh(app: &App, conv: &str) {
 
 /// The turn's share of its session's totals. A turn of its own (`loose`) is its whole session; a session whose spending before is not known gives none rather than a guess.
 pub(super) fn own_share(app: &App, t: &mut Turn) {
-    let (totals, u) = (t.usage.session_totals, &mut t.usage);
-    if t.loose || !u.seen || !(totals || u.cost.is_some()) {
+    share(app, (&t.conv, &t.session), t.loose, &mut t.usage);
+}
+
+/// `own_share` of any run in `conv`'s session `session`: a lane's run is one too (`costs/`).
+pub fn share(app: &App, (conv, session): (&str, &str), loose: bool, u: &mut Usage) {
+    let totals = u.session_totals;
+    if loose || !u.seen || !(totals || u.cost.is_some()) {
         return;
     }
     let now = SoFar {
-        session: t.session.clone(),
+        session: session.to_string(),
         input: if totals { u.input } else { 0 },
         output: if totals { u.output } else { 0 },
         cache_read: if totals { u.cache_read } else { 0 },
@@ -42,10 +48,10 @@ pub(super) fn own_share(app: &App, t: &mut Turn) {
         cost: u.cost.unwrap_or(0.0),
     };
     let before = app
-        .kv(&key(&t.conv))
+        .kv(&key(conv))
         .and_then(|v| serde_json::from_str::<SoFar>(&v).ok())
         .filter(|b| b.session.is_empty() || b.session == now.session);
-    keep(app, &t.conv, &now);
+    keep(app, conv, &now);
     let Some(before) = before else {
         (u.cost, u.seen) = (None, !totals);
         if totals {

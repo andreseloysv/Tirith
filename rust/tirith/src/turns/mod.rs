@@ -52,16 +52,19 @@ pub use live::{abandon, end, handed, idle, line, on_event, take_trigger, trigger
 pub use looks::Looks;
 pub use loose::{done, turn_of};
 pub use open_start::open_start;
+pub use price::cost as price_of;
+#[cfg(test)]
+use price::cost;
 pub use quality::{scored, EVAL as GRADE};
 pub use react::reacted;
 pub use record::Turn;
+pub use settle::fresh as fresh_input;
 pub use signals::{add_columns, judged, last};
-pub use spent::fresh;
+pub use spent::{fresh, share};
+pub use usage::Usage;
 pub use versions::prepare;
 #[cfg(test)]
 use {api::turns, checks::request, signals::cited};
-#[cfg(test)]
-use {price::cost, usage::Usage};
 #[cfg(test)]
 #[path = "../../checks/agents.rs"]
 mod agents_tests;

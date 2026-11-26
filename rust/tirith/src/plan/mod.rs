@@ -15,7 +15,7 @@ pub use change::drop_item;
 pub use delete::delete_step;
 pub use flush::{flush, flush_locked};
 pub use item::Item;
-pub use lookup::{find, read, same, tick_text};
+pub use lookup::{find, plain, read, same, tick_text};
 pub use parse::{clean, parse};
 pub use step::add_step;
 

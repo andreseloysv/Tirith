@@ -54,6 +54,7 @@ async fn nothing_to_merge(app: &Shared, lane: &Lane) -> bool {
 /// The agent's process is gone: a working lane goes to the merge queue (or, out of credits, to the next agent of the fallback chain); a waiting lane waits for its answer.
 pub(super) async fn ended(app: &Shared, id: &str, code: Option<i32>) {
     let Some(lane) = app.lane(id) else { return };
+    crate::costs::run_ended(app, &lane);
     let text = tail(&app.home.join(format!("logs/lanes/{id}.log")), 200);
     let raw = this_run(&text).to_string();
     let _ = (lane.agent == "codex").then(|| codex_session(app, id, &raw));

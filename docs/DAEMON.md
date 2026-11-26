@@ -355,6 +355,43 @@ Files:
 - `row.rs`: The strict check of one `[[connectors]]` row.
 - `verdict.rs`: The one verdict on a bot's use of a connector's tool: listing and calling both ask it, so a tool that is listed is one a call may reach.
 
+## `costs/`
+
+What the lanes spent. Every run of every lane, each attempt and each sent-back continuation, leaves a row in
+`lane_runs` when its agent's process ends: lane, project, step, item, the issue key the item's text starts with
+(`ABC-123: ...` or `[ABC-123] ...`, else empty), attempt, agent, model, start and end, tokens (fresh input, output,
+cache read, cache write) and dollars. The numbers are read as a turn's are (`turns/usage.rs`): Anthropic's `result`,
+Codex's `turn.completed`, Muse's `run.usage` from the lane's log (this run's lines only), Copilot's `modelMetrics`
+from the file NeoBot tells it to write (`--usage-output-file`, beside the worktree). Codex and Copilot give their
+session's totals, Anthropic its session's cost: a resumed run keeps only its own share (`turns::share`, kept per
+lane in kv `spent:lane:<id>`, started again when a lane starts from its brief). The dollars are the agent's own when it
+says them, else `[prices."<model id>"]` as for a turn, and none (never a guess) without a price. A run whose agent
+printed no usage is a row with no tokens and no cost, so it still counts.
+
+A plan item's cost is the sum of its lanes' runs; the cost per finished item is that for the items the plan has
+ticked. It is shown in `neobot status` (per lane), `neobot plan show` (per item), `GET /api/state` (`spent` on each
+lane), `GET /api/plan/<project>` (`spent` on each item) and on the page (a lane's card and its details, a plan item).
+
+`neobot costs [--project P] [--since DATE] [--by item|lane|run|issue|model|day|project] [--format csv|json]` and
+`GET /api/costs?project=&since=&by=&format=` give one flat table for a BI tool: the grouping columns, then `runs`,
+`priced_runs`, `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write`, `cost_usd`. JSON adds `total`
+and `finished` (`finished_items`, `cost_per_finished_item_usd`). `--by issue` is what a later step joins with Jira
+story points on the key. The table is by team (project) and by bot (lane, agent, model): no person is recorded or
+exported. Anything that names a person is a decision for the owner, not a column.
+
+Files:
+
+- `api.rs`: `GET /api/costs`.
+- `cli.rs`: `neobot costs`.
+- `export.rs`: The report and its CSV.
+- `group.rs`: The runs added up by item, lane, run, issue key, model, day or project.
+- `issue.rs`: The issue key an item's text starts with.
+- `keys.rs`: The columns of each way to group.
+- `read.rs`: What a run used, from the lane's log and Copilot's usage file.
+- `record.rs`: A run's row when its process ends; Copilot told where to write its usage.
+- `rows.rs`: The rows of `lane_runs`.
+- `sum.rs`: What runs add up to.
+
 ## `config/`
 
 `~/.tirith/config.toml` (projects, agent aliases, this machine's overlay on the factory) and each project's `tirith.toml` (plan file, checks, lane excludes, extra rules). Unknown keys are an error the owner sees, never silently ignored; yesterday's sections are read in memory under the factory's names, the file itself untouched.

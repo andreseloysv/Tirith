@@ -41,6 +41,9 @@ pub use cleanup::{cleanup_lane, cleanup_later};
 pub use delete::delete;
 pub use disk::free_gb;
 pub use live::{drain, tell};
+pub use logscan::this_run;
+#[cfg(test)]
+pub use logscan::RUN_START;
 pub use scheduler::scheduler;
 pub use send_back::send_back;
 pub use skip::is_autopilot_skipped;

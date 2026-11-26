@@ -41,6 +41,15 @@ CREATE TABLE IF NOT EXISTS turns (id INTEGER PRIMARY KEY, conv TEXT, role TEXT, 
     factory TEXT NOT NULL DEFAULT '', role_hash TEXT NOT NULL DEFAULT '',
     reaction INTEGER, corrected INTEGER NOT NULL DEFAULT 0, checks_passed INTEGER, checks_total INTEGER,
     checks TEXT, cited TEXT, score REAL, experiment INTEGER, variant TEXT, why TEXT);
+-- What each run of a lane spent (docs/DAEMON.md, `costs/`): one row for every attempt, a sent-back continuation too.
+-- `issue` is the key an item's text starts with ("ABC-123: ..."), '' for none; `source` says where the numbers came
+-- from (usage file, log, none); no cost is `NULL` (no price known), never a guess. No person is recorded.
+CREATE TABLE IF NOT EXISTS lane_runs (id INTEGER PRIMARY KEY, lane TEXT, project TEXT, step TEXT, item TEXT,
+    issue TEXT NOT NULL DEFAULT '', attempt INTEGER, agent TEXT, model TEXT, started_at TEXT, ended_at TEXT,
+    tokens_in INTEGER, tokens_out INTEGER, tokens_cache_read INTEGER, tokens_cache_write INTEGER, cost_usd REAL,
+    source TEXT);
+CREATE INDEX IF NOT EXISTS lane_runs_lane ON lane_runs (lane);
+CREATE INDEX IF NOT EXISTS lane_runs_project ON lane_runs (project, ended_at);
 CREATE INDEX IF NOT EXISTS turns_conv ON turns (conv, id);
 -- What was due (docs/DAEMON.md, `expected/`): one row for each occurrence of a routine or scheduled pass, written
 -- before anything starts: when it was due (UTC), its task, waiting | running | ok | failed, why, and its turn.
