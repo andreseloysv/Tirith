@@ -147,3 +147,98 @@ fn item_check_uses_stage_env() {
     );
     assert_eq!(stage_env(&stages, "cargo test -q x"), []);
 }
+/// A home with project "redp" on a one-commit repo, main red at its head, and merge-queued lanes (oldest first).
+async fn red_main_fixture(tag: &str, lanes: &[(&str, &str)]) -> (crate::app::Shared, String) {
+    let root = std::env::temp_dir().join(format!("tirith-redmain-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let (home, repo) = (root.join("home"), root.join("repo"));
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(repo.join("f"), "x").unwrap();
+    for a in [
+        "init -q",
+        "config user.email t@t",
+        "config user.name t",
+        "add .",
+        "commit -qm i",
+    ] {
+        crate::app::git(&repo, &a.split(' ').collect::<Vec<_>>())
+            .await
+            .unwrap();
+    }
+    let cfg = format!("[network]\nsandbox = false\n\n[[projects]]\nid = \"redp\"\nrepo = \"{}\"\n\n[[projects]]\nid = \"other\"\nrepo = \"{}\"\n", repo.display(), repo.display());
+    std::fs::write(home.join("config.toml"), cfg).unwrap();
+    let app = crate::app::App::open_at(home);
+    let head = crate::app::git(&repo, &["rev-parse", "HEAD"])
+        .await
+        .unwrap();
+    app.set_kv("main_red:redp", Some(&format!("test at {}", &head[..8])));
+    for (i, (id, project)) in lanes.iter().enumerate() {
+        app.save_lane(&crate::app::Lane {
+            id: id.to_string(),
+            project: project.to_string(),
+            status: "merge-queued".into(),
+            ended_at: Some(format!("2026-11-24T00:00:0{i}Z")),
+            ..Default::default()
+        });
+    }
+    (app, head[..8].to_string())
+}
+#[tokio::test]
+async fn red_main_still_tries_its_oldest_lane_alone() {
+    use super::batch::{next_batch, waits_note};
+    let ids = |b: Vec<crate::app::Lane>| b.into_iter().map(|l| (l.id, l.solo)).collect::<Vec<_>>();
+    // The lane that fixes main waited forever: every lane of a red project was held back.
+    let (app, head8) = red_main_fixture("trial", &[("fix", "redp"), ("next", "redp")]).await;
+    assert_eq!(
+        ids(next_batch(&app).await),
+        [("fix".to_string(), true)],
+        "the oldest lane rides alone"
+    );
+    // One that already failed alone on this red main waits; the next lane gets its trial.
+    app.update_lane("fix", |l| l.note = waits_note(&head8));
+    assert_eq!(ids(next_batch(&app).await), [("next".to_string(), true)]);
+    // Main moves (still red): the waiting lane is tried again.
+    assert!(
+        super::batch::red_trial(next_queue(&app), "redp", "ffffffff")
+            .iter()
+            .any(|l| l.id == "fix" && l.solo)
+    );
+    // Green main: the lanes ride one train together as before.
+    app.set_kv("main_red:redp", None);
+    assert_eq!(
+        ids(next_batch(&app).await),
+        [("fix".to_string(), false), ("next".to_string(), false)]
+    );
+    let root = std::env::temp_dir().join(format!("tirith-redmain-trial-{}", std::process::id()));
+    std::fs::remove_dir_all(root).unwrap();
+}
+fn next_queue(app: &crate::app::Shared) -> Vec<crate::app::Lane> {
+    let mut q: Vec<_> = app.lanes.lock().unwrap().values().cloned().collect();
+    q.sort_by(|a, b| a.ended_at.cmp(&b.ended_at));
+    q
+}
+#[test]
+fn red_trial_leaves_other_projects_and_holds_an_unknown_head() {
+    use super::batch::red_trial;
+    let lane = |id: &str, p: &str| crate::app::Lane {
+        id: id.into(),
+        project: p.into(),
+        ..Default::default()
+    };
+    let q = || vec![lane("a", "redp"), lane("b", "other"), lane("c", "redp")];
+    let got: Vec<_> = red_trial(q(), "redp", "abcd1234")
+        .into_iter()
+        .map(|l| (l.id, l.solo))
+        .collect();
+    assert_eq!(got, [("a".into(), true), ("b".into(), false)]);
+    let held: Vec<_> = red_trial(q(), "redp", "")
+        .into_iter()
+        .map(|l| l.id)
+        .collect();
+    assert_eq!(
+        held,
+        ["b"],
+        "a red main at an unknown head still holds its lanes back"
+    );
+}
