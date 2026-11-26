@@ -471,3 +471,19 @@ fn only_secrets_are_hidden_in_a_byok_agent_env() {
         "unknown names stay hidden"
     );
 }
+
+#[test]
+fn setup_server_writes_the_mode_that_fails_closed() {
+    let home = dir("server-mode");
+    std::fs::write(home.join("config.toml"), "# mine\n[server]\nport = 7717\n").unwrap();
+    super::configure::server(&home).unwrap();
+    let cfg = crate::config::Config::load_at(&home);
+    let get = |p: &[&str]| crate::config::get::<toml::Value>(&cfg.raw, p);
+    assert_eq!(get(&["server", "mode"]).unwrap().as_str(), Some("server"));
+    assert_eq!(get(&["network", "sandbox"]).unwrap().as_bool(), Some(true));
+    assert_eq!(cfg.port, 7717, "what it had stays");
+    assert!(std::fs::read_to_string(home.join("config.toml"))
+        .unwrap()
+        .contains("# mine"));
+    let _ = std::fs::remove_dir_all(&home);
+}

@@ -33,6 +33,15 @@ pub fn port(home: &Path, port: u16) -> Result<(), String> {
     })
 }
 
+/// `neobot setup --server`: the home is a server's, which fails closed (`[server] mode = "server"`: no lane or bot starts without the network sandbox, which is asked for explicitly).
+pub fn server(home: &Path) -> Result<(), String> {
+    edit(home, |doc| {
+        table(doc, &["server"])?.insert("mode", value("server"));
+        table(doc, &["network"])?.insert("sandbox", value(true));
+        Ok(())
+    })
+}
+
 /// The roles that run on an agent this machine has not connected move to `primary`: (role, the agent it had).
 pub fn roles(
     home: &Path,

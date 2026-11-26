@@ -32,6 +32,7 @@ pub mod rehook;
 pub mod root;
 pub mod run;
 mod secret;
+mod server_line;
 mod signin;
 mod summary;
 #[cfg(target_os = "linux")]

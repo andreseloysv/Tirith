@@ -1280,6 +1280,7 @@ Files:
 - `cli/mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `cli/status.rs`: `neobot net status`.
 - `caller.rs`: Whether a connection to the daemon comes from inside the sandbox, as the kernel tells it.
+- `closed.rs`: Server mode: no process starts without the sandbox (`wrap` refuses), and what needs the Mac says so on a Linux server.
 - `git.rs`: The git the daemon itself runs, confined like the rest: what a repository agents write in makes git run is an agent's.
 - `confine.rs`: How this system confines (macOS's profile, Linux's namespace), and the launcher's way in from the command line.
 - `env.rs`: The environment of a sandboxed process: the proxy for every tool that reads one, ssh through the proxy and the tool wrappers first on PATH.
@@ -1575,6 +1576,15 @@ container) it is started in a session of its own and says that nothing brings it
 `com.tirith.serve` (a marked one for a home that is not the usual). A restart leaves the
 running lanes alone: the next daemon takes them up.
 
+Server mode fails closed. `neobot setup --server` (or `--boot`, or yes to the question) writes `[server] mode =
+"server"` and `[network] sandbox = true` in config.toml. With that mode, a lane, a bot's or a manager's turn, a merge
+check and a local connector start only inside the network sandbox: where it is off (`sandbox = false`, no `bwrap`,
+no `sandbox-exec`) `sandbox::wrap` refuses with the reason and leaves a `net-off` event, instead of running the
+process unconfined as a desktop does. `neobot doctor` has a line for it (from `GET /api/net/status`: `server_mode`,
+`closed`) with the fix. On a Linux server what only a Mac has answers "this needs the Mac": Safari and the owner's
+Chrome or Edge (`POST /api/safari`), the macOS folder picker, and `[browser] use = "mine"` (a doctor line);
+NeoBot's own browser works. A home without the mode is as before.
+
 Files:
 
 - `alive.rs`: Whether what answers is the service's own process (`alive:` in `neobot service status`).
@@ -1608,7 +1618,8 @@ Files:
 - `auth.rs`: An agent's token, kept private and handed to its processes alone.
 - `catalog.rs`: The agents the guide knows.
 - `choose.rs`: Which agents the owner connects, and which one the work runs on.
-- `configure.rs`: What the guide writes in config.toml.
+- `configure.rs`: What the guide writes in config.toml (the port, an agent's command, the roles' agents, and `[server] mode = "server"` for `--server`).
+- `server_line.rs`: What `neobot doctor` says of server mode and of the owner's own Edge on Linux.
 - `connect.rs`: Connecting one agent, in order.
 - `context.rs`: What every step works with: the home, this binary, the terminal.
 - `daemon.rs`: The guide's talk with this home's daemon.

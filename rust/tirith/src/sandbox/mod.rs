@@ -3,6 +3,7 @@ mod blocks;
 mod caller;
 mod check;
 mod cli;
+mod closed;
 mod confine;
 mod egress;
 mod env;
@@ -38,6 +39,7 @@ mod wrappers;
 pub use caller::confined;
 pub use check::check_command;
 pub use cli::cli;
+pub use closed::{needs_mac, refusal as closed_for, server_mode};
 pub use egress::{allow as net_allow, settled as net_settled};
 pub use git::{git, prepare};
 #[cfg(target_os = "macos")]

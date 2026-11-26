@@ -22,7 +22,7 @@ impl Local {
         argv: &[String],
         secrets: &[(String, String)],
     ) -> Result<Local, String> {
-        let launch = crate::sandbox::wrap(app, who, argv.to_vec());
+        let launch = crate::sandbox::wrap(app, who, argv.to_vec())?;
         let mut cmd = launch.command(app);
         cmd.envs(secrets.iter().map(|(k, v)| (k, v)))
             .stdin(Stdio::piped())

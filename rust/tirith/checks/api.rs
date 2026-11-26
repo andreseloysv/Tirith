@@ -81,6 +81,7 @@ impl Daemon {
         });
         // The token as the lane's process gets it.
         crate::sandbox::wrap(&self.app, id, vec!["true".into()])
+            .unwrap()
             .env
             .into_iter()
             .find(|(name, _)| name == "TIRITH_TOKEN")

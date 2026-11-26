@@ -55,6 +55,7 @@ fn start(cx: &Context, o: &Opts, pending: &mut Vec<String>) -> Result<(), String
         println!("NeoBot runs: {}.", service::start(&unit, &cx.ask)?.said());
         return Ok(());
     }
+    configure::server(&cx.home)?; // it fails closed
     let boot = o.boot
         || (cfg!(target_os = "macos")
             && cx.ask.yes_no(

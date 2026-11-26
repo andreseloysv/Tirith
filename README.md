@@ -292,6 +292,7 @@ words = ["…"]                       # your forbidden words (regexes allowed)
 
 [server]
 port = 7717
+# mode = "server"                   # what `neobot setup --server` writes: no lane or bot starts without the network sandbox
 [autopilot]
 enabled = true                      # per project on the page or with `neobot autopilot`
 [limits]                            # any limit of the factory, for this machine

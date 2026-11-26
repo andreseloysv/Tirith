@@ -12,6 +12,7 @@ const PANEL: &str = include_str!("../../assets/panel.js");
 
 /// The macOS folder picker, opened by the daemon in the owner's session (one at a time): the folder, or "" when cancelled.
 pub(super) async fn pick(State(app): State<Shared>) -> R {
+    crate::sandbox::needs_mac("the folder picker (type the path)").map_err(bad)?;
     let Ok(_one) = PICKING.try_lock() else {
         return Err(bad("the folder picker is already open".into()));
     };

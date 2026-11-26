@@ -35,7 +35,7 @@ pub(super) fn spawn_agent(
     argv: Vec<String>,
 ) -> Result<(), String> {
     let own_tmp = super::temp::env(app, argv.first().map_or("", String::as_str), ws);
-    let launch = sandbox::wrap(app, &lane.id, argv);
+    let launch = sandbox::wrap(app, &lane.id, argv)?;
     let log = open_log(app, &lane.id)?;
     let mut command = launch.command(app);
     let child = command

@@ -12,7 +12,7 @@ pub fn spawn_chat(
     argv: Vec<String>,
 ) -> Result<(Child, ChildStdin, ChildStdout), String> {
     let quick = super::quick_shell::env(app, project, argv.first().map_or("", |p| p)); // a bot's shell starts without the owner's profile
-    let launch = sandbox::wrap(app, &format!("{role}@{project}"), argv);
+    let launch = sandbox::wrap(app, &format!("{role}@{project}"), argv)?;
     let dir = if app.cfg().factory.role::<String>(role, "scope").as_deref() == Some("own") {
         app.home.join("manager").join(role)
     } else {

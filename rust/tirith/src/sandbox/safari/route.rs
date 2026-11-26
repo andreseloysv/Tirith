@@ -11,6 +11,16 @@ pub async fn safari_route(
 ) -> Result<String, (axum::http::StatusCode, String)> {
     let agent = who.agent().cloned().unwrap_or_default();
     let which = b["app"].as_str().unwrap_or("");
+    let (cmd, target) = (
+        b["cmd"].as_str().unwrap_or(""),
+        b["target"].as_str().unwrap_or(""),
+    );
+    let own = !matches!(cmd, "browser" | "login") && (cmd != "use" || target != "neobot");
+    let name = if which.is_empty() { "Safari" } else { which };
+    let _ = own
+        .then(|| crate::sandbox::needs_mac(name))
+        .transpose()
+        .map_err(bad)?; // NeoBot's own browser works anywhere
     if super::uia::browser(which).is_some() {
         // the owner's Chrome or Edge, on Windows: the same roles, the same commands
         super::script::chat_role(&app, &agent.lane, &agent.role).map_err(bad)?;

@@ -43,7 +43,7 @@ pub fn routes() -> Router<Shared> {
 
 fn status(app: &Shared) -> Value {
     json!({"sandbox": enabled(app).is_ok(), "why": enabled(app).err(), "proxy_port": proxy_port(app),
-    "proxy": proxy::state(), "blocks": list()})
+    "proxy": proxy::state(), "blocks": list(), "server_mode": super::server_mode(app), "closed": super::closed_for(app, "a lane")})
 }
 
 async fn change(app: Shared, b: Value, on: bool) -> R {

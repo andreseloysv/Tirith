@@ -21,7 +21,7 @@ pub(super) async fn run_stage(
     app.emit("run", row.clone());
     app.emit("pipeline", pipeline(app, &pipe.id));
     let file = std::fs::File::create(&log).map_err(|e| e.to_string())?;
-    let mut command = stage_command(app, pipe, dir, name, run);
+    let mut command = stage_command(app, pipe, dir, name, run)?;
     let child = command
         .current_dir(dir)
         .stdin(Stdio::null())
@@ -51,7 +51,7 @@ fn stage_command(
     dir: &Path,
     name: &str,
     run: &str,
-) -> tokio::process::Command {
+) -> Result<tokio::process::Command, String> {
     let who = format!(
         "merge:{}",
         pipe.lanes
@@ -60,7 +60,7 @@ fn stage_command(
             .filter(|l| !l.is_empty())
             .unwrap_or("main")
     );
-    let launch = sandbox::wrap(app, &who, vec![crate::os::sh(), "-c".into(), run.into()]);
+    let launch = sandbox::wrap(app, &who, vec![crate::os::sh(), "-c".into(), run.into()])?;
     let mut command = launch.command(app);
     command.env(
         "CARGO_TARGET_DIR",
@@ -69,7 +69,7 @@ fn stage_command(
     let _ = name
         .starts_with("check ")
         .then(|| command.envs(stage_env(&Manifest::load(dir).stages, run)));
-    command
+    Ok(command)
 }
 /// "passed", "failed" or "timeout": a stage past its limit is killed with its group, and learns a longer limit.
 async fn wait_within_limit(
