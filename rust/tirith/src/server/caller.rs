@@ -33,6 +33,11 @@ pub(super) fn of(req: &Request) -> Option<Caller> {
 }
 
 impl Caller {
+    /// Whether it connects from this machine: the only place X-Forwarded-* is believed from.
+    pub(super) fn loopback(&self) -> bool {
+        self.from.ip().is_loopback()
+    }
+
     pub(super) async fn confined(&self) -> bool {
         let (from, to) = (self.from, self.to);
         let look = || async move {

@@ -21,3 +21,9 @@ pub(super) fn nobody(path: &str) -> Response {
 pub(super) fn not_theirs(why: &'static str) -> Response {
     (StatusCode::FORBIDDEN, why).into_response()
 }
+
+/// 403 for a person whose role does not reach what they asked.
+pub(super) fn role(has: &str, needs: &str) -> Response {
+    let said = format!("forbidden: your role ({has}) may not do this, it needs {needs}");
+    (StatusCode::FORBIDDEN, said).into_response()
+}

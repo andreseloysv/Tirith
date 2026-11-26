@@ -36,7 +36,6 @@ pub(super) fn same(a: &str, b: &str) -> bool {
 
 /// Whether the request is the opened page's: its cookie, and for the API not another site's request (another port is one) nor an address somebody had the browser visit.
 pub(super) fn opened(app: &App, path: &str, h: &HeaderMap) -> bool {
-    let header = |name: &str| h.get(name).and_then(|v| v.to_str().ok());
     let own = cookie(app);
     let kept = h
         .get_all("cookie")
@@ -44,8 +43,14 @@ pub(super) fn opened(app: &App, path: &str, h: &HeaderMap) -> bool {
         .filter_map(|v| v.to_str().ok())
         .flat_map(|v| v.split(';'))
         .any(|pair| same(pair.trim(), &own));
-    if !kept || !path.starts_with("/api/") {
-        return kept;
+    kept && fetch_ok(path, h)
+}
+
+/// For the API: not another site's request (another port is one) nor an address somebody had the browser visit.
+pub(super) fn fetch_ok(path: &str, h: &HeaderMap) -> bool {
+    let header = |name: &str| h.get(name).and_then(|v| v.to_str().ok());
+    if !path.starts_with("/api/") {
+        return true;
     }
     let ours = header("sec-fetch-site").is_none_or(|s| s == "same-origin" || s == "none");
     let visited = header("sec-fetch-dest") == Some("document");

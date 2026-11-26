@@ -86,6 +86,37 @@ neobot service status | restart | logs | uninstall
   `codex review`, by that bare name, NeoBot keeps the limit it asked for; by an absolute path it fails, and its
   other subcommands run no commands there (docs/DAEMON.md, `sandbox/nested/`).
 
+## A team on one server: sign in with your company account
+
+A NeoBot server (above) can be shared. Each member opens the NeoBot desktop app, adds the server and signs in with the
+company's identity provider (Microsoft Entra ID), and sees the team's bots, runs and costs by their role. Nobody gets
+the owner's token: the owner stays the person whose machine it is.
+
+1. **The identity provider (once, an admin of the tenant).** Register one application, single tenant, as a *public
+   client* with the redirect URI `http://localhost` (no client secret) and *Allow public client flows* on. Expose an
+   API (`api://<client id>`) with the delegated scope `access_as_user`, use v2 access tokens, add the app roles
+   `Team.Admin`, `Team.Member` and `Team.Viewer`, require user assignment and assign each person a role (a free
+   tenant assigns people, not groups).
+2. **The server (the owner).** In `~/.tirith/config.toml`:
+   ```toml
+   [auth.oidc]
+   issuer    = "https://login.microsoftonline.com/<tenant id>/v2.0"
+   client_id = "<application (client) id>"
+   [server]
+   # public_url = "https://neobot.team.example"   # only when a TLS reverse proxy on the server serves the page
+   ```
+   Restart with `neobot service restart`. Reach the server from the members' computers by an SSH tunnel
+   (`ssh -N -L 7801:127.0.0.1:7801 <user>@<server>`) or the proxy's https address.
+3. **A member.** In the app, *Server* menu, *Servers...*: add `http://127.0.0.1:7801` (the tunnel) or
+   `https://neobot.team.example`, choose *Sign in with Microsoft*, finish in the browser that opens. The window then
+   shows the server's page, signed in as you; its title says your name and role. *This Mac* in the same dialog goes
+   back to your own NeoBot, which is never started or needed while a server is shown.
+
+What a role may do: a *viewer* reads (page, bots, runs, costs); a *member* also starts runs and tasks and answers cards
+that are not the owner's; an *admin* also configures bots, routines, connectors and net permits and approves outward
+actions. Credentials, payments, secrets and the service stay the machine owner's. Every sign-in and refusal is an
+event on the page. Details: [docs/DAEMON.md](docs/DAEMON.md), `oidc/` and `server/`.
+
 ## What it does
 
 Agents stop halfway, ask what they could decide, and lose the big picture. NeoBot keeps the plan moving to the

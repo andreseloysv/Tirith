@@ -15,3 +15,16 @@ pub(super) async fn owner_only(req: Request, next: Next) -> Response {
     }
     next.run(req).await
 }
+
+/// A bot's connector grants are the owner's, and an admin's: they choose which connectors a bot may use, never a connector's sign-in.
+pub(super) async fn admin_too(req: Request, next: Next) -> Response {
+    let who = req.extensions().get::<crate::server::Who>();
+    if !who.is_some_and(crate::server::Who::is_admin) {
+        return (
+            StatusCode::FORBIDDEN,
+            "a bot's connectors are the owner's and an admin's",
+        )
+            .into_response();
+    }
+    next.run(req).await
+}

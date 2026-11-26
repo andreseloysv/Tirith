@@ -10,7 +10,10 @@ pub(super) fn routes(app: Shared) -> Router {
     Router::new()
         .route("/hook/{event}", post(rules_alone))
         .fallback(|| async { (StatusCode::FORBIDDEN, WHY) })
-        .layer(middleware::from_fn(origin::same_origin))
+        .layer(middleware::from_fn_with_state(
+            app.clone(),
+            origin::same_origin,
+        ))
         .with_state(app)
 }
 

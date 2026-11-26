@@ -37,7 +37,7 @@ async fn answer(
     Json(b): Json<Value>,
 ) -> R {
     let (text, by_manager) = (s(&b, "answer"), s(&b, "by") == "manager");
-    let done = if who.is_agent() {
+    let done = if who.is_agent() && !who.is_person() {
         manager::relayed(&app, &id, &text)
     } else {
         manager::owner_answer(&app, &id, &text, by_manager)
@@ -51,7 +51,7 @@ async fn close(
     Path(id): Path<String>,
     Json(b): Json<Value>,
 ) -> R {
-    let manager = who.is_agent() || s(&b, "by") == "manager";
+    let manager = (who.is_agent() && !who.is_person()) || s(&b, "by") == "manager";
     let by = if manager { "the manager" } else { "the owner" };
     manager::close_card(&app, &id, by, &s(&b, "why"))
         .map(Json)

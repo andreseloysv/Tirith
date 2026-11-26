@@ -26,6 +26,8 @@ pub enum Who {
     /// A teach route's own token.
     Extension,
     Agent(Agent),
+    /// A team member signed in with the provider (`oidc/`): what their role allows (`policy.rs`), nothing the owner's.
+    Person(crate::oidc::Person),
     #[default]
     Nobody,
 }
@@ -33,7 +35,17 @@ pub enum Who {
 impl Who {
     /// Whether it is kept from what is the owner's: whoever is not known to be them, the extension apart.
     pub fn is_agent(&self) -> bool {
-        matches!(self, Who::Agent(_) | Who::Nobody)
+        !matches!(self, Who::Owner | Who::Extension)
+    }
+
+    /// The owner, or a person signed in as an admin.
+    pub fn is_admin(&self) -> bool {
+        matches!(self, Who::Owner)
+            || matches!(self, Who::Person(p) if p.level == crate::oidc::Level::Admin)
+    }
+
+    pub fn is_person(&self) -> bool {
+        matches!(self, Who::Person(_))
     }
 
     pub fn agent(&self) -> Option<&Agent> {
@@ -47,6 +59,7 @@ impl Who {
     pub fn name(&self) -> &str {
         match self {
             Who::Agent(a) if !SPEAKERS.contains(&a.name.as_str()) => &a.name,
+            Who::Person(p) => &p.name,
             Who::Agent(_) | Who::Nobody => "agent",
             Who::Owner | Who::Extension => "",
         }

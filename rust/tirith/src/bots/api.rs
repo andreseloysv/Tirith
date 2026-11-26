@@ -75,7 +75,7 @@ fn connectors() -> Router<Shared> {
     };
     Router::new()
         .route("/api/bots/{id}/connectors", get(got).post(set))
-        .route_layer(axum::middleware::from_fn(crate::connector_page::owner_only))
+        .route_layer(axum::middleware::from_fn(super::owner::admin_too))
 }
 pub fn routes() -> Router<Shared> {
     Router::new()

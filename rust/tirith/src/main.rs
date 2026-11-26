@@ -26,6 +26,7 @@ mod modeldoor;
 mod models;
 mod numbers;
 mod oauth;
+mod oidc;
 mod os;
 mod plan;
 mod power;

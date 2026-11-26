@@ -1175,6 +1175,76 @@ Files:
 - `start.rs`: A sign-in begun: discovery, registration and the browser's address.
 - `token.rs`: The token endpoint: a code exchanged and a refresh.
 
+## `oidc/`
+
+Team sign-in: people who are not the machine's owner join a NeoBot server with the company's identity provider
+(Microsoft Entra ID is the one it is written and checked for; any provider with RS256 access tokens, a JWKS and
+Entra's `/oauth2/v2.0/` endpoints under its issuer fits). The desktop app signs the person in at the provider and hands
+their access token to this daemon; the daemon never sees a password and holds no provider secret (the app is a public
+client: Authorization Code with PKCE).
+
+```toml
+[auth.oidc]
+issuer    = "https://login.microsoftonline.com/<tenant id>/v2.0"
+client_id = "<application (client) id>"
+# audience = ["<client id>", "api://<client id>"]   # the `aud` values accepted: these two by default
+# tenant   = "<tenant id>"                          # the `tid` required: the issuer's first path part by default
+# scope    = "access_as_user"                       # the delegated scope `scp` must carry ("" = not checked)
+# jwks_uri = "https://.../discovery/v2.0/keys"      # the signing keys: <issuer without /v2.0>/discovery/v2.0/keys by default
+# leeway = 60                                       # seconds of clock difference allowed on exp and nbf
+# session_hours = 12                                # how long a signed-in session lasts
+[auth.oidc.roles]                                   # app role (the `roles` claim) -> NeoBot level; these are the defaults
+"Team.Admin"  = "admin"
+"Team.Member" = "member"
+"Team.Viewer" = "viewer"
+```
+
+`POST /api/auth/oidc` takes the access token (`Authorization: Bearer <token>`, or `{"access_token": "..."}`) and checks
+it in this order: RS256 (any other `alg`, `none` included, is refused) against the key its `kid` names in the provider's
+JWKS, `iss`, `aud`, `exp` and `nbf` with the leeway, `tid`, the scope, and the roles: a token with none of the roles of
+`[auth.oidc.roles]` is refused, and with several the highest wins. The JWKS is fetched on first use and kept; a `kid`
+that is not in it fetches it again, at most once a minute. On success the person is written to `people` (`oid`, name,
+`preferred_username`, level, first and last seen: the level is always the last token's, so a role the provider
+removes ends at the next sign-in and a session never outlives `session_hours`), a session opens (the database keeps the
+token's hash only) and the answer sets the cookie `neobot-person-<home>=<token>` (`HttpOnly`, `SameSite=Lax`, `Secure`
+when `public_url` is https). The answer also carries `link`, a path that sets the same cookie once within a minute
+(`GET /auth/session/<code>`), for a window that cannot read the response. `GET /api/auth/oidc` (no token needed) tells
+the app which endpoints, client id and scope to use; `GET /api/auth/me` says who the gate takes the caller for; `POST
+/api/auth/logout` ends the session.
+
+**Who calls.** The gate knows four kinds: the owner (`owner.token`, or the page opened with it), a person (that
+cookie), an agent (its token) and nobody (403). A person is never the owner: every check that asks for the owner
+refuses them, and `Who::is_agent` is true for them (kept from what is the owner's), so a new owner-only route is closed
+to people without a line of code. What a person may do is `server/policy.rs`'s one table; whatever changes something and
+is not in it is the owner's.
+
+| Level | May |
+|---|---|
+| viewer | read the page, bots, runs, costs and the change stream; change nothing |
+| member | also start bot runs (`/api/bots/<id>/run/<routine>`), lanes and tasks (plan), chat with the manager, interrupt it, react to a turn, ask a card, and answer cards of kind `decision` and a lane's question |
+| admin | also configure bots, their routines, webhooks and connector grants, projects, models, autopilot, guard and lab; permit hosts on the net (`/api/net/allow`); answer `approval` cards (outward actions); close cards, clear chats |
+| owner only | secrets, connector sign-ins and calls, payment, credential, account and device cards, agent set-up, pairing phones and rooms, the model door, importing bots, the teach extension, Safari, picking folders |
+
+A refusal is a 403 that says `your role (viewer) may not do this, it needs member`, and an event
+(`auth`/`refused`). Every sign-in (`auth`/`login`) and refusal of a token (`auth`/`refused`, with the reason: expired,
+other tenant, no role, ...) is an event too, and so is every change a person makes (`auth`/`action`: who, role, method
+and path). A person's chat lines go to the manager under their name.
+
+The service install, `neobot secret`, payment and the like are CLI or owner-token calls and stay the machine owner's:
+being admin gives no way to them.
+
+Files:
+
+- `der.rs`: An RSA public key as DER, from a JWK's modulus and exponent (what `ring` verifies with).
+- `jwks.rs`: The provider's signing keys: fetched, kept, and fetched again for a new key id, at most once a minute.
+- `level.rs`: viewer, member, admin.
+- `mod.rs`: Declares the folder's files and re-exports what other modules use.
+- `people.rs`: The people table and their sessions.
+- `routes.rs`: The sign-in routes: the app's configuration, `/api/auth/me` and sign-out.
+- `login.rs`: The token's trade for a session and the one-use link that hands it to a window.
+- `settings.rs`: `[auth.oidc]` and the role map.
+- `verify.rs`: Checking an access token.
+
 ## `plan/`
 
 The plan: the project's markdown checklist (`## N. Title` steps, `- [ ] item` lines). Its content changes (new step, new item, ticked item, deleted step) are written to the file at once and committed in batches; which lane works on an item lives in the
@@ -1562,6 +1632,9 @@ The token goes as `X-Tirith-Token`.
   server `neobot open link`) gets `/auth/<code>` from `POST /api/page`: it works once, for 10 minutes, and sets the
   cookie (HttpOnly, SameSite=Lax). The API takes the cookie neither from another site or port nor for an address a
   browser was made to visit. Without it even `/` is 403, and says how to open the page.
+- **A person** (`person.rs`, `oidc/`): a team member signed in with the company's identity provider holds a session
+  cookie of their own, and what their level allows is `policy.rs`'s table (viewer reads, member also runs, admin also
+  configures; the rest is the owner's). See `oidc/`.
 - **A hook without a valid agent's token** (the owner's own sessions, whatever their token) can only be refused, as
   those sessions always were: the rules of the folder it stands in and the block list. It is no lane and no role: it
   gets no allow, no message, and writes no event but a refusal, no session and no note.
@@ -1569,6 +1642,35 @@ The token goes as `X-Tirith-Token`.
   link. They too are refused from inside the sandbox.
 - **Everything else** without a valid caller token is 403. `scope.rs` keeps a token from acting as another: a lane asks
   only as itself and does nothing that is the manager's, a bot rehearses and keeps checks only as itself.
+
+**Behind a TLS reverse proxy** (the enterprise case). The daemon itself still listens on 127.0.0.1 only. A proxy on
+the same machine terminates TLS and forwards to it:
+
+```toml
+[server]
+port = 7717
+public_url = "https://neobot.team.example"   # the host and origin people's browsers use
+```
+
+With `public_url`, a request is let in when its `Host` (or `X-Forwarded-Host`, from a loopback peer only) is that
+host and its `Origin`, if it has one, is exactly that URL, besides the loopback names as before; any other host or
+origin is still 403 (no DNS rebinding, no cross-site calls), and without `public_url` nothing of X-Forwarded-* is
+read. The session cookie is `Secure` when it is https. nginx (the SSE stream needs buffering off):
+
+```nginx
+location / {
+  proxy_pass http://127.0.0.1:7717;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-Host $host;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_buffering off;
+  proxy_read_timeout 1h;
+}
+```
+
+The SSH-tunnel case (`ssh -N -L 7801:127.0.0.1:7801 <server>`, then `http://127.0.0.1:7801/`) is unchanged and needs
+no setting. The proxy exposes the sign-in routes to its network: they accept only a token the provider signed for this
+tenant, this application and a role you assigned; keep the proxy behind your usual access controls anyway.
 
 An agent may hand its hooks and shells none of its variables (Muse): the CLI then takes `TIRITH_TOKEN` from the
 environment its own ancestors started with (`client/ancestry.rs`). A session of a lane or a role never falls back to
@@ -1603,7 +1705,10 @@ Files:
 - `hook_rules.rs`: A tool call that breaks a rule is refused before it runs.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `door.rs`: The daemon's door: loopback only, and on Linux only for this NeoBot's own user, root and `[server] users`.
-- `origin.rs`: The same-origin guard in front of every route.
+- `origin.rs`: The same-origin guard in front of every route; a reverse proxy's public host is let in too (`public.rs`).
+- `person.rs`: A signed-in person at the gate: their session cookie, and what their level may call (`policy.rs`).
+- `policy.rs`: What each call needs, a level or the machine owner; what is not listed and changes something is the owner's.
+- `public.rs`: `[server] public_url`, and X-Forwarded-Host, which is read only when it is set and the connection is from loopback.
 - `caller.rs`: A caller's connection, and whether it comes from inside the sandbox, where nobody is the owner.
 - `peer.rs`: Who is at the other end of a loopback connection, from the kernel's table of sockets (Linux).
 - `plan.rs`: A project's plan as the page shows it (each item with its newest lane), and the step a command adds to it.

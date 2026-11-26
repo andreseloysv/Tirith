@@ -31,6 +31,7 @@ pub fn router(app: Shared, port: u16) -> Router {
         lab::routes(),
         setup::routes(),
         page::routes(),
+        crate::oidc::routes(),
     ];
     let own = [
         routes::state(),
@@ -45,6 +46,9 @@ pub fn router(app: Shared, port: u16) -> Router {
         .fold(Router::new(), Router::merge)
         .fallback(web_file)
         .layer(middleware::from_fn_with_state(app.clone(), admit::admit))
-        .layer(middleware::from_fn(origin::same_origin))
+        .layer(middleware::from_fn_with_state(
+            app.clone(),
+            origin::same_origin,
+        ))
         .with_state(app)
 }

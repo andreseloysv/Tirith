@@ -7,5 +7,5 @@ mod seen;
 mod state;
 mod status;
 
-pub use routes::{owner_only, routes};
+pub use routes::routes;
 pub use seen::{failed, worked};

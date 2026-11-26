@@ -40,8 +40,14 @@ async fn intro(
     Ok(Json(json!({ "written": lines.len() })))
 }
 
-/// `{name, welcome}`: the owner's first name, or null, and the id of the bot that still owes its welcome, or null.
-async fn me(State(app): State<Shared>) -> R {
+/// `{name, welcome}`: the owner's first name (a signed-in person's, with their `role`), or null, and the id of the bot that still owes its welcome, or null.
+async fn me(State(app): State<Shared>, who: Who) -> R {
+    if let Who::Person(p) = &who {
+        let first = p.name.split_whitespace().next().unwrap_or(&p.name);
+        return Ok(Json(
+            json!({ "name": first, "role": p.level.name(), "welcome": null }),
+        ));
+    }
     let name = tokio::task::spawn_blocking(crate::os::full_name)
         .await
         .ok()

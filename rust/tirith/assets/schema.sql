@@ -89,3 +89,5 @@ CREATE INDEX IF NOT EXISTS connector_calls_conv ON connector_calls (conv, id);
 -- refused (a no, or closed) or used (the one identical call it let run).
 CREATE TABLE IF NOT EXISTS connector_permits (card TEXT PRIMARY KEY, at TEXT, conv TEXT, call_sha TEXT, status TEXT);
 CREATE INDEX IF NOT EXISTS connector_permits_call ON connector_permits (conv, call_sha, status);
+CREATE TABLE IF NOT EXISTS people (oid TEXT PRIMARY KEY, name TEXT, username TEXT, role TEXT, first_seen TEXT, last_seen TEXT);
+CREATE TABLE IF NOT EXISTS person_sessions (hash TEXT PRIMARY KEY, oid TEXT, expires INTEGER);
