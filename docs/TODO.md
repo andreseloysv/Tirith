@@ -157,7 +157,7 @@ Este archivo es la fuente del panel «Plan» del Overview: Tirith lee las casill
 - [x] Manager de guardia: atender el chat
 - [x] Manager de guardia: atender el chat
 - [x] Muse chat real check: one tiny session
-- [ ] Un main en rojo ya no bloquea la lane que lo arregla: hoy next_batch (rust/tirith/src/merge/batch.rs) aparta todas las lanes de un proyecto con main_red en su head, y main solo se vuelve a probar cuando main se mueve, así que la lane que arregla la prueba roja queda merge-queued para siempre (superpolitika: arreglar-main-en-rojo-test-diagn-2790 lleva desde el 24/11). Con main rojo, la cola debe probar igualmente la lane más antigua de ese proyecto, sola; si su tren pasa todas las etapas, fusionarla y limpiar main_red; si falla, devolverla como hoy. Con una prueba que reproduzca el bloqueo (check: `cargo test -q -p tirith merge`)
+- [x] Un main en rojo ya no bloquea la lane que lo arregla: hoy next_batch (rust/tirith/src/merge/batch.rs) aparta todas las lanes de un proyecto con main_red en su head, y main solo se vuelve a probar cuando main se mueve, así que la lane que arregla la prueba roja queda merge-queued para siempre (superpolitika: arreglar-main-en-rojo-test-diagn-2790 lleva desde el 24/11). Con main rojo, la cola debe probar igualmente la lane más antigua de ese proyecto, sola; si su tren pasa todas las etapas, fusionarla y limpiar main_red; si falla, devolverla como hoy. Con una prueba que reproduzca el bloqueo (check: `cargo test -q -p tirith merge`)
 
 ## 1. `lane run` devuelve la respuesta final
 
