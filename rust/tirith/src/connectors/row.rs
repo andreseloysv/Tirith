@@ -2,8 +2,8 @@
 use super::check::string_list;
 use super::read::strings;
 
-const KEYS: [&str; 7] = [
-    "id", "command", "url", "blocked", "deny", "approval", "secrets",
+const KEYS: [&str; 8] = [
+    "id", "command", "url", "blocked", "deny", "approval", "secrets", "required",
 ];
 
 /// An id is lowercase letters, digits, `-` and `_`.
@@ -47,7 +47,7 @@ pub(super) fn wrong(i: usize, t: &toml::Table) -> Option<String> {
         "" => format!("connectors[{i}]"),
         _ => format!("connector '{id}'"),
     };
-    let lists = ["deny", "approval", "secrets"];
+    let lists = ["deny", "approval", "secrets", "required"];
     let bad = t
         .keys()
         .find(|k| !KEYS.contains(&k.as_str()))
@@ -70,6 +70,13 @@ pub(super) fn wrong(i: usize, t: &toml::Table) -> Option<String> {
                 .iter()
                 .any(|s| !secret_name(s))
                 .then(|| "secrets as variable names (A-Z, 0-9, _), never values".into())
+        })
+        .or_else(|| {
+            let all = strings(t, "secrets");
+            let stray = strings(t, "required")
+                .into_iter()
+                .any(|r| !all.contains(&r));
+            stray.then(|| "required names only secrets it declares".into())
         })
         .or_else(|| {
             strings(t, "secrets")

@@ -60,7 +60,9 @@ async fn asked(
     let cfg = app.cfg();
     let names = cfg.factory.connectors.iter().find(|c| c.id == connector);
     let names = names.map(|c| c.secrets.clone()).unwrap_or_default();
-    let values = secrets(app, &s.bot, &names).await.unwrap_or_default();
+    let values = secrets(app, &s.bot, (&names, &[]))
+        .await
+        .unwrap_or_default();
     let values: Vec<String> = values.into_iter().map(|(_, v)| v).collect();
     let question = format!(
         "Bot «{}» asks to run tool {tool} of connector {connector} with: {}. Answer yes to let this exact call run once, or no.",

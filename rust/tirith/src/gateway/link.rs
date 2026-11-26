@@ -22,7 +22,9 @@ pub struct Link {
 impl Link {
     /// Connector `c` opened for bot `bot` (its page id), running as `who`: started or reached, greeted, its tools read.
     pub async fn open(app: &Shared, who: &str, bot: &str, c: &Connector) -> Result<Link, String> {
-        let mut given = secrets(app, bot, &c.secrets).await?;
+        let first = c.secrets.first().filter(|_| c.command.is_empty()); // a remote one's first is its Bearer: without it the next would take its place
+        let required: Vec<String> = c.required.iter().chain(first).cloned().collect();
+        let mut given = secrets(app, bot, (&c.secrets, &required)).await?;
         let conn = if c.command.is_empty() {
             let signed = crate::oauth::bearer(app, bot, &c.id, false).await?;
             let renew = signed.is_some().then(|| Renew::of(app, bot, &c.id));

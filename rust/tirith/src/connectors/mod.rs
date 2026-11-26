@@ -22,6 +22,8 @@ pub struct Connector {
     pub deny: Vec<String>,
     pub approval: Vec<String>,
     pub secrets: Vec<String>,
+    /// The secrets (of `secrets`) without which it does not open; a missing other one is left out and it opens without it.
+    pub required: Vec<String>,
 }
 
 /// One bot's grant of a connector: an empty one is the connector as defined; `tools`, when set, is all it may use.

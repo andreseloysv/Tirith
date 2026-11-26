@@ -134,6 +134,11 @@ fn bot_rules_cannot_loosen_the_connector() {
             "never values",
         ),
         (
+            "secrets = [\"GMAIL_TOKEN\"]",
+            "secrets = [\"GMAIL_TOKEN\"]\nrequired = [\"OTHER\"]",
+            "required names only secrets it declares",
+        ),
+        (
             "blocked = true",
             "blocked = true\ncommand = [\"x\"]",
             "not both",

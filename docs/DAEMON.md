@@ -324,6 +324,7 @@ blocked = false                       # optional, default false: true refuses ev
 deny = ["delete_*"]                   # optional globs (* any run, ? one character)
 approval = ["send_*"]                 # optional globs: a call asks the owner first
 secrets = ["GMAIL_TOKEN"]             # optional: variable names only (A-Z, 0-9, _), never values, never a TIRITH_OAUTH_ one
+required = []                         # optional: the secrets (of secrets) without which it does not open
 # a remote server that signs in with OAuth needs no secret: neobot connector login <id> --bot <bot> (see oauth/)
 
 [roles.bot-<id>.connectors.gmail]     # the grant: without this table the bot has no gmail
@@ -532,8 +533,9 @@ connector's `secrets` added to that process's environment alone; a remote one (`
 per message, the answer JSON or an event stream, `Mcp-Session-Id` kept) is reached always through NeoBot's proxy with
 the bot's run's credentials (`sandbox/proxy_url.rs`), so the proxy counts it as the bot's, never the daemon's; its
 first secret goes as `Authorization: Bearer <value>` and any other as a header of its own name (`_` as `-`), marked
-sensitive; a bot signed in to it (`neobot connector login`, `oauth/`) sends its access as that Bearer first, renewed by the daemon when it ends or the server answers 401. The values come from the per-bot store (`secrets::value`) at open time and stay in the daemon. A connector
+sensitive (so a remote one's first secret is always required: the next would take its place); a bot signed in to it (`neobot connector login`, `oauth/`) sends its access as that Bearer first, renewed by the daemon when it ends or the server answers 401. The values come from the per-bot store (`secrets::value`) at open time and stay in the daemon. A connector
 that does not open is the owner's `error` event (with why) and missing from the list, never the end of the others.
+A secret the bot lacks does not keep a connector from opening: it starts without that variable and the Connectors page says so (`ok`, why `opens without NAME: not set for this bot, and not required`). Only a name listed in the connector's `required` (and a remote one's first secret) makes the connector not open when the bot lacks it, with `needs login` and `NAME is required and not set for this bot`.
 
 The agent is listed each open connector's tools as `<connector>__<tool>`, only those the verdict lets this bot reach
 (one that asks first says "(asks the owner first)"), by the grants of now. Every `tools/call` asks the verdict again,

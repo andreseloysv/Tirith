@@ -22,6 +22,7 @@ pub(super) fn connector(t: &toml::Table) -> Connector {
         deny: strings(t, "deny"),
         approval: strings(t, "approval"),
         secrets: strings(t, "secrets"),
+        required: strings(t, "required"),
     }
 }
 
