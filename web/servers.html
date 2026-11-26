@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeoBot servers</title>
+<meta name="color-scheme" content="light dark">
+<style>
+  body { font: 15px/1.5 system-ui; margin: 0; padding: 20px; background: Canvas; color: CanvasText; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p { margin: 0 0 14px; opacity: .7; }
+  .row { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid #8884; border-radius: 8px; margin-bottom: 8px; }
+  .row.on { border-color: #4a8; }
+  .row span { flex: 1; overflow-wrap: anywhere; }
+  .row small { display: block; opacity: .65; }
+  button, input { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid #8886; background: ButtonFace; color: ButtonText; }
+  input { flex: 1; background: Field; color: FieldText; }
+  #say { min-height: 1.5em; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h1>Servers</h1>
+<p>Show this Mac's NeoBot, or a team server you sign in to with your company account.</p>
+<div id="list"></div>
+<div class="row"><input id="url" placeholder="https://neobot.team.example or http://127.0.0.1:7801" autocomplete="off"><button id="add">Add</button></div>
+<div id="say" role="status"></div>
+<script src="js/servers.js"></script>
+</body>
+</html>

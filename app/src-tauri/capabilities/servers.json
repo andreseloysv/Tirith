@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "servers",
+  "description": "The servers window: local content only, it calls the app's team commands",
+  "windows": ["servers"],
+  "permissions": ["core:default"]
+}

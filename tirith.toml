@@ -26,3 +26,8 @@ run = "git show main:tools/size.sh | sh"
 name = "app"
 run = "cargo check -q -p tirith-app"
 paths = ["app/**", "rust/tirith/ui/**", "Cargo.toml"]
+
+[[pipelines.stages]]
+name = "signin"
+run = "cargo test -q -p tirith-signin"
+paths = ["app/signin/**", "Cargo.toml"]

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["rust/tirith", "app/src-tauri"]
+members = ["rust/tirith", "app/src-tauri", "app/signin"]
 default-members = ["rust/tirith"]
 
 # The sign-in checks make RSA keys, which takes minutes unoptimized.

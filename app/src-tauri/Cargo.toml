@@ -15,3 +15,5 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 toml = "0.8"
+serde_json = "1"
+tirith-signin = { path = "../signin" }
