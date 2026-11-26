@@ -69,6 +69,9 @@ docker exec -u tirith -e HOME=/home/tirith neobot-server neobot open link    # o
 
 Open the link in your browser within 10 minutes; later `http://127.0.0.1:7801/` is enough.
 
+The page answers only to the port it was set up with (`--port`): use that same number at both ends of the tunnel
+(a request for another host:port gets 403), and publish the container's 7802 on whatever host port you like.
+
 ## Upgrade and backup
 
 ```sh
