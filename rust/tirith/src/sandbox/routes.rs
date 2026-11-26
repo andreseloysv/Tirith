@@ -25,6 +25,19 @@ pub fn routes() -> Router<Shared> {
             "/api/net/destinations",
             get(|| async { Json(proxy::destinations()) }),
         )
+        .route(
+            "/api/net/allow",
+            axum::routing::post(
+                |State(app): State<Shared>, Json(b): Json<Value>| async move {
+                    let role = b["role"].as_str().filter(|r| !r.is_empty());
+                    let host = b["host"].as_str().unwrap_or("");
+                    super::net_allow(&app, role, host).map_err(bad)?;
+                    Ok::<_, (axum::http::StatusCode, String)>(Json(
+                        json!({"allowed": host, "role": role}),
+                    ))
+                },
+            ),
+        )
         .route("/api/safari", axum::routing::post(safari_route))
 }
 

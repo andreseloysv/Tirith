@@ -15,6 +15,7 @@ pub(super) fn refused(agent: &Agent, method: &Method, path: &str) -> Option<&'st
         // pairing a phone, which is then the owner
         ["api", "rooms", .., "qr" | "qr.svg"] => true,
         ["api", "net", "blocks"] => method == Method::DELETE,
+        ["api", "net", "allow"] => true,
         ["api", "turns", .., "reaction"] => true,
         ["api", "page"] => true,
         // an agent is never the teach extension

@@ -16,6 +16,7 @@ pub(super) fn card_done(app: &Shared, id: &str, status: &str, answer: &str) {
         rusqlite::params![status, answer, id],
     );
     crate::gateway::settled(app, id, status, answer); // a gateway call's permit: granted by the owner's yes alone
+    crate::sandbox::net_settled(app, id); // a destination's: the yes puts it on its role's list
     crate::turns::released(app, id); // a turn that waited for this card as its approval is done
     app.emit(
         "owner",

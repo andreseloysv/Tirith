@@ -38,6 +38,7 @@ neobot teach do open "<url>"                   (a bot, rehearsing) open the page
 neobot teach do click "<selector or text>"     (a bot, rehearsing) click it there: the result and a screenshot's path
 neobot teach do type "<field>" "<value>"       (a bot, rehearsing) type the value in the field (its label, placeholder, name or selector)
 neobot teach stop                              (a bot) end the rehearsal
+neobot net permit <host> [--role R]      (the owner) allow a destination: `[network] allow`, or the `net` list of a role; when either exists, everything else is refused
 neobot net allow                               (Linux, with sudo, once) let this binary make the network sandbox where AppArmor forbids it
 neobot hook <Event>                            agent hook bridge (stdin JSON; also --agent A --event E); sends the agent's TIRITH_TOKEN, and without one only refuses
 neobot hooks install                           point the agents' hooks at the daemon over HTTP, each sending TIRITH_TOKEN

@@ -36,6 +36,7 @@ pub(super) const ROLE_KEYS: &[&str] = &[
     "brief",
     "writes",
     "connectors",
+    "net",
 ];
 pub(super) const ROUTE_KEYS: &[&str] = &[
     "on",

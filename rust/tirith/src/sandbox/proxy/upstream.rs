@@ -1,6 +1,6 @@
 //! Reaching the destination: refused if blocked by name or by any of its addresses.
 use super::{
-    answer::{answer, refuse},
+    answer::{answer, refuse, refuse_with},
     record::record,
 };
 use crate::{app::Shared, sandbox::blocks::blocked};
@@ -17,6 +17,13 @@ pub async fn upstream(
 ) -> Result<Option<TcpStream>, String> {
     let closed = (crate::lab::closed(who) && !crate::lab::reaches(app, who, host, port))
         .then(|| "replay (a replay reads nothing outside)".to_string());
+    if let Some(no) = super::super::egress::denied(app, who, host)
+        .filter(|_| closed.is_none() && blocked(host).is_none())
+    {
+        return refuse_with(app, c, (who, host, port), (&no.rule, &no.body))
+            .await
+            .map(|_| None);
+    }
     let addrs: Vec<SocketAddr> = match closed.or_else(|| blocked(host)) {
         Some(rule) => return refuse(app, c, who, host, port, &rule).await.map(|_| None),
         None => match tokio::net::lookup_host((host, port)).await {

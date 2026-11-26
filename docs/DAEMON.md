@@ -1315,6 +1315,35 @@ Files:
 - `wrap.rs`: Putting a process NeoBot starts inside the sandbox.
 - `wrappers.rs`: The wrappers in `<home>/net/bin` that turn off the inner sandbox of tools that start their own (on macOS Codex's is `sandbox/nested/`).
 
+## `sandbox/egress/`
+
+Where a confined process may go, beyond the owner's block list. Everything that leaves goes through the proxy (git
+over ssh and `neobot net tunnel` too, as `CONNECT`), and `proxy/upstream.rs` asks this folder right after the block
+list, so one check covers them all. With no list anywhere, nothing changes.
+
+- `[network] allow = ["api.example.com", "*.example.com", "10.1.0.0/16"]` in config.toml: the machine's ceiling,
+  for a server install. When it is set (even empty), every destination not on it is refused for every caller
+  (lanes, merge checks, bots, the daemon's own git). A host names itself only, `*.domain` any subdomain (not the
+  domain), an address or a range an address. The caller's own loopback is never held back.
+- `net = ["mail.google.com", "*.googleusercontent.com"]` in any `[roles.<role>]` (a role is its conversation's
+  role, `worker` for a lane and its merge checks, `bot-<id>` for a bot; `extends` is followed): that role may reach
+  those destinations only, inside the machine's list when there is one. A role without `net` is as before.
+- `net = "ask"`, or a list that holds the word `ask`: a destination not on the list is refused, the owner is asked
+  on one approval card (in the bot's chat, or the project's), and their yes (the card's page or phone, never an
+  agent's) puts it on the role's list in config.toml with toml_edit (`ask` stays); their no is not asked again.
+
+A refusal is `403` with a message that says why and how to allow it (`neobot net permit <host> [--role <role>]`, the
+owner's: `POST /api/net/allow`), and a `net-blocked` event. `neobot net permit` writes the list in config.toml and
+keeps its comments; a bot's `net` survives the page's rewrites of its bot (`bots/net.rs`).
+
+Files:
+
+- `ask.rs`: `net = "ask"`: the card for a new destination, and what its yes does (it reuses `connector_permits`).
+- `lists.rs`: The lists: `[network] allow` and a role's `net`, and which role a caller is.
+- `matcher.rs`: Whether a destination is on a list.
+- `mod.rs`: `denied`: why a caller may not reach a destination, with the words it is told.
+- `permit.rs`: A destination put on a list in config.toml.
+
 ## `sandbox/linux/`
 
 Linux's confinement, with no root and nothing to install: `neobot net run <port…> -- <program>` forks, the child

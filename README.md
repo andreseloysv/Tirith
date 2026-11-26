@@ -282,6 +282,7 @@ command = ["…", "-p", "Read the brief at {brief} and implement it in {workspac
 
 [roles.manager]                     # also [roles.worker] and [roles.ceo]; the page can override
 agent = "anthropic"
+# net = ["mail.google.com", "*.googleusercontent.com"]   # this role reaches these only ("ask": ask the owner for each new one)
 model = "…"
 effort = "medium"
 fallback = ["muse", "codex:…"]      # used when the agent runs out of credits
@@ -302,6 +303,7 @@ push = true
 [network]
 sandbox = true
 proxy_port = 47812
+# allow = ["api.example.com", "*.example.com"]   # a server's ceiling: everything else is refused (neobot net permit <host>)
 [power]
 keep_awake = false                  # true: a Mac does not sleep while the daemon runs (read when it starts)
 [messenger]

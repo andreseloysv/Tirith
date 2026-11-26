@@ -4,6 +4,7 @@ mod caller;
 mod check;
 mod cli;
 mod confine;
+mod egress;
 mod env;
 mod git;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -37,6 +38,7 @@ mod wrappers;
 pub use caller::confined;
 pub use check::check_command;
 pub use cli::cli;
+pub use egress::{allow as net_allow, settled as net_settled};
 pub use git::{git, prepare};
 #[cfg(target_os = "macos")]
 pub use nested::inside;

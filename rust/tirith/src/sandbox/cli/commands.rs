@@ -11,16 +11,17 @@ macro_rules! OWN {
 }
 
 /// `neobot net …`, `neobot safari|chrome|edge …` and `neobot browser …` commands; `None` when `pos` is not one of this module's commands.
-pub fn cli(pos: &[&str], _flag: Flag) -> Option<Result<(), String>> {
+pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     Some(match pos {
         ["net", "status"] => status(),
         ["net", "list"] => list(),
         ["net", "block", rule] => change("POST", rule, "blocked"),
         ["net", "unblock", rule] => change("DELETE", rule, "unblocked"),
         ["net", "tunnel", host, port] => tunnel(host, port),
+        ["net", "permit", host] => permit(host, flag("--role").unwrap_or_default()),
         ["net", "allow"] => crate::sandbox::confine::allow(),
         ["net", ..] => Err(
-            "neobot net status|list|block <domain|ip|cidr>|unblock <rule>|tunnel <host> <port>|allow"
+            "neobot net status|list|block <domain|ip|cidr>|unblock <rule>|permit <host> [--role R]|tunnel <host> <port>|allow"
                 .into(),
         ),
         [app @ OWN!(), cmd @ ("open" | "read"), rest @ ..] => {
@@ -59,4 +60,11 @@ fn change(method: &str, rule: &str, done: &str) -> Result<(), String> {
 fn own(app: &str, mut body: serde_json::Value) -> Result<(), String> {
     body["app"] = json!(app);
     crate::client::call("POST", "/api/safari", Some(body)).map(|b| println!("{b}"))
+}
+
+/// Puts a destination on `[network] allow`, or with a role on that role's `net`.
+fn permit(host: &str, role: String) -> Result<(), String> {
+    let body = json!({"host": host, "role": role});
+    crate::client::call_json("POST", "/api/net/allow", Some(body))
+        .map(|_| println!("allowed {host}"))
 }

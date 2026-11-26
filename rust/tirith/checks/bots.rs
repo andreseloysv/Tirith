@@ -782,3 +782,20 @@ fn a_bots_material_and_eyes_live_in_its_face() {
         "a bot without one is solid with ink eyes"
     );
 }
+
+#[test]
+fn a_bots_net_list_survives_a_rewrite() {
+    let old = "[roles.bot-abc123]\nextends = \"manager\"\nscope = \"own\"\nnet = [\"mail.google.com\", \"ask\"]\n";
+    let bots =
+        json!([{"id": "abc123", "name": "N", "shape": "drop", "color": "#22d3ee", "routines": []}]);
+    let text = super::written::written(old, bots.as_array().unwrap()).unwrap();
+    assert!(
+        text.contains("net = [\"mail.google.com\", \"ask\"]"),
+        "{text}"
+    );
+    let gone = super::written::written(&text, &[]).unwrap();
+    assert!(
+        !gone.contains("mail.google.com"),
+        "a deleted bot's list goes with it:\n{gone}"
+    );
+}

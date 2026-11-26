@@ -23,7 +23,7 @@ mod summary;
 
 pub use api::routes;
 pub use cli::cli;
-pub use permit::{is_gateway_card, settled};
+pub use permit::{ask as ask_permit, is_gateway_card, settled};
 
 #[cfg(test)]
 #[path = "../../checks/connector_access.rs"]
