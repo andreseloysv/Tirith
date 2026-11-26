@@ -34,6 +34,7 @@ export class Bot3D {
     this.body = new THREE.Mesh(this.sh.mesh ? this.sh.mesh() : bodyGeometry3(this.name, seg), bodyMaterial3(this.color)); this.rig.add(this.body);
     this.eyes = eyes3(); this.look = lookOf(mood);
     this.rig.add(...this.eyes);
+    this.hover = 0; this.gx = 0; this.gy = 0; this.tgx = 0; this.tgy = 0; /* how much its eyes are on the pointer, and where */
     this.yaw = 0; this.pitch = 0; this.ty = 0; this.tp = 0; this.nextLook = 0; this.nextBlink = 1 + Math.random() * 3; this.blinkAt = -1;
     this.phase = Math.random() * 10; this.setMood(mood);
     this.mountCanvas(el);
@@ -58,7 +59,8 @@ export class Bot3D {
   update(t, dt, pointer) {
     const r = this.el.getBoundingClientRect();
     if (FREEZE) { frozenPose(this); return r; }
-    const near = !this.reduced && pointer && pointer.x >= r.left && pointer.x <= r.right && pointer.y >= r.top && pointer.y <= r.bottom; // only the bot under the pointer
+    const m = r.width * 0.12; /* the tile round a face counts too (the sidebar's) */
+    const near = !this.reduced && pointer && pointer.x >= r.left - m && pointer.x <= r.right + m && pointer.y >= r.top - m && pointer.y <= r.bottom + m; // only the bot under the pointer
     this.hovered = !!near;
     if (this.quiet && !near) stillPose(this, dt);
     else livePose(this, t, dt, pointer, near, r);

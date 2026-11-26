@@ -24,10 +24,11 @@ export function frozenPose(b) {
 
 /** A still face off the pointer: ease back to front and hold the pose. */
 export function stillPose(b, dt) {
-  const easeBack = Math.min(1, dt * 3.5);
+  const easeBack = Math.min(1, dt * 3.5), eyesBack = Math.min(1, dt * 10);
   b.yaw += (0 - b.yaw) * easeBack; b.pitch += (0 - b.pitch) * easeBack;
-  b.settled = Math.abs(b.yaw) < 0.002 && Math.abs(b.pitch) < 0.002;
-  if (b.settled) { b.yaw = 0; b.pitch = 0; }
+  b.hover -= b.hover * eyesBack; b.gx -= b.gx * eyesBack; b.gy -= b.gy * eyesBack; /* its eyes come back from the pointer */
+  b.settled = Math.abs(b.yaw) < 0.002 && Math.abs(b.pitch) < 0.002 && b.hover < 0.01;
+  if (b.settled) { b.yaw = 0; b.pitch = 0; b.hover = 0; }
   b.rig.rotation.set(b.pitch, b.yaw, 0);
   rest(b);
 }
@@ -36,14 +37,16 @@ export function stillPose(b, dt) {
     somewhere of its own. */
 function aim(b, t, pointer, near, r) {
   const lim = b.mood === 'sleep' ? 0.3 : 1;
-  if (near) { // it turns, all of it, towards the pointer
+  if (near) { // its eyes look straight at the pointer (the owner's «que los ojos miren directo al mouse»); it turns a little
     const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    b.ty = THREE.MathUtils.clamp((pointer.x - cx) / (r.width / 2), -1, 1) * 0.62 * lim;
-    b.tp = THREE.MathUtils.clamp((pointer.y - cy) / (r.height / 2), -1, 1) * 0.42 * lim;
+    let dx = (pointer.x - cx) / (r.width / 2), dy = (pointer.y - cy) / (r.height / 2);
+    const len = Math.hypot(dx, dy); if (len > 1) { dx /= len; dy /= len; }
+    b.tgx = dx; b.tgy = dy; b.ty = dx * 0.16 * lim; b.tp = dy * 0.12 * lim; /* a small turn: the eyes do the looking */
     b.nextLook = t + 0.8;
   } else if (b.acting) {
-    b.ty = 0; b.tp = 0; b.nextLook = t + 0.4;
+    b.tgx = b.tgy = 0; b.ty = 0; b.tp = 0; b.nextLook = t + 0.4;
   } else if (t > b.nextLook) { // on its own: it looks around now and then
+    b.tgx = b.tgy = 0;
     const busy = b.mood === 'work' && !b.lively;
     b.ty = (Math.random() * 2 - 1) * (busy ? 0.45 : 0.32) * lim; b.tp = (Math.random() * 2 - 1) * 0.18 * lim;
     b.nextLook = t + (busy ? 0.6 + Math.random() : 1.6 + Math.random() * 2.6) * b.persona.look; /* its colour's curiosity */
@@ -61,6 +64,8 @@ export function livePose(b, t, dt, pointer, near, r) {
   const act = b.acts.step(t, b.mood, near);
   b.acting = !!b.acts.playing; b.fast = b.acts.fast;
   aim(b, t, pointer, near, r);
+  const quick = Math.min(1, dt * 10); /* the eyes reach the pointer in about 0.3 s (the article's 280 to 340 ms), and come back as fast */
+  b.hover += ((near ? 1 : 0) - b.hover) * quick; b.gx += ((near ? b.tgx : 0) - b.gx) * quick; b.gy += ((near ? b.tgy : 0) - b.gy) * quick;
   const easeAmt = Math.min(1, dt * (near ? 9 : 3.5));
   b.yaw += (b.ty - b.yaw) * easeAmt; b.pitch += (b.tp - b.pitch) * easeAmt;
   const { tempo, energy: e } = b.persona; /* its colour's temperament: how fast and how much it moves */
