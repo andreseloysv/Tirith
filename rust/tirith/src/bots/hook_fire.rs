@@ -59,3 +59,6 @@ pub(super) fn fire(app: &Shared, b: &Value, r: &Value, e: &Value, trigger: &str)
         crate::expected::unhanded(app, &key, &rid); // an experiment on it makes the run its A or its B when it starts
     }
 }
+#[cfg(test)]
+#[path = "../../checks/hook_turn.rs"]
+mod tests;

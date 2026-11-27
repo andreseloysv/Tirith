@@ -39,10 +39,10 @@ fn emit_by(
     }
     let mut heard: BTreeSet<String> = BTreeSet::new();
     for (to, mode, _, phone, after) in routes {
-        // A turn role heard as a turn runs its own pass now (the metrics run it, like the CEO's).
-        let _ = (mode == "turn" && after.is_none())
+        // A turn role heard as a turn runs its own pass now (the metrics run it, like the CEO's); a due routine is its owner's run alone, never a pass of any role.
+        let _ = (mode == "turn" && after.is_none() && job.is_none())
             .then(|| crate::metrics::heard(app, &to, on, told.unwrap_or(shown)));
-        let Some(dest) = dest_of(&app.cfg().factory, &to, on, here_p) else {
+        let Some(dest) = dest_of(&app.cfg().factory, &to, (on, job.is_some()), here_p) else {
             continue;
         };
         if !heard.insert(dest.clone()) {
@@ -65,9 +65,10 @@ fn emit_by(
     (event, handed)
 }
 /// The conversation a route to role `to` hands its event to, if any.
-fn dest_of(f: &Factory, to: &str, on: &str, here_p: &str) -> Option<String> {
-    // Only chat roles are handed text here, in the conversation of their scope; a turn role is run by whoever watches its condition (the metrics run the CEO through `run_turn`, like any turn role).
-    (f.role::<String>(to, "session").as_deref() == Some("chat")).then_some(())?;
+fn dest_of(f: &Factory, to: &str, (on, routine): (&str, bool), here_p: &str) -> Option<String> {
+    // Chat roles are handed text here, in the conversation of their scope; a turn role is run by whoever watches its condition (the metrics run the CEO through `run_turn`), except for a due routine: that is a turn of its owner, whatever its session.
+    let session = f.role::<String>(to, "session");
+    (session.as_deref() == Some("chat") || (routine && to == here_p)).then_some(())?;
     let own = f.role::<String>(to, "scope").as_deref() == Some("own");
     // A due routine (its bot's own `schedule` or `webhook` route) is for that bot's conversation alone, and a conversation that more than one route reaches (the factory's schedule route and the bot's) hears the event once.
     (!(matches!(on, "schedule" | "webhook") && own && to != here_p)).then_some(())?;

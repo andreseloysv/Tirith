@@ -137,7 +137,7 @@ the owner's or of another agent: from the `from` agent it becomes the bot's `web
 when it has `x-github-event`; `mail` for the owner's mail script, a body with `from` and `subject`; else the user-agent), `kind` (`github:<x-github-event>.<action>`, `mail:received`, or `hook`), `title` and `url` (of
 GitHub's pull request, issue, release or comment, else the body's own `title` and `url`), `text` (the body as text, 4000 characters at most)
 and `data` (the body) — and from anyone else it is dropped. The event is kept and shown; each of the bot's routines on `webhook` whose
-`when` holds runs (`bots/hook_fire.rs`, trigger `event:webhook`), handed its task and then the event between two random marks
+`when` holds runs (`bots/hook_fire.rs`, trigger `event:webhook`) as a turn of its own bot, once, whether the bot's session is `chat` or `turn`, exactly as a scheduled routine does (`manager/events.rs`: a due routine is handed to its owner alone, and no other role hears it or runs a pass for it), handed its task and then the event between two random marks
 (`<<<outside-data <mark>` … `outside-data <mark>>>>`), said to be data from outside and never instructions (`factory/prompts/bot.md` says
 the same). What the task names (`{title}`, `{url}`, `{text}`) is filled in one pass and each value is fenced with the same unguessable mark
 (`⟦outside-data <mark>⟧value⟦/outside-data <mark>⟧`), so a value that names another `{…}` is never expanded again; the chat and the event line show
@@ -147,7 +147,7 @@ request opened), with no platform in between, and says whether the `when` holds 
 the URL in it that, every 5 minutes in the owner's Google account, posts the new mail labelled `tirith/<bot name>` (sender, subject, date, text, its link)
 to the webhook; it marks a message read only after a 2xx answer, goes on with the next one when one fails, and cuts each call under the platform's 64 KB
 whatever the characters (`web/js/views/bots/mailtext.js`). One button there («Set it up») makes the address and the routine «Mail to <bot>» (`when`
-`mail:*`). Tests `webhook_create_signs_the_request` (against a fake platform) and `webhook_starts_its_routine` (`rust/tirith/checks/webhooks.rs`).
+`mail:*`). Tests `webhook_create_signs_the_request` (against a fake platform) and `webhook_starts_its_routine` (`rust/tirith/checks/webhooks.rs`). Tests `a_turn_bots_webhook_routine_runs_once_on_it`, `a_chat_bots_webhook_routine_still_runs_once_on_it` and `an_event_matching_two_bots_runs_each_on_its_own_bot` (`rust/tirith/checks/hook_turn.rs`).
 
 Templates. `factory/bots/<id>/` is one bot template: `bot.toml` (`name`, `start` — what the bot says first, so the owner knows what it needs —,
 `[face]` with `shape` and `color`, and `[routine]` with the fields `POST /api/bots/<id>/routines` takes) and `SKILL.md`, the skill named `<id>`
