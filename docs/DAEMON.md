@@ -124,7 +124,7 @@ the Numbers like a timed one, and costs a turn: choose the longest interval that
 The page lists it as «Every 2m», with the next run.
 
 Routines on an event from outside. A routine is either timed (`schedule`) or waits for its bot's webhook: a `[[routes]]` with `on = "webhook"` and
-`when` — the event's `<source>:<kind>` (`github:pull_request.opened`, GitLab's `gitlab:merge_request.open` from its `X-Gitlab-Event`, `object_kind` and `object_attributes.action`), a pattern of it with `*` (`github:issues.*`), or `*` for every call —
+`when` — the event's `<source>:<kind>` (`github:pull_request.opened`, GitLab's `gitlab:merge_request.open` from its `X-Gitlab-Event` or a `GitLab/` user-agent, `object_kind` and `object_attributes.action`; a pipeline's or job's status is its action, `gitlab:pipeline.success`; a merge request also has `gitlab:merge_request.assigned:<user>`, `.review_requested:<user>` and `.update.push`: an event has several labels and one that matches is enough), a pattern of it with `*` (`github:issues.*`), several patterns separated by commas, or `*` for every call —
 made on the page (Routines: "At a time" or "On an event from outside") or by the bot (`neobot routine hook "<title>" "<when>" "<task>"`); its
 task may name `{title}`, `{url}` and `{text}`. The webhook is agentsmessenger.com's sealed webhook (its `src/server/hooks/`):
 `POST /api/bots/<id>/webhook` gives the bot's URL, making it once — the daemon makes sure the bot has its own private room (`rooms/hooks.rs`,
@@ -176,7 +176,11 @@ Files:
 - `hook_api.rs`: A bot's webhook from the page: its URL (made once on the platform), deleted, and «Probar».
 - `hook_clean.rs`: What a webhook event shows outside its data block: a label of name characters only, a title as one quoted line, and a value fenced inside a task.
 - `hook_event.rs`: What a webhook call brought, as a bot's `webhook` event: where from, what kind, its title, link and text, and the body.
-- `hook_gitlab.rs`: GitLab's call: `X-Gitlab-Event`, the body's `object_kind` and `object_attributes.action` as `gitlab:merge_request.open`; and its sample.
+- `hook_gitlab.rs`: GitLab's call: `X-Gitlab-Event` or a `GitLab/` user-agent with `object_kind`, and `object_attributes.action` (a pipeline's or job's status) as `gitlab:merge_request.open`.
+- `hook_labels.rs`: A merge request's more specific labels: `assigned:<user>`, `review_requested:<user>`, `update.push`.
+- `hook_match.rs`: An event's labels against a routine's `when` (patterns separated by commas).
+- `hook_text.rs`: A GitLab merge request, pipeline or job as a few lines of essentials for the bot.
+- `hook_gitlab_sample.rs`: «Probar»'s GitLab sample, shaped as the relay passes it.
 - `hook_title.rs`: The title and link of a call's body.
 - `interval.rs`: A routine's `every`: its words, its least and most, and when it is next due.
 - `hook_fire.rs`: A webhook event reaches its bot: the bot's `webhook` routines whose `when` holds run with it, the event inside a block marked as data from outside.

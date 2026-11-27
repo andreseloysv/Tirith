@@ -1,7 +1,8 @@
 //! A bot's webhook from the page: its URL (made once on the platform, then the same), deleted, and «Probar» — a sample event (GitHub's or an e-mail) for one routine, with no platform in between.
 use super::hook::kept;
-use super::hook_event::{event_of, matches};
+use super::hook_event::event_of;
 use super::hook_fire::fire;
+use super::hook_match::matches;
 use super::hook_sample::for_when;
 use super::list::{bot, key_for};
 use crate::app::{bad, Shared, R};

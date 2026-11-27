@@ -25,7 +25,7 @@ pub fn webhook(app: &Shared, key: &str, payload: &str) {
     let hits = matching(&b, &e);
     let shown = format!(
         "Webhook · {} · {}",
-        ident(&super::hook_event::label(&e)),
+        ident(&super::hook_match::label(&e)),
         quoted(&s(&e, "title"))
     );
     let _ = hits

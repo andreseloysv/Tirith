@@ -168,6 +168,17 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
   from before that ignores the request and seals with its webhook agent's key, which it holds); NeoBot's room watcher turns it into the event `webhook` of that bot, with `source`, `kind`,
   `title`, `url`, `text` and its data (GitHub's `X-GitHub-Event` and `action` give `github:pull_request.opened`; GitLab's `X-Gitlab-Event`, `object_kind` and `object_attributes.action` give `gitlab:merge_request.open`).
   The URL is the only secret: whoever has it can send any of these, which is one more reason they are only data.
+- **GitLab labels:** an event has one or more labels, and a routine's `when` holds if any of them matches. GitLab is known by
+  its `X-Gitlab-Event` header or, since the agentsmessenger.com relay passes only content-type, user-agent, `x-github-event`
+  and `x-github-delivery`, by a `GitLab/` user-agent and a body with `object_kind`. The first label is `gitlab:<object_kind>.<action>`
+  (`gitlab:merge_request.open`, `.update`, `.merge`, `.approved`, `.unapproved`); for a pipeline or a job (`build`) the status is the action
+  (`gitlab:pipeline.success`, `gitlab:pipeline.failed`, `gitlab:pipeline.running`, `gitlab:build.failed`). A merge request event adds
+  `gitlab:merge_request.assigned:<username>` for each assignee this event added (on open or reopen every current one; on update the ones in
+  `changes.assignees.current` and not in `previous`), `gitlab:merge_request.review_requested:<username>` for reviewers the same way, and
+  `gitlab:merge_request.update.push` when `object_attributes.oldrev` is present. `<username>` keeps letters, digits and `_` only
+  (`review-bot` is `reviewbot`). So `when = "gitlab:merge_request.assigned:dev_bot"` wakes one bot, not every one on each update.
+- **Several patterns:** `when` may list patterns separated by commas, spaces around them ignored (`when = "gitlab:merge_request.assigned:review_bot, gitlab:merge_request.review_requested:review_bot, gitlab:pipeline.success"`); it holds if any pattern matches any label. A single pattern behaves as it always did.
+- **The text of a GitLab event:** a merge request, pipeline or job event's `text` is a few lines (labels, project, MR iid, title, URL, source branch, state, pipeline id and status, assignees, reviewers, who triggered it, a pipeline's failed jobs) in place of the raw call, which is longer than the 4000 characters a text holds; `data` stays the whole body.
 - **The routine:** a routine may say `on = "webhook"` and `when = "github:pull_request.opened"`; its task may use
   `{title}`, `{url}` and `{text}`. A «Probar» button hands it a sample event without the platform.
 - **Every so often:** a routine that watches something with no webhook (a board, a queue) says `every = "2m"` (1 minute at least, 7 days at most) instead of days and a time; `neobot routine every "<title>" 2m "<task>"`, or the form's «Every so often». It never starts while its own last run still waits or works, and each run is a turn that costs, so the longest interval that serves is the one to choose.

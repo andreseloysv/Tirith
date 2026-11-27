@@ -84,7 +84,7 @@ fn bot_templates_are_complete() {
             let sample = super::hook_sample::for_when(r["when"].as_str().unwrap());
             let event = super::hook_event::event_of(&sample).unwrap();
             assert!(
-                super::hook_event::matches(r["when"].as_str().unwrap(), &event),
+                super::hook_match::matches(r["when"].as_str().unwrap(), &event),
                 "{id}: a pull request opened starts it"
             );
             assert!(

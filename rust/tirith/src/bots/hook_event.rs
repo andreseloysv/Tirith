@@ -1,8 +1,9 @@
 //! What a webhook call brought, as a bot's `webhook` event: where from, what kind, its title, link and text, and the body.
+use super::hook_match::label;
 use serde_json::{json, Value};
 /// The longest `text` a webhook event carries.
 const TEXT: usize = 4000;
-/// The event of one `tirith-hook {"v":1,"at":…,"headers":{…},"body":…}` line (the part after the mark): `source` (github when GitHub sent it, mail for the owner's mail script, else the user-agent), `kind` (`github:<event>.<action>`, `mail:received`, or `hook`), `title`, `url`, `text` (the body as text, 4000 characters at most; a mail's sender, subject, date and body) and `data` (the body).
+/// The event of one `tirith-hook {"v":1,"at":…,"headers":{…},"body":…}` line (the part after the mark): `source` (github when GitHub sent it, mail for the owner's mail script, else the user-agent), `kind` (`github:<event>.<action>`, `mail:received`, or `hook`), `labels` (the kind's label, and for GitLab the more specific ones of its payload), `title`, `url`, `text` (the body as text, 4000 characters at most; a mail's sender, subject, date and body; a GitLab merge request, pipeline or job in a few lines of its essentials) and `data` (the body).
 pub(super) fn event_of(payload: &str) -> Option<Value> {
     let v: Value = serde_json::from_str(payload).ok()?;
     let (h, body) = (&v["headers"], v["body"].clone());
@@ -39,9 +40,15 @@ pub(super) fn event_of(payload: &str) -> Option<Value> {
         (Value::String(s), _) => s.clone(),
         (b, _) => serde_json::to_string_pretty(b).unwrap_or_default(),
     };
-    Some(
-        json!({"source": source, "kind": kind, "title": title, "url": url, "text": text.chars().take(TEXT).collect::<String>(), "data": body, "at": v["at"]}),
-    )
+    let mut e = json!({"source": source, "kind": kind, "title": title, "url": url, "text": text.chars().take(TEXT).collect::<String>(), "data": body, "at": v["at"]});
+    let mut labels = vec![label(&e)];
+    if gitlab.is_some() {
+        labels.extend(super::hook_labels::extra(&labels[0], &body));
+        let compact = super::hook_text::compact(&labels, &body);
+        let _ = compact.map(|t| e["text"] = json!(t.chars().take(TEXT).collect::<String>()));
+    }
+    e["labels"] = json!(labels);
+    Some(e)
 }
 /// The sender's user-agent, cleaned of controls, 100 characters at most; `hook` without one.
 fn agent(h: &Value) -> String {
@@ -55,22 +62,4 @@ fn agent(h: &Value) -> String {
     Some(ua.trim().to_string())
         .filter(|u| !u.is_empty())
         .unwrap_or_else(|| "hook".into())
-}
-/// The match key of an event, as a routine's `when` names it: its kind when it says its source (`github:pull_request.opened`), else `<source>:<kind>`.
-pub(super) fn label(e: &Value) -> String {
-    let (source, kind) = (
-        e["source"].as_str().unwrap_or(""),
-        e["kind"].as_str().unwrap_or(""),
-    );
-    if kind.starts_with(&format!("{source}:")) {
-        kind.to_string()
-    } else {
-        format!("{source}:{kind}")
-    }
-}
-/// `when` holds for the event: `*`, its label itself, or a pattern of it with `*` for any part (as `github:pull_request.*`).
-pub(super) fn matches(when: &str, e: &Value) -> bool {
-    let (when, label) = (when.trim(), label(e));
-    let pattern = format!("^{}$", regex::escape(when).replace(r"\*", ".*"));
-    when == "*" || regex::Regex::new(&pattern).is_ok_and(|re| re.is_match(&label))
 }

@@ -17,7 +17,11 @@ mod hook_clean;
 mod hook_event;
 mod hook_fire;
 mod hook_gitlab;
+mod hook_gitlab_sample;
+mod hook_labels;
+mod hook_match;
 mod hook_sample;
+mod hook_text;
 mod hook_title;
 mod interval;
 mod intro;
@@ -76,6 +80,9 @@ pub use versioned::versioned;
 #[cfg(test)]
 #[path = "../../checks/bot_git.rs"]
 mod git_tests;
+#[cfg(test)]
+#[path = "../../checks/hook_labels.rs"]
+mod hook_label_tests;
 #[cfg(test)]
 #[path = "../../checks/hook_data.rs"]
 mod hook_tests;

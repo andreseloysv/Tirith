@@ -1,6 +1,7 @@
 //! What arrives through a webhook is data: fenced where a routine's task uses it, neutral where the chat and the event show it, and a routine can be made and tried for mail as for GitHub.
-use super::hook_event::{event_of, label, matches};
+use super::hook_event::event_of;
 use super::hook_fire::told;
+use super::hook_match::{label, matches};
 use super::hook_sample::for_when;
 use serde_json::{json, Value};
 

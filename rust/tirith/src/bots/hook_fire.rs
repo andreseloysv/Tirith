@@ -1,6 +1,6 @@
 //! A webhook event reaches its bot: the bot's `webhook` routines whose `when` holds run with it, the event inside a block marked as data from outside.
 use super::hook_clean::{fenced, ident};
-use super::hook_event::{label, matches};
+use super::hook_match::{label, matches};
 use crate::app::{now_iso, Shared};
 use crate::server::s;
 use regex::Regex;
