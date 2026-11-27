@@ -7,6 +7,7 @@ mod canon;
 mod cli;
 mod door;
 mod given;
+mod held;
 mod link;
 mod list;
 mod local;
@@ -40,6 +41,9 @@ mod oauth_tests;
 #[cfg(test)]
 #[path = "../../checks/connectors_page.rs"]
 mod page_tests;
+#[cfg(test)]
+#[path = "../../checks/gateway_shadow.rs"]
+mod shadow_tests;
 #[cfg(test)]
 #[path = "../../checks/gateway.rs"]
 mod tests;

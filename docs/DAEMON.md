@@ -600,15 +600,30 @@ leaves none. Test `approval_is_bound_to_the_call` (`rust/tirith/checks/gateway_a
 no run before yes, one after, no reuse, changed arguments and another tool ask again, a no runs nothing, and the bot's
 own caller token cannot answer the card (as itself, in the owner's chat words, or with a forged gateway request).
 
+**Shadow and replay runs at the gateway.** The hook cannot be the only guard (an agent that never calls it, or a
+connector tool it cannot name, passed through it: on a real server a shadow B approved a merge request, set a label,
+posted comments and sent an email through `neobot mcp`). So the daemon decides in `call.rs` too, from the run's token
+(`<role>@<conversation>`): a conversation `shadow-<experiment>-<pair>` is a shadow run; `replay-…`, or a token `replay:…`,
+a replay's. Their calls are asked after the verdict and before any approval card, and a write never opens a card. A tool
+is a read when its server declares it read-only (`annotations.readOnlyHint`) or a word of its name says it reads
+(`get`, `list`, `search`, `read`, `fetch`…), and no word of its name sends, writes or deletes (`approve`, `merge`, `set`,
+`comment`, `create`, `send`…; `lab/outward_words.rs`); anything else is a write, so `notify_reviewers` counts as one.
+A write answers the agent «held back in a shadow run: <connector>__<tool>» (or «in a replay»), runs nothing, and its
+`connector_calls` row says the same, so the comparison can judge what B would have done. Reads run live in a shadow
+run; a replay's connector reads also run (its network is closed to remote connectors). The listing is unchanged, so B
+sees the tools A sees. Judge, Coach and other system roles hold no gateway (`open.rs`: a bot run's alone), a live B
+run is a real run.
+
 Files:
 
 - `api.rs`: The gateway's routes, for the bot run whose token opened it alone: open, the tools of now, one call, close.
 - `auth.rs`: A remote connector's secrets as its auth headers, each marked sensitive.
 - `approve.rs`: A call that asks the owner first: run once on its permit, said `approved and ran`, else a card and `waiting for approval`.
-- `call.rs`: One `tools/call`: the verdict asked again with the grants of now, a refusal answered without running, an approval match handed to its permit, and every attempt recorded.
+- `call.rs`: One `tools/call`: the verdict asked again with the grants of now, a refusal answered without running, a write of a shadow run or a replay held back (`held.rs`), an approval match handed to its permit, and every attempt recorded.
 - `canon.rs`: Canonical JSON (keys sorted at every depth, no spaces) and its sha256.
 - `cli.rs`: `neobot mcp --bot <id>`: its stdout is the protocol's alone; why it stops goes to stderr.
 - `door.rs`: The gateway process's way to the daemon: its port and its run's caller token, nothing else.
+- `held.rs`: A call from a shadow B run or a replay: a write is held back, never run, and recorded as `held back in a shadow run` or `held back in a replay`; a read passes.
 - `given.rs`: The bot's values of a connector's secrets, read from its store for that connector alone.
 - `link.rs`: One connector of an open gateway: its connection, local or remote, and the tools it listed.
 - `list.rs`: What the agent is listed: each open connector's tools the verdict lets this bot reach now.

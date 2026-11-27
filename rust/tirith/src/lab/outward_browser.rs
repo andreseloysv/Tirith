@@ -39,6 +39,13 @@ fn words(name: &str) -> Vec<String> {
     parts.filter(|w| !w.is_empty()).map(String::from).collect()
 }
 
+/// True when an MCP tool called `name` is not clearly a read: no word of its name says it reads (unless its server declared it read-only), or one says it sends, writes or deletes.
+pub fn name_acts(name: &str, declared_read: bool) -> bool {
+    let said = words(name);
+    let has = |list: &[&str]| said.iter().any(|w| list.contains(&w.as_str()));
+    !(declared_read || has(&READ)) || has(&VERBS)
+}
+
 /// True for a browser or MCP call (`tool` as named) that acts outward.
 pub fn acts(tool: &str, input: &Value) -> bool {
     let lower = tool.to_lowercase();
@@ -49,9 +56,7 @@ pub fn acts(tool: &str, input: &Value) -> bool {
     let action = lower.rsplit("__").next().unwrap_or(&lower);
     let action = action.strip_prefix("browser_").unwrap_or(action);
     if !browser {
-        let said = words(tool.rsplit("__").next().unwrap_or(tool));
-        let has = |list: &[&str]| said.iter().any(|w| list.contains(&w.as_str()));
-        return !has(&READ) || has(&VERBS);
+        return name_acts(tool.rsplit("__").next().unwrap_or(tool), false);
     }
     let said = |k: &str| input[k].as_str().unwrap_or("").to_string();
     match action {

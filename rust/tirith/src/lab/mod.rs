@@ -41,6 +41,7 @@ pub use compare::judged;
 pub use decide::tick;
 pub use fresh::session as fresh_session;
 pub use interrupted::interrupted;
+pub use outward_browser::name_acts;
 pub use own_folder::{experimenting, stands_for};
 pub use reach::{reaches, replay_args};
 pub use replay::{closed, proxy_caller};

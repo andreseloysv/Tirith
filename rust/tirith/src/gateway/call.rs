@@ -1,5 +1,7 @@
 //! One `tools/call`: the verdict asked again with the grants of now (never the list the agent was given), a refusal answered without running, a call that asks first handed to its permit (`approve.rs`), a call that may run handed to its connector, and every attempt recorded.
-use super::{approve::approval, names::split, record::record, rpc::failed, session::Session};
+use super::{
+    approve::approval, held::held_back, names::split, record::record, rpc::failed, session::Session,
+};
 use crate::app::Shared;
 use crate::connectors::{refusal, verdict, Verdict};
 use serde_json::{json, Value};
@@ -35,10 +37,14 @@ pub async fn call(app: &Shared, s: &Session, name: &str, args: &Value) -> Value 
             "{connector}.{tool}: refused by scope; this bot is not granted connector '{connector}'"
         )),
     };
+    let entry = link.and_then(|l| l.catalog.iter().find(|t| t["name"] == tool));
     let (result, word, ran) = if let Some(said) = said {
-        (failed(&said), v.word(), false)
+        (failed(&said), v.word().to_string(), false)
+    } else if let Some((said, word)) = held_back(&s.who, &connector, tool, entry) {
+        (failed(&said), word, false)
     } else if matches!(v, Verdict::Approval | Verdict::BotApproval) {
-        approval(app, s, (&connector, tool), args, link).await
+        let (r, w, ran) = approval(app, s, (&connector, tool), args, link).await;
+        (r, w.to_string(), ran)
     } else {
         let params = json!({"name": tool, "arguments": args});
         let result = match link {
@@ -50,7 +56,7 @@ pub async fn call(app: &Shared, s: &Session, name: &str, args: &Value) -> Value 
                 "connector '{connector}' is not open in this gateway"
             )),
         };
-        (result, v.word(), true)
+        (result, v.word().to_string(), true)
     };
     record(
         app,
@@ -58,7 +64,7 @@ pub async fn call(app: &Shared, s: &Session, name: &str, args: &Value) -> Value 
         (&connector, tool),
         args,
         ran.then_some(&result),
-        word,
+        &word,
     );
     result
 }

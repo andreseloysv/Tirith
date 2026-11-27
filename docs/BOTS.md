@@ -149,7 +149,8 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
   2. **Live.** The bot's real runs of that routine alternate A and B (B in the branch's worktree), for when inputs
      cannot be replayed; each run starts a session of its own and is handed the memory and skills of its side; its answers reach the owner as always. An adopted skill is used from the next run: a changed skill is read again, in a new session.
   3. **Shadow.** B runs beside each real run of A, in its worktree, with live reads and every outward action
-     refused (no cards, no `neobot say`, no phones, no `safari open`). It costs double while it lasts.
+     refused (no cards, no `neobot say`, no phones, no `safari open`), the bot's connector tools too: a tool that does not
+     clearly read is «held back in a shadow run» by the gateway and recorded as such. It costs double while it lasts.
   Both sides always start alike: a replay warms the cache with an uncounted turn and alternates which side
   goes first; live and shadow runs resume no session.
 - **Comparison:** the judge reads the input and the two answers in random order (eval `ab-compare`) and says `a`,
