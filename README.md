@@ -96,7 +96,8 @@ the owner's token: the owner stays the person whose machine it is.
    client* with the redirect URI `http://localhost` (no client secret) and *Allow public client flows* on. Expose an
    API (`api://<client id>`) with the delegated scope `access_as_user`, use v2 access tokens, add the app roles
    `Team.Admin`, `Team.Member` and `Team.Viewer`, require user assignment and assign each person a role (a free
-   tenant assigns people, not groups).
+   tenant assigns people, not groups). For people who sign in from a browser at the proxy's https address, add
+   `<public_url>/auth/callback` too, as a redirect URI of the *Mobile and desktop applications* (public client) kind.
 2. **The server (the owner).** In `~/.tirith/config.toml`:
    ```toml
    [auth.oidc]
@@ -104,10 +105,12 @@ the owner's token: the owner stays the person whose machine it is.
    client_id = "<application (client) id>"
    [server]
    # public_url = "https://neobot.team.example"   # only when a TLS reverse proxy on the server serves the page
+   #                                                # (a browser that opens it signed out is sent to Microsoft and back)
    ```
    Restart with `neobot service restart`. Reach the server from the members' computers by an SSH tunnel
    (`ssh -N -L 7801:127.0.0.1:7801 <user>@<server>`) or the proxy's https address.
-3. **A member.** In the app, *Server* menu, *Servers...*: add `http://127.0.0.1:7801` (the tunnel) or
+3. **A member.** In a browser, open `https://neobot.team.example` (with a `public_url`): the page sends you to
+   Microsoft and back, signed in. Or in the app, *Server* menu, *Servers...*: add `http://127.0.0.1:7801` (the tunnel) or
    `https://neobot.team.example`, choose *Sign in with Microsoft*, finish in the browser that opens. The window then
    shows the server's page, signed in as you; its title says your name and role. *This Mac* in the same dialog goes
    back to your own NeoBot, which is never started or needed while a server is shown.

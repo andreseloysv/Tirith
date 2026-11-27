@@ -7,7 +7,7 @@ mod fresh;
 mod keep;
 mod names;
 mod pending;
-mod pkce;
+pub(crate) mod pkce;
 mod register;
 mod start;
 mod token;

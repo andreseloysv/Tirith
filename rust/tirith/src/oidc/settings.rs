@@ -11,6 +11,9 @@ pub struct Settings {
     /// The tenant the token's `tid` must name: by default the issuer's first path part.
     pub tenant: String,
     pub jwks_uri: String,
+    /// The provider's authorize and token endpoints: Entra's v2 ones under the issuer unless config.toml names them.
+    pub authorize_url: String,
+    pub token_url: String,
     /// The delegated scope a token must carry in `scp` (empty: not checked).
     pub scope: String,
     pub leeway: u64,
@@ -45,6 +48,10 @@ impl Settings {
         Some(Settings {
             audience: get(raw, &["auth", "oidc", "audience"])
                 .unwrap_or_else(|| vec![client_id.clone(), format!("api://{client_id}")]),
+            authorize_url: text("authorization_endpoint")
+                .unwrap_or_else(|| format!("{authority}/oauth2/v2.0/authorize")),
+            token_url: text("token_endpoint")
+                .unwrap_or_else(|| format!("{authority}/oauth2/v2.0/token")),
             jwks_uri: text("jwks_uri")
                 .unwrap_or_else(|| format!("{authority}/discovery/v2.0/keys")),
             scope: get(raw, &["auth", "oidc", "scope"]).unwrap_or_else(|| "access_as_user".into()),
@@ -63,8 +70,11 @@ impl Settings {
         held.iter().filter_map(of).max()
     }
 
-    /// Where the app sends the person to sign in and to trade the code, Entra's v2 endpoints under the issuer.
-    pub fn authority(&self) -> &str {
-        self.issuer.strip_suffix("/v2.0").unwrap_or(&self.issuer)
+    /// The scope a sign-in asks for, the app's and the browser's alike.
+    pub fn request_scope(&self) -> String {
+        match self.scope.as_str() {
+            "" => "openid".into(),
+            s => format!("api://{}/{s}", self.client_id),
+        }
     }
 }

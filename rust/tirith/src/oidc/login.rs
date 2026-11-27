@@ -1,6 +1,7 @@
 //! The token's trade for a session, and the one-use link that hands the session to a window that cannot read the answer.
-use super::{people, verify, Settings};
-use crate::app::{now_iso, Shared};
+use super::session::{refuse, start_session};
+use super::{people, Settings};
+use crate::app::Shared;
 use crate::rooms::sealed::{hex, sha_hex};
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -12,18 +13,6 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 static LINKS: Mutex<Option<HashMap<String, (String, Instant)>>> = Mutex::new(None);
-
-fn refuse(app: &Shared, code: StatusCode, why: &str) -> Response {
-    app.event(
-        "",
-        "",
-        "auth",
-        "refused",
-        &format!("sign-in refused: {why}"),
-        "",
-    );
-    (code, Json(json!({ "error": why }))).into_response()
-}
 
 pub(super) async fn login(
     State(app): State<Shared>,
@@ -45,25 +34,16 @@ pub(super) async fn login(
     let Some(token) = bearer.or(sent) else {
         return refuse(&app, StatusCode::BAD_REQUEST, "no access token");
     };
-    let claims = match verify::check(&s, token).await {
-        Ok(c) => c,
+    let (claims, session) = match start_session(&app, &s, token).await {
+        Ok(opened) => opened,
         Err(why) => return refuse(&app, StatusCode::FORBIDDEN, &why),
     };
-    people::upsert(&app, &claims);
-    let session = people::open_session(&app, &claims.oid, s.hours);
     let code = hex(&rand::random::<[u8; 16]>());
     let mut links = LINKS.lock().unwrap();
     let map = links.get_or_insert_with(HashMap::new);
     map.retain(|_, (_, at)| at.elapsed() < Duration::from_secs(60));
     map.insert(sha_hex(code.as_bytes()), (session.clone(), Instant::now()));
     drop(links);
-    let said = format!(
-        "{} ({}) signed in at {}",
-        claims.name,
-        claims.level.name(),
-        now_iso()
-    );
-    app.event("", "", "auth", "login", &said, "");
     let body = json!({"name": claims.name, "username": claims.username, "role": claims.level.name(), "link": format!("/auth/session/{code}")});
     (
         [("set-cookie", people::cookie(&app, &session, s.hours))],

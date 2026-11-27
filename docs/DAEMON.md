@@ -1253,7 +1253,22 @@ that is not in it fetches it again, at most once a minute. On success the person
 removes ends at the next sign-in and a session never outlives `session_hours`), a session opens (the database keeps the
 token's hash only) and the answer sets the cookie `neobot-person-<home>=<token>` (`HttpOnly`, `SameSite=Lax`, `Secure`
 when `public_url` is https). The answer also carries `link`, a path that sets the same cookie once within a minute
-(`GET /auth/session/<code>`), for a window that cannot read the response. `GET /api/auth/oidc` (no token needed) tells
+(`GET /auth/session/<code>`), for a window that cannot read the response.
+
+**Browser sign-in** (needs `[server] public_url` as well). A browser that opens a page without a session (a GET that
+accepts `text/html`, never `/api/`, `/hook/`, `/door/`, `/auth/`) is sent with a 302 to `/auth/login?next=<path>`; API
+calls, JSON, SSE and every other method stay 403, and without `public_url` the gate answers as before. `GET
+/auth/login` (`browser.rs`) makes a state (128 bits or more) and a PKCE verifier, keeps them in memory for ten minutes,
+once (`pending.rs`), sets a cookie `<session cookie name>-login` with the state (HttpOnly, SameSite=Lax, Secure over
+https, path `/auth`) so the callback is only taken from the browser that began, and sends the browser to the provider's
+authorize endpoint with `response_type=code`, `redirect_uri=<public_url>/auth/callback`, the same scope as
+`GET /api/auth/oidc`, `code_challenge_method=S256` and `response_mode=query`. `GET /auth/callback` checks the state
+against the cookie and the kept entry, shows the provider's `error`, trades the code at the token endpoint with the
+verifier and no client secret (`redeem.rs`), and runs the same check and session as `POST /api/auth/oidc`
+(`session.rs`), then redirects to `next` (only a path of this site: not `//`, `/\` or an address). A failure is a
+small page with the reason and a link to try again; the code and the tokens are never shown. The provider must have
+`<public_url>/auth/callback` as a redirect URI of the public-client kind ("Mobile and desktop applications" in Entra),
+no secret. `authorization_endpoint` and `token_endpoint` in `[auth.oidc]` override Entra's v2 addresses under the issuer. `GET /api/auth/oidc` (no token needed) tells
 the app which endpoints, client id and scope to use; `GET /api/auth/me` says who the gate takes the caller for; `POST
 /api/auth/logout` ends the session.
 
@@ -1285,6 +1300,12 @@ Files:
 - `level.rs`: viewer, member, admin.
 - `mod.rs`: Declares the folder's files and re-exports what other modules use.
 - `people.rs`: The people table and their sessions.
+- `browser.rs`: Signing in from a browser: `/auth/login` to the provider and `/auth/callback` back.
+- `gate.rs`: The redirect of a signed-out browser to `/auth/login`.
+- `pending.rs`: Browser sign-ins under way by their state, one use, ten minutes.
+- `redeem.rs`: The code traded at the provider's token endpoint with the PKCE verifier.
+- `reply.rs`: The 302 and the failure page of a browser sign-in.
+- `session.rs`: The person kept and a session opened for a proven token, for both ways in.
 - `routes.rs`: The sign-in routes: the app's configuration, `/api/auth/me` and sign-out.
 - `login.rs`: The token's trade for a session and the one-use link that hands it to a window.
 - `settings.rs`: `[auth.oidc]` and the role map.
@@ -1713,7 +1734,9 @@ location / {
 }
 ```
 
-The SSH-tunnel case (`ssh -N -L 7801:127.0.0.1:7801 <server>`, then `http://127.0.0.1:7801/`) is unchanged and needs
+With `[auth.oidc]` too, a browser that opens the URL without a session signs in with the provider and comes back
+(browser sign-in, `oidc/`): register `https://neobot.team.example/auth/callback` in the provider as a public-client
+redirect URI. The SSH-tunnel case (`ssh -N -L 7801:127.0.0.1:7801 <server>`, then `http://127.0.0.1:7801/`) is unchanged and needs
 no setting. The proxy exposes the sign-in routes to its network: they accept only a token the provider signed for this
 tenant, this application and a role you assigned; keep the proxy behind your usual access controls anyway.
 

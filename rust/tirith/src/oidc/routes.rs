@@ -1,5 +1,6 @@
 //! The routes of team sign-in: what the app needs to start (`GET /api/auth/oidc`), the token's trade for a session
 //! (`POST /api/auth/oidc`), the one-use link that hands that session to the app's window, who am I and sign out.
+use super::browser;
 use super::login::{enter, login};
 use super::{people, Settings};
 use crate::app::Shared;
@@ -17,12 +18,17 @@ pub fn routes() -> Router<Shared> {
         .route("/api/auth/logout", post(logout))
         .route("/api/auth/me", get(me))
         .route("/auth/session/{code}", get(enter))
+        .route("/auth/login", get(browser::begin))
+        .route("/auth/callback", get(browser::back))
 }
 
 /// The routes that stand before the gate: they prove who calls themselves.
 pub fn own_route(method: &Method, path: &str) -> bool {
     (path == "/api/auth/oidc" && (method == Method::GET || method == Method::POST))
-        || (method == Method::GET && path.starts_with("/auth/session/"))
+        || (method == Method::GET
+            && (path.starts_with("/auth/session/")
+                || path == "/auth/login"
+                || path == "/auth/callback"))
 }
 
 /// What the app needs to sign a person in: the provider's endpoints and the scope to ask.
@@ -34,13 +40,8 @@ async fn config(State(app): State<Shared>) -> Response {
         )
             .into_response();
     };
-    let a = s.authority();
-    let scope = if s.scope.is_empty() {
-        "openid".into()
-    } else {
-        format!("api://{}/{}", s.client_id, s.scope)
-    };
-    let urls = json!({"authorization_endpoint": format!("{a}/oauth2/v2.0/authorize"), "token_endpoint": format!("{a}/oauth2/v2.0/token")});
+    let urls = json!({"authorization_endpoint": s.authorize_url, "token_endpoint": s.token_url});
+    let scope = s.request_scope();
     Json(json!({"issuer": s.issuer, "client_id": s.client_id, "scope": scope, "endpoints": urls}))
         .into_response()
 }

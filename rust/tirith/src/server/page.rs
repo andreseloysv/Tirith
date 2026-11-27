@@ -60,7 +60,8 @@ pub(super) fn fetch_ok(path: &str, h: &HeaderMap) -> bool {
 /// The one route that opens the page: its code is its token.
 pub(super) fn link(method: &Method, path: &str) -> bool {
     let code = path.strip_prefix("/auth/").unwrap_or("");
-    method == Method::GET && !code.is_empty() && !code.contains('/')
+    let sign_in = ["login", "callback"].contains(&code); // oidc/ routes, not a link
+    method == Method::GET && !code.is_empty() && !code.contains('/') && !sign_in
 }
 
 async fn made(State(app): State<Shared>) -> Json<Value> {

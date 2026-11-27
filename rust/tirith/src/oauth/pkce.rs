@@ -11,16 +11,16 @@ fn random(n: usize) -> String {
 }
 
 /// A code verifier of 43 characters.
-pub(super) fn verifier() -> String {
+pub(crate) fn verifier() -> String {
     random(32)
 }
 
 /// The S256 challenge of `verifier`.
-pub(super) fn challenge(verifier: &str) -> String {
+pub(crate) fn challenge(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
 }
 
 /// A state, or a ticket: unguessable and used once.
-pub(super) fn state() -> String {
+pub(crate) fn state() -> String {
     random(24)
 }

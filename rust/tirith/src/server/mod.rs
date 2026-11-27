@@ -31,7 +31,7 @@ pub use caller::Caller;
 pub use door::door;
 #[cfg(target_os = "macos")]
 pub use hook_door::rules_door;
-pub use public::public_https;
+pub use public::{public_https, url as public_url};
 pub use refused::NO_CALLER;
 pub use router::router;
 pub use who::Who;

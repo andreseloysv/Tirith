@@ -29,6 +29,8 @@ pub(super) async fn admit(State(app): State<Shared>, mut req: Request, next: Nex
         Who::Owner
     } else if let Some(p) = person::of(&app, &path, &headers) {
         Who::Person(p)
+    } else if let Some(go) = crate::oidc::sign_in_redirect(&app, &method, req.uri(), &headers) {
+        return go;
     } else {
         return refused::nobody(&path);
     };

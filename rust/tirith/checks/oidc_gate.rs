@@ -4,10 +4,10 @@ use super::oidc_tests::{good, home, jwks, jwt};
 use crate::app::Shared;
 use serde_json::{json, Value};
 
-struct Daemon {
-    app: Shared,
-    port: u16,
-    http: reqwest::Client,
+pub(super) struct Daemon {
+    pub(super) app: Shared,
+    pub(super) port: u16,
+    pub(super) http: reqwest::Client,
 }
 
 impl Drop for Daemon {
@@ -16,7 +16,7 @@ impl Drop for Daemon {
     }
 }
 
-async fn start(tag: &str, extra: &str) -> Daemon {
+pub(super) async fn start(tag: &str, extra: &str) -> Daemon {
     let (uri, _) = jwks(&[("k1", 0)]).await;
     let app = home(tag, &uri, extra);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -38,7 +38,7 @@ async fn start(tag: &str, extra: &str) -> Daemon {
 
 impl Daemon {
     /// (status, body, set-cookie) of one call with these headers.
-    async fn call(
+    pub(super) async fn call(
         &self,
         method: &str,
         path: &str,
