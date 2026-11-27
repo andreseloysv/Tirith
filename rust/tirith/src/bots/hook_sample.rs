@@ -28,6 +28,9 @@ fn mail() -> String {
 /// The sample that fits a routine's `when`: an e-mail for `mail:…`, the named GitHub event and action for `github:<event>.<action>` (no `*`), else a pull request opened.
 pub(super) fn for_when(when: &str) -> String {
     let when = when.trim();
+    if let Some(w) = when.strip_prefix("gitlab:").filter(|w| !w.contains('*')) {
+        return super::hook_gitlab::sample(w);
+    }
     let github_event = when.strip_prefix("github:").filter(|w| !w.contains('*'));
     match github_event {
         _ if when.starts_with("mail") => mail(),

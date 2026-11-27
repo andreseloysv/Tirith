@@ -10,6 +10,7 @@ fn browser(skills: &[(String, String)]) -> bool {
         .any(|(_, t)| t.contains("tirith_browser") || t.contains("browser_"))
 }
 
+/// A package carries the routines at a time and on an event: one every so often is the owner's own, as their cost is.
 fn routine(r: &Value) -> Value {
     let mut out = json!({"title": r["title"], "prompt": r["prompt"], "trigger": r["trigger"], "catch_up": r["catch_up"]});
     if s(r, "trigger") == "webhook" {
@@ -40,7 +41,7 @@ pub(in crate::bots) fn export(app: &Shared, id: &str, about: &Value) -> Result<V
     let p = json!({
         "format": super::FORMAT, "v": super::VERSION,
         "bot": {"name": bot["name"], "description": s(about, "description"), "instructions": s(about, "instructions"), "face": {"shape": bot["shape"], "color": bot["color"]}},
-        "routines": bot["routines"].as_array().into_iter().flatten().map(routine).collect::<Vec<_>>(),
+        "routines": bot["routines"].as_array().into_iter().flatten().filter(|r| s(r, "every").is_empty()).map(routine).collect::<Vec<_>>(),
         "skills": skills.iter().map(|(n, t)| json!({"name": n, "text": t})).collect::<Vec<_>>(),
         "integrations": grants, "permissions": permissions, "created": crate::app::now_iso(),
     });

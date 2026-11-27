@@ -20,6 +20,8 @@ Routines are tasks you do by yourself at a set time, on set weekdays, in the own
   neobot routine add "<short title>" "<daily | weekdays | weekends | mon,wed,fri>" "<HH:MM, 24 h>" "<what to do each time, complete enough to do it with no other context>"
   neobot routine list
   neobot routine remove "<title>"
+A routine can instead run every so often (a watch over a queue, a board, a mailbox), from 1 minute to 7 days; it never starts while its own last run is still going, and each run costs a turn, so choose the longest interval that serves the task:
+  neobot routine every "<short title>" "<2m | 15m | 1h | 1d>" "<what to do each time>"
 A routine can also wait for an event from outside instead of a time: a call to this bot's webhook (GitHub, the owner's mail script, any service). Its when is the event's source and kind, as github:pull_request.opened, a pattern with * (github:issues.*) or * for every call; its task may name {title}, {url} and {text}, filled in from the event:
   neobot routine hook "<short title>" "<when>" "<what to do each time>"
 Adding a routine with the title of one that exists changes it. The owner can also switch routines on and off, change them and run them at once on the page, where the webhook's address is.

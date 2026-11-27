@@ -1,5 +1,6 @@
 // When a bot's routines run, in words: their days, their time, the next run.
 import { t } from '../../i18n.js';
+import { everySecs } from './every.js';
 export const DAY = [t('Mon'), t('Tue'), t('Wed'), t('Thu'), t('Fri'), t('Sat'), t('Sun')];
 export const WEEKDAYS = [1, 2, 3, 4, 5], DAILY = [1, 2, 3, 4, 5, 6, 7];
 export const isOn = (r) => r.on !== false;
@@ -13,6 +14,7 @@ export const timeLabel = (at) => { const [h, m] = hm(at); return new Date(2000, 
 
 /** The next time the routine runs (the machine's local time), or null when it is off. */
 export function nextRun(r, now = new Date()) {
+  if (r.every) { const s = everySecs(r.every), last = Date.parse(r.last || ''); return isOn(r) && s ? new Date(Math.max(now.getTime(), (last || 0) + s * 1000)) : null; }
   if (!isOn(r) || !(r.days || []).length) return null;
   const [h, m] = hm(r.at);
   for (let i = 0; i < 8; i++) {

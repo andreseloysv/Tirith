@@ -111,8 +111,20 @@ stays on the page and never reaches the phones (`rooms::to_phones`), so only new
 
 The judge of a bot's turns can be switched off for that bot to save their cost (in a trial the judge was about 30% of a bot's cost): `judge = false` in `[roles.bot-<id>]`, or the card's Factory section («Judge its answers»), `judge` in `GET`/`POST /api/bots`. It is on by default and always on for a system bot. A bot without its judge has no evals on its conversation (no `turn-quality` score, no `unapproved` verdict, no `owner-mood`; `factory/evals/` runs skip it, `Factory::judged`), its routine's news go to the phones when the run ends instead of waiting for a judge, and only the lab's `ab-compare` (an experiment the Coach started) still reads it.
 
+Routines every so often. A routine may run at an interval instead of at a time of day: `every = "2m"` in its `[[routes]]` row
+(no `days`, no `at`), `every` in `POST /api/bots/<id>/routines`, `neobot routine every "<title>" "<2m>" "<task>"` for the bot, and
+the Routines form's «Every so often» on the page (presets 2m to 1d, or any number with s, m, h or d). The least is 1 minute (the
+scheduler's tick comes every 30 to 60 s), the most 7 days; `90s` is read, `30s` and `8d` are refused. It is due one interval after its
+last run (kv `routine:<bot>:<id>`: a run, Run now, or the routine's making or change), a never-run one at once, and one run only however many intervals a
+stopped daemon missed (no catch_up, no lateness, no missed times written down). The tick (`bots/run.rs`) never starts it while a run of
+that same routine waits for its conversation or works (`expected::going`, over the `expected_runs` rows), so a slow run is never
+doubled and the stuck one still ends at `[limits] routine_minutes`; the bot's own limits (its turn's, its conversation's
+one-at-a-time, its model and effort per routine) hold as for any run. Each run is a turn with its own `expected_runs` row, so it shows in
+the Numbers like a timed one, and costs a turn: choose the longest interval that serves. A bot package leaves such a routine out.
+The page lists it as «Every 2m», with the next run.
+
 Routines on an event from outside. A routine is either timed (`schedule`) or waits for its bot's webhook: a `[[routes]]` with `on = "webhook"` and
-`when` — the event's `<source>:<kind>` (`github:pull_request.opened`), a pattern of it with `*` (`github:issues.*`), or `*` for every call —
+`when` — the event's `<source>:<kind>` (`github:pull_request.opened`, GitLab's `gitlab:merge_request.open` from its `X-Gitlab-Event`, `object_kind` and `object_attributes.action`), a pattern of it with `*` (`github:issues.*`), or `*` for every call —
 made on the page (Routines: "At a time" or "On an event from outside") or by the bot (`neobot routine hook "<title>" "<when>" "<task>"`); its
 task may name `{title}`, `{url}` and `{text}`. The webhook is agentsmessenger.com's sealed webhook (its `src/server/hooks/`):
 `POST /api/bots/<id>/webhook` gives the bot's URL, making it once — the daemon makes sure the bot has its own private room (`rooms/hooks.rs`,
@@ -164,6 +176,9 @@ Files:
 - `hook_api.rs`: A bot's webhook from the page: its URL (made once on the platform), deleted, and «Probar».
 - `hook_clean.rs`: What a webhook event shows outside its data block: a label of name characters only, a title as one quoted line, and a value fenced inside a task.
 - `hook_event.rs`: What a webhook call brought, as a bot's `webhook` event: where from, what kind, its title, link and text, and the body.
+- `hook_gitlab.rs`: GitLab's call: `X-Gitlab-Event`, the body's `object_kind` and `object_attributes.action` as `gitlab:merge_request.open`; and its sample.
+- `hook_title.rs`: The title and link of a call's body.
+- `interval.rs`: A routine's `every`: its words, its least and most, and when it is next due.
 - `hook_fire.rs`: A webhook event reaches its bot: the bot's `webhook` routines whose `when` holds run with it, the event inside a block marked as data from outside.
 - `hook_sample.rs`: The sample events «Probar» sends a routine: GitHub's (the event and action the `when` names) and the mail script's.
 - `layer.rs`: A changed system bot's layer over its factory role, in config.toml.

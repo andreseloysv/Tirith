@@ -54,6 +54,9 @@ pub fn due(r: &Value, now: DateTime<Local>) -> bool {
 /// The one of its times it is to run for now, so the one that is not lost (`expected/missed.rs`).
 pub fn owed(r: &Value, now: DateTime<Local>) -> Option<DateTime<Local>> {
     (r["on"] != false).then_some(())?;
+    if !s(r, "every").is_empty() {
+        return super::interval::owed(r, now); // every so often: no day, no time, no catch_up
+    }
     pending(r, now).filter(|time| r["catch_up"] != "skip" || !past(*time, now))
 }
 /// Whether `time` is too long ago for a run of it to be on time.

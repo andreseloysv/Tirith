@@ -6,10 +6,11 @@ import { api } from '../../store.js';
 import { ICON, Icon } from '../../common.js';
 import { DAY, WEEKDAYS, DAILY, isOn, daysLabel, timeLabel, nextRun, whenLabel } from './when.js';
 import { Webhook } from './webhook.js';
+import { Every, everySecs, everyLabel } from './every.js';
 import { RoutineModel, ownWords } from './routine-model.js';
 import { t } from '../../i18n.js';
 
-const TRIGGERS = [['schedule', t('At a time')], ['webhook', t('On an event from outside')]];
+const TRIGGERS = [['schedule', t('At a time')], ['every', t('Every so often')], ['webhook', t('On an event from outside')]];
 export const isHook = (r) => r.trigger === 'webhook';
 
 function Timed({ days, setDays, at, setAt }) {
@@ -29,7 +30,8 @@ function OnEvent({ bot, when, setWhen }) {
 export function RoutineForm({ bot, r, onDone }) {
   const [title, setTitle] = useState(r.title || '');
   const [prompt, setPrompt] = useState(r.prompt || '');
-  const [trigger, setTrigger] = useState(r.trigger || 'schedule');
+  const [trigger, setTrigger] = useState(r.every ? 'every' : r.trigger || 'schedule');
+  const [every, setEvery] = useState(r.every || '5m');
   const [when, setWhen] = useState(r.when || 'github:pull_request.opened');
   const [days, setDays] = useState(r.days && r.days.length ? r.days : WEEKDAYS);
   const [at, setAt] = useState(r.at || '08:00');
@@ -37,11 +39,11 @@ export function RoutineForm({ bot, r, onDone }) {
   const [effort, setEffort] = useState(r.effort || '');
   const [err, setErr] = useState('');
   const hook = trigger === 'webhook';
-  const ok = title.trim() && prompt.trim() && (hook ? when.trim() : days.length && at);
+  const ok = title.trim() && prompt.trim() && (hook ? when.trim() : trigger === 'every' ? everySecs(every) : days.length && at);
   const save = (e) => {
     e.preventDefault();
     if (!ok) return;
-    const body = { id: r.id, title: title.trim(), prompt: prompt.trim(), trigger, model, effort, ...(hook ? { when: when.trim() } : { days, at }) };
+    const body = { id: r.id, title: title.trim(), prompt: prompt.trim(), trigger: hook ? trigger : 'schedule', model, effort, ...(hook ? { when: when.trim() } : trigger === 'every' ? { every: every.trim() } : { days, at, every: '' }) };
     api('POST', `/api/bots/${encodeURIComponent(bot.id)}/routines`, body).then(onDone, (x) => setErr(x.message));
   };
   return html`<form class="bform" onSubmit=${save}>
@@ -50,7 +52,7 @@ export function RoutineForm({ bot, r, onDone }) {
       onInput=${(e) => setPrompt(e.target.value)}></textarea></label>
     <div class="bfield"><span class="bcap">${t('Runs')}</span><div class="btrig" role="radiogroup">${TRIGGERS.map(([k, label]) => html`<button type="button" key=${k} role="radio"
       aria-checked=${trigger === k} class=${trigger === k ? 'on' : ''} onClick=${() => setTrigger(k)}>${label}</button>`)}</div></div>
-    ${hook ? html`<${OnEvent} bot=${bot} when=${when} setWhen=${setWhen} />` : html`<${Timed} days=${days} setDays=${setDays} at=${at} setAt=${setAt} />`}
+    ${hook ? html`<${OnEvent} bot=${bot} when=${when} setWhen=${setWhen} />` : trigger === 'every' ? html`<${Every} every=${every} setEvery=${setEvery} />` : html`<${Timed} days=${days} setDays=${setDays} at=${at} setAt=${setAt} />`}
     <${RoutineModel} bot=${bot} model=${model} effort=${effort} setModel=${setModel} setEffort=${setEffort} />
     ${err ? html`<p class="berr">${err}</p>` : null}
     <div class="bfoot"><button type="button" class="bbtn" onClick=${onDone}>${t('Cancel')}</button><button type="submit" class="bbtn pri" disabled=${!ok}>${t('Save routine')}</button></div>
@@ -68,7 +70,7 @@ export function Routine({ bot, r, onEdit }) {
   /* Test: a sample GitHub pull request opened, straight to this routine */
   const run = () => post(hook ? `/webhook/test/${encodeURIComponent(r.id)}` : `/run/${encodeURIComponent(r.id)}`).then((ok) => { if (ok) { setRan(true); setTimeout(() => setRan(false), 4000); } });
   const next = hook ? null : nextRun(r);
-  const timed = hook ? t('On an event · {when}', { when: r.when }) : t('{days} around {time}', { days: daysLabel(r.days), time: timeLabel(r.at) });
+  const timed = hook ? t('On an event · {when}', { when: r.when }) : r.every ? everyLabel(r.every) : t('{days} around {time}', { days: daysLabel(r.days), time: timeLabel(r.at) });
   const said = [timed, ownWords(r)].filter(Boolean).join(' · '); /* and its own model or effort, when it has one */
   const state = hook ? t('Waits for its webhook') : next ? t('Next · {when}', { when: whenLabel(next) }) : '';
   return html`<li class=${`brr${isOn(r) ? '' : ' off'}`}>

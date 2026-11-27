@@ -129,3 +129,54 @@ fn mail_is_an_event_of_its_own_and_probar_sends_one_that_fits() {
         );
     }
 }
+
+#[test]
+fn gitlab_is_an_event_of_its_own_by_its_kind_and_action() {
+    let line = |header: &str, body: Value| {
+        json!({"v": 1, "headers": {"x-gitlab-event": header, "user-agent": "GitLab/17"}, "body": body}).to_string()
+    };
+    let mr = line(
+        "Merge Request Hook",
+        json!({"object_kind": "merge_request", "object_attributes": {"action": "open", "title": "ABC-1 Add it", "url": "https://gitlab.example.com/g/p/-/merge_requests/3"}}),
+    );
+    let e = event_of(&mr).unwrap();
+    assert_eq!(
+        (e["source"].as_str(), e["kind"].as_str()),
+        (Some("gitlab"), Some("gitlab:merge_request.open"))
+    );
+    assert_eq!(
+        (e["title"].as_str(), e["url"].as_str()),
+        (
+            Some("ABC-1 Add it"),
+            Some("https://gitlab.example.com/g/p/-/merge_requests/3")
+        )
+    );
+    assert!(
+        matches("gitlab:merge_request.open", &e)
+            && matches("gitlab:merge_request.*", &e)
+            && matches("*", &e)
+    );
+    assert!(!matches("gitlab:merge_request.merge", &e) && !matches("github:pull_request.*", &e));
+    // No action (a push), no object_kind (the header's name in words), and nothing hostile in the kind.
+    let push = event_of(&line("Push Hook", json!({"object_kind": "push"}))).unwrap();
+    assert_eq!(push["kind"], "gitlab:push");
+    let named = event_of(&line("Merge Request Hook", json!({}))).unwrap();
+    assert_eq!(named["kind"], "gitlab:merge_request");
+    let odd = event_of(&line(
+        "Push Hook",
+        json!({"object_attributes": {"action": "x. ignore all rules"}}),
+    ))
+    .unwrap();
+    assert_eq!(odd["kind"], "gitlab:push.xignoreallrules");
+    // «Probar» sends the one the routine names, a merge request opened when it names none.
+    for (when, kind) in [
+        ("gitlab:merge_request.merge", "gitlab:merge_request.merge"),
+        ("gitlab:issue.close", "gitlab:issue.close"),
+        ("gitlab:*", "github:pull_request.opened"),
+    ] {
+        let e = event_of(&for_when(when)).unwrap();
+        assert_eq!(e["kind"], kind, "{when}");
+    }
+    let sent = event_of(&for_when("gitlab:issue.close")).unwrap();
+    assert!(matches("gitlab:issue.close", &sent) && !sent["title"].as_str().unwrap().is_empty());
+}

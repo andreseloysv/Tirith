@@ -84,7 +84,12 @@ pub(crate) fn tick_at(app: &Shared, now: DateTime<Local>) {
     crate::lab::tick(app);
     for b in all(app) {
         let (id, routines) = (s(&b, "id"), b["routines"].as_array().into_iter().flatten());
+        let key = s(&b, "key");
         for r in routines.filter(|r| due(r, now)) {
+            let busy = !s(r, "every").is_empty() && crate::expected::going(app, &key, &s(r, "id"));
+            if busy {
+                continue; // an interval routine never starts beside its own run still going
+            }
             let (rid, told) = (s(r, "id"), late(r, now));
             drop(fire_at(app, (&id, &rid), "schedule", &told, now));
         }

@@ -165,10 +165,11 @@ What the bot's screen shows, in a tab «Números» (`GET /api/bots/<id>/numbers`
   on the internet with HTTPS). The platform seals what arrives for the bot's room (NeoBot's key) at once and keeps
   only the sealed copy, which it cannot open when it seals once (a key made for that call and thrown away; a platform
   from before that ignores the request and seals with its webhook agent's key, which it holds); NeoBot's room watcher turns it into the event `webhook` of that bot, with `source`, `kind`,
-  `title`, `url`, `text` and its data (GitHub's `X-GitHub-Event` and `action` give `github:pull_request.opened`).
+  `title`, `url`, `text` and its data (GitHub's `X-GitHub-Event` and `action` give `github:pull_request.opened`; GitLab's `X-Gitlab-Event`, `object_kind` and `object_attributes.action` give `gitlab:merge_request.open`).
   The URL is the only secret: whoever has it can send any of these, which is one more reason they are only data.
 - **The routine:** a routine may say `on = "webhook"` and `when = "github:pull_request.opened"`; its task may use
   `{title}`, `{url}` and `{text}`. A «Probar» button hands it a sample event without the platform.
+- **Every so often:** a routine that watches something with no webhook (a board, a queue) says `every = "2m"` (1 minute at least, 7 days at most) instead of days and a time; `neobot routine every "<title>" 2m "<task>"`, or the form's «Every so often». It never starts while its own last run still waits or works, and each run is a turn that costs, so the longest interval that serves is the one to choose.
 - **E-mail:** the Library gives the owner a short Google Apps Script with the bot's URL in it: every 5 minutes, in
   the owner's own Google account, it sends the new mail with the label `tirith/<bot>` to the webhook. No mail
   server, and no bot opening the owner's Safari every 5 minutes.

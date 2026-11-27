@@ -66,10 +66,11 @@ pub(super) fn runs(r: &Value, now: DateTime<Local>, label: &str) -> String {
 
 /// What the line of a new timed routine adds: its days, its time and when it first runs, so nobody waits for it on a day it has none.
 pub fn first(r: &Value, now: DateTime<Local>) -> String {
-    if s(r, "trigger") != "schedule" {
-        return String::new();
+    match (s(r, "trigger") == "schedule", s(r, "every")) {
+        (false, _) => String::new(),
+        (_, every) if !every.is_empty() => format!(" · every {every}"),
+        _ => runs(r, now, "first time"),
     }
-    runs(r, now, "first time")
 }
 
 /// What a failed run's reason reads: `cause` after "could not: ", unless it already begins with a could-not (never "could not: could not …"). `lead` goes first.

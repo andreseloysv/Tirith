@@ -16,6 +16,13 @@ pub fn known(app: &App, conv: &str, routine: &str, due: &str) -> bool {
     occurrence(app, (conv, routine, due)).is_some()
 }
 
+/// True when a run of that routine waits for its conversation or works: an interval routine never starts beside it.
+pub fn going(app: &App, conv: &str, routine: &str) -> bool {
+    [super::store::WAITING, super::store::RUNNING]
+        .iter()
+        .any(|state| oldest(app, conv, routine, state).is_some())
+}
+
 /// The oldest occurrence of that routine in `state`.
 pub(super) fn oldest(app: &App, conv: &str, routine: &str, state: &str) -> Option<Expected> {
     let rest = "conv = ?1 AND routine = ?2 AND state = ?3 ORDER BY id LIMIT 1";

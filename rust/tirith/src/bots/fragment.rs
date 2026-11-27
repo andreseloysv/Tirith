@@ -15,6 +15,8 @@ fn routine_of(key: &str, r: &Value) -> Value {
     let mut route = json!({"on": "schedule", "to": key, "mode": "turn", "phone": true, "id": s(r, "id"), "title": s(r, "title"), "task": s(r, "prompt"), "enabled": r["on"] != false});
     if s(r, "trigger") == "webhook" {
         (route["on"], route["when"]) = (json!("webhook"), json!(s(r, "when")));
+    } else if !s(r, "every").is_empty() {
+        route["every"] = json!(s(r, "every")); // every so often: no days, no time
     } else {
         (route["days"], route["at"]) = (r["days"].clone(), json!(s(r, "at")));
         let _ = (r["catch_up"] == "skip").then(|| route["catch_up"] = json!("skip"));

@@ -818,3 +818,61 @@ fn a_bots_judge_is_on_unless_written_off() {
     let by = |id: &str| read.iter().find(|b| b["id"] == id).unwrap()["judge"].clone();
     assert_eq!((by("aaa111"), by("bbb222")), (json!(false), json!(true)));
 }
+
+#[test]
+fn an_interval_routine_runs_every_so_often_never_twice_at_once() {
+    let stamp = |t: chrono::DateTime<Local>| t.with_timezone(&chrono::Utc).to_rfc3339();
+    for (words, secs) in [("2m", 120), ("90s", 90), ("1h", 3600), (" 1D ", 86400)] {
+        assert_eq!(super::interval::secs(words), Ok(secs), "{words}");
+    }
+    for bad in ["30s", "0m", "8d", "2", "m", "2 min", "", "-3m"] {
+        assert!(super::interval::secs(bad).is_err(), "{bad}");
+    }
+    assert_eq!(super::interval::normal("120s").unwrap(), "2m");
+    assert_eq!(super::interval::normal("90s").unwrap(), "90s");
+    // Due an interval after its last run, once however long it was down; a run does not make it due before its time.
+    let r = |last: &str| json!({"every": "2m", "last": last, "on": true, "trigger": "schedule"});
+    let ran = at(2026, 11, 20, 10, 0);
+    assert!(!super::due(&r(&stamp(ran)), at(2026, 11, 20, 10, 1)));
+    assert!(super::due(&r(&stamp(ran)), at(2026, 11, 20, 10, 2)));
+    let down = at(2026, 11, 20, 18, 0);
+    assert_eq!(
+        super::owed(&r(&stamp(ran)), down),
+        Some(at(2026, 11, 20, 10, 2))
+    );
+    assert!(
+        super::schedule::late(&r(&stamp(ran)), down).is_empty(),
+        "no lateness to tell"
+    );
+    assert!(super::due(&r(""), down), "one that never ran is due");
+    let mut off = r(&stamp(ran));
+    off["on"] = json!(false);
+    assert!(!super::due(&off, down));
+    // Made on the card: normalised, no days and no time, written as `every` and read back; a time takes it back.
+    let mut routine = json!({"id": "r1", "title": "t", "prompt": "p", "on": true});
+    super::routine::set(&mut routine, &json!({"every": "120s"})).unwrap();
+    assert_eq!(
+        (routine["every"].as_str(), routine["at"].as_str()),
+        (Some("2m"), Some(""))
+    );
+    assert!(super::routine::set(&mut routine, &json!({"every": "10s"})).is_err());
+    let bots = json!([{"id": "abc123", "name": "N", "shape": "hex", "color": "#22d3ee", "routines": [routine.clone()]}]);
+    let text = super::written::written("", bots.as_array().unwrap()).unwrap();
+    assert!(
+        text.contains("every = \"2m\"") && !text.contains("days") && !text.contains("at ="),
+        "{text}"
+    );
+    let raw = serde_json::to_value(text.parse::<toml::Table>().unwrap()).unwrap();
+    let read = super::list::bots_of(&raw, &|_, _| String::new());
+    assert_eq!(read[0]["routines"][0]["every"], "2m");
+    super::routine::set(
+        &mut routine,
+        &json!({"every": "", "days": "daily", "at": "08:30"}),
+    )
+    .unwrap();
+    assert_eq!(
+        (routine["every"].as_str(), routine["at"].as_str()),
+        (Some(""), Some("08:30"))
+    );
+    assert!(super::due(&routine, at(2026, 11, 21, 9, 0)));
+}

@@ -29,7 +29,7 @@ pub use admitted::{admitted_by, ungraded};
 pub use calendar::{today, utc as instant};
 pub use changed::changed;
 pub use claims::{honest, quiet};
-pub use found::known;
+pub use found::{going, known};
 pub use gaps::late;
 pub use life::{ended, orphaned, started, unhanded, unstarted};
 pub use news::settled;

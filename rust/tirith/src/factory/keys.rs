@@ -49,6 +49,7 @@ pub(super) const ROUTE_KEYS: &[&str] = &[
     "then",
     "days",
     "at",
+    "every",
     "catch_up",
     "task",
     "title",

@@ -7,13 +7,19 @@ pub(super) fn event_of(payload: &str) -> Option<Value> {
     let v: Value = serde_json::from_str(payload).ok()?;
     let (h, body) = (&v["headers"], v["body"].clone());
     let github = h["x-github-event"].as_str().filter(|e| !e.is_empty());
-    let mail = github.is_none() && body["from"].is_string() && body["subject"].is_string();
+    let gitlab = super::hook_gitlab::kind(h, &body).filter(|_| github.is_none());
+    let mail = github.is_none()
+        && gitlab.is_none()
+        && body["from"].is_string()
+        && body["subject"].is_string();
     let source = match (github, mail) {
+        _ if gitlab.is_some() => "gitlab".to_string(),
         (Some(_), _) => "github".to_string(),
         (_, true) => "mail".to_string(),
         _ => agent(h),
     };
     let kind = match (github, mail) {
+        _ if gitlab.is_some() => gitlab.clone().unwrap_or_default(),
         (Some(e), _) => match body["action"].as_str() {
             Some(a) => format!("github:{e}.{a}"),
             None => format!("github:{e}"),
@@ -21,7 +27,7 @@ pub(super) fn event_of(payload: &str) -> Option<Value> {
         (_, true) => "mail:received".to_string(),
         _ => "hook".to_string(),
     };
-    let (title, url) = title_and_url(&body);
+    let (title, url) = super::hook_title::title_and_url(&body);
     let text = match (&body, mail) {
         (_, true) => format!(
             "From: {}\nSubject: {}\nDate: {}\n\n{}",
@@ -49,29 +55,6 @@ fn agent(h: &Value) -> String {
     Some(ua.trim().to_string())
         .filter(|u| !u.is_empty())
         .unwrap_or_else(|| "hook".into())
-}
-/// The title and link of GitHub's pull request, issue, release or comment (a comment's link with its issue's title), else the body's own `title` and `url`.
-fn title_and_url(b: &Value) -> (String, String) {
-    let s = |v: &Value| v.as_str().unwrap_or("").to_string();
-    let item = ["pull_request", "issue", "release"]
-        .iter()
-        .map(|k| &b[*k])
-        .find(|v| v.is_object());
-    let title = item.map_or_else(
-        || s(&b["title"]),
-        |i| {
-            Some(s(&i["title"]))
-                .filter(|t| !t.is_empty())
-                .unwrap_or_else(|| s(&i["name"]))
-        },
-    );
-    let url = [&b["comment"]]
-        .into_iter()
-        .chain(item)
-        .map(|v| s(&v["html_url"]))
-        .find(|u| !u.is_empty())
-        .unwrap_or_else(|| s(&b["url"]));
-    (title, url)
 }
 /// The match key of an event, as a routine's `when` names it: its kind when it says its source (`github:pull_request.opened`), else `<source>:<kind>`.
 pub(super) fn label(e: &Value) -> String {

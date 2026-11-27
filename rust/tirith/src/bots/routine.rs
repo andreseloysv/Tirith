@@ -8,6 +8,9 @@ use chrono::NaiveTime;
 use serde_json::{json, Value};
 /// A timed routine's days, its time written HH:MM, and its catch_up.
 fn timed(r: &mut Value, b: &Value) -> Result<bool, String> {
+    if super::interval::apply(r, b)? {
+        return Ok(true); // every so often
+    }
     match &b["catch_up"] {
         Value::Null => {}
         v if v == "once" || v == "skip" => r["catch_up"] = v.clone(),

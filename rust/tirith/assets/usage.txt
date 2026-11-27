@@ -31,6 +31,7 @@ neobot chat clear [--project P]                clear a conversation (this sessio
 neobot chat keep [<time>] [--project P]        how long a chat lives, in your words (30m, 1h, 24 h, 2 días, una semana; "siempre" = no limit); without a time it says the current one
 neobot turn checks <passed>/<total> "<names>"  (a bot, in its session) keep what its own validation checked on its turn now
 neobot turn key <ABC-123>                      (a bot, in its session) the issue this turn works on: its cost is counted per issue (neobot costs --by issue)
+neobot routine add|every|hook|remove|list  (a bot, in its session) its routines: at a time on some days, every so often (neobot routine every "<title>" 2m "<task>", 1 minute at least, never beside its own run still going), or on an event from outside
 neobot lab start <bot> <branch> --routine <id> --mode live|replay|shadow --hypothesis "<text>"
                                               (the Coach) start an experiment: the branch (one commit on the bot's main) against its main, decided by the [lab] rule it started with; live on the routine's real runs, replay on its last captured runs done again offline, shadow beside each real run with every outward action refused
 neobot lab list [<bot>]                       the experiments (a bot's, or every bot's): change, hypothesis, mode, comparisons, numbers and decision
