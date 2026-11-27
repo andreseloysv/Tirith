@@ -22,6 +22,8 @@ pub(super) fn of(
             at("started_at", &r.started_at),
             at("ended_at", &r.ended_at),
             at("source", &r.source),
+            at("kind", &r.kind),
+            at("bot", &r.bot),
         ],
         "lane" => vec![
             at("project", &r.project),
@@ -31,6 +33,7 @@ pub(super) fn of(
             at("issue", &r.issue),
         ],
         "issue" => vec![at("project", &r.project), at("issue", &r.issue)],
+        "bot" => vec![at("bot", &r.bot), at("kind", &r.kind)],
         "model" => vec![at("model", &r.model)],
         "day" => vec![at("day", r.ended_at.get(..10).unwrap_or(""))],
         "project" => vec![at("project", &r.project)],

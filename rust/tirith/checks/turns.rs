@@ -557,3 +557,49 @@ fn a_cache_write_is_counted_once() {
     drop(app);
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn a_turn_has_the_issue_key_its_run_says_then_its_answer_then_its_task() {
+    let home = home("issue-key");
+    std::fs::write(home.join("config.toml"), "[network]\nsandbox = false\n").unwrap();
+    let app = crate::app::App::open_at(home.clone());
+    let made = crate::bots::save(
+        &app,
+        json!({"name": "Keyed", "shape": "drop", "color": "#22d3ee", "session": "chat"}),
+    )
+    .unwrap();
+    let conv = &format!("bot-{}", made["id"].as_str().unwrap());
+    let row = |role: &str| {
+        let sql = "INSERT INTO turns (conv, role, \"trigger\", started_at, ended_at, status) VALUES (?1, ?2, 'owner', '2026-11-26T10:00:00Z', '2026-11-26T10:01:00Z', 'ok')";
+        app.insert(sql, rusqlite::params![conv, role])
+    };
+    let issue = |id: i64| -> String {
+        let sql = "SELECT COALESCE(issue, '') FROM turns WHERE id = ?1";
+        app.query(sql, [id], |r| r.get(0)).remove(0)
+    };
+    super::hint(conv, "Review [ABC-1] now");
+    super::key::opened(conv);
+    assert_eq!(
+        super::key::take(conv, "[XY-2] done"),
+        "XY-2",
+        "the answer's tag first"
+    );
+    super::hint(conv, "Review [ABC-1] now");
+    super::key::opened(conv);
+    assert_eq!(
+        super::key::take(conv, "nothing tagged"),
+        "ABC-1",
+        "then its task"
+    );
+    // With no turn open the key goes on the conversation's last row; the judge's turn takes the key of the turn it judged.
+    let (bot, judge) = (row(conv), row("judge"));
+    super::key::keep(&app, conv, "SET-3").unwrap();
+    assert_eq!(issue(bot), "SET-3");
+    app.insert(
+        "UPDATE turns SET issue = 'ABC-1', event = 77 WHERE id = ?1",
+        &[&bot],
+    );
+    super::inherit(&app, (conv, "judge"), 77, None);
+    assert_eq!((issue(bot), issue(judge)), ("ABC-1".into(), "ABC-1".into()));
+    let _ = std::fs::remove_dir_all(&home);
+}

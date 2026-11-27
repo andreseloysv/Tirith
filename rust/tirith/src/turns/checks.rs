@@ -15,6 +15,7 @@ pub fn cli(pos: &[&str], flag: Flag) -> Option<Result<(), String>> {
     let (count, names) = match pos {
         ["turn", "checks", count] => (*count, ""),
         ["turn", "checks", count, names] => (*count, *names),
+        ["turn", "key", ..] => return None, // key.rs
         ["turn", ..] => {
             return Some(Err(
                 "use: neobot turn checks <passed>/<total> \"<names>\"".into()

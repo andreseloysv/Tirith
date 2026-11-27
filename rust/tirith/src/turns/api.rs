@@ -7,7 +7,7 @@ use rusqlite::types::ValueRef;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-const COLS: [&str; 33] = [
+const COLS: [&str; 34] = [
     "id",
     "conv",
     "role",
@@ -41,6 +41,7 @@ const COLS: [&str; 33] = [
     "cited",
     "score",
     "why",
+    "issue",
 ];
 
 /// One cell as JSON: a number, a text (the JSON columns parsed), or null.
@@ -76,7 +77,9 @@ pub fn turns(app: &Shared, conv: &str, limit: u32) -> Vec<Value> {
 }
 
 pub fn routes() -> Router<Shared> {
-    let signals = super::react::routes().merge(super::checks::routes());
+    let signals = super::react::routes()
+        .merge(super::checks::routes())
+        .merge(super::key::routes());
     signals.route(
         "/api/turns",
         get(

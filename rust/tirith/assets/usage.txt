@@ -7,7 +7,7 @@ neobot serve                                   run the daemon (page on http://12
 neobot open [link]                             (the owner) open the page signed in as you; link: print a link that does it once, within 10 minutes
 neobot status [--project P]                    lanes and the merge queue (of one project)
 neobot plan show <project>                     the plan with what works on each item, and what each done item cost
-neobot costs [--project P] [--since DATE] [--by item|lane|run|issue|model|day|project] [--format csv|json]   what the lanes spent: tokens and dollars, per finished item too (team level, never a person)
+neobot costs [--project P] [--since DATE] [--by item|lane|run|issue|model|day|project|bot] [--format csv|json]   what the lanes and the bots (their turns and their judges') spent: tokens and dollars, per finished item too (team level, never a person)
 neobot plan add <project> <step> "<text>"      add an item to a step
 neobot plan step <project> <number> "<title>" ["<intro paragraph>"]   create the plan's next step, at its end
 neobot plan step delete <project> <number>     remove that step with all its items (refused while a lane of it is not merged)
@@ -30,6 +30,7 @@ neobot say [--project P] "<text>"              write to the project's manager (w
 neobot chat clear [--project P]                clear a conversation (this session's, or P's): its bot starts fresh
 neobot chat keep [<time>] [--project P]        how long a chat lives, in your words (30m, 1h, 24 h, 2 días, una semana; "siempre" = no limit); without a time it says the current one
 neobot turn checks <passed>/<total> "<names>"  (a bot, in its session) keep what its own validation checked on its turn now
+neobot turn key <ABC-123>                      (a bot, in its session) the issue this turn works on: its cost is counted per issue (neobot costs --by issue)
 neobot lab start <bot> <branch> --routine <id> --mode live|replay|shadow --hypothesis "<text>"
                                               (the Coach) start an experiment: the branch (one commit on the bot's main) against its main, decided by the [lab] rule it started with; live on the routine's real runs, replay on its last captured runs done again offline, shadow beside each real run with every outward action refused
 neobot lab list [<bot>]                       the experiments (a bot's, or every bot's): change, hypothesis, mode, comparisons, numbers and decision

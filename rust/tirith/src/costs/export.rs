@@ -4,7 +4,7 @@ use super::rows::runs;
 use crate::app::Shared;
 use serde_json::{json, Value};
 
-const NUMBERS: [&str; 7] = [
+const NUMBERS: [&str; 10] = [
     "runs",
     "priced_runs",
     "tokens_in",
@@ -12,6 +12,9 @@ const NUMBERS: [&str; 7] = [
     "tokens_cache_read",
     "tokens_cache_write",
     "cost_usd",
+    "lane_cost_usd",
+    "bot_cost_usd",
+    "judge_cost_usd",
 ];
 
 fn object(row: &Row) -> Value {
@@ -39,7 +42,7 @@ fn finished(rows: &[Row]) -> Value {
 
 /// `{project, since, by, rows, total, finished}`: the rows grouped `by`, all the runs added up, and the cost per finished item.
 pub fn report(app: &Shared, project: &str, since: &str, by: &str) -> Value {
-    let all = runs(app, project, since);
+    let all = super::turns::with_turns(app, runs(app, project, since), project, since);
     let done = done_items(app, &all);
     let rows = group(&all, by, &done);
     let mut total = super::sum::Sum::default();

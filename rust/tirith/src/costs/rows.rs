@@ -36,6 +36,44 @@ pub fn runs(app: &Shared, project: &str, since: &str) -> Vec<Run> {
             cache_write: number(r, 13),
             cost: r.get::<_, Option<f64>>(14).ok().flatten(),
             source: text(r, 15),
+            kind: "lane".into(),
+            bot: String::new(),
         })
     })
+}
+
+/// The bots' turns and their judges' turns that ended since `since`, as runs: a turn of a bot's own role is `bot`, a judge's turn is `judge` and has the issue key of the turn it judged. Whatever they spent is in `cost_usd` (a price from config.toml where its agent gave none). No person is in them.
+pub fn turn_runs(app: &Shared, since: &str) -> Vec<Run> {
+    let cols = "conv, role, COALESCE(issue, ''), agent, model, started_at, ended_at, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, cost_usd";
+    let sql = format!("SELECT {cols} FROM turns WHERE ended_at >= ?1 AND (role = conv AND conv LIKE 'bot-%' OR role != conv) ORDER BY id");
+    let cfg = app.cfg();
+    let all = app.query(&sql, [since], |r| {
+        let (conv, role) = (text(r, 0), text(r, 1));
+        let kind = match (role == conv, cfg.factory.is_judge(&role)) {
+            (true, _) => "bot",
+            (_, true) => "judge",
+            _ => "",
+        };
+        Ok(Run {
+            lane: String::new(),
+            project: String::new(),
+            step: String::new(),
+            item: String::new(),
+            issue: text(r, 2),
+            attempt: 1,
+            agent: text(r, 3),
+            model: text(r, 4),
+            started_at: text(r, 5),
+            ended_at: text(r, 6),
+            input: number(r, 7),
+            output: number(r, 8),
+            cache_read: number(r, 9),
+            cache_write: number(r, 10),
+            cost: r.get::<_, Option<f64>>(11).ok().flatten(),
+            source: "turn".into(),
+            kind: kind.into(),
+            bot: conv,
+        })
+    });
+    all.into_iter().filter(|r| !r.kind.is_empty()).collect()
 }

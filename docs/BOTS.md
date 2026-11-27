@@ -66,6 +66,7 @@ table `turns` (`runs` is the pipelines'):
   read from its session folder's `session.jsonl` when the stream lacks them. Codex's `turn.completed` gives `usage`.
   When an agent gives no cost, `[prices."<model id>"]` in config.toml (dollars per million tokens: `input`,
   `output`, `cached`) gives it; without a price the cost stays empty, never guessed.
+- **Issue:** the issue key its cost is counted under (`neobot costs --by issue`, `GET /api/costs`, which hold the bots' and judges' runs next to the lanes): the one the run sets with `neobot turn key ABC-123`, else a leading `[ABC-123]` of its final answer, else the one its task or event names (leading, or in brackets). A judge's turn takes the key of the turn it judged. Counted by team and bot, never by person.
 - **Versions:** the git blob hash (`git hash-object`) of `memory.md`, of the shared `memory.md` and of each
   `SKILL.md` it read, as they were when it read them: the exact versions every result came from.
 - **Quality:** `reaction` (+1 or −1: the owner's 👍/👎 on its answer, on the page or as a message that is only 👍

@@ -37,7 +37,9 @@ pub(super) fn judge_evals(app: &Shared, project: &str, on: &str, shown: &str, ev
             let mut said = None;
             for _ in 0..2 {
                 crate::turns::trigger(&format!("turn:{judge}"), &format!("event:{on}"), "");
-                let Ok(text) = run_turn(&app, &judge, &project, &asked).await else {
+                let ran = run_turn(&app, &judge, &project, &asked).await;
+                crate::turns::inherit(&app, (&project, &judge), event, before); // its turn has the issue key of the one it read
+                let Ok(text) = ran else {
                     break;
                 };
                 let decided = super::verdict::given(&text, &rules);

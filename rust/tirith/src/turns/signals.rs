@@ -18,6 +18,7 @@ pub fn add_columns(db: &Connection) {
         "experiment INTEGER",
         "variant TEXT",
         "why TEXT",
+        "issue TEXT",
     ]
     .into_iter()
     .for_each(|col| drop(db.execute(&format!("ALTER TABLE turns ADD COLUMN {col}"), [])));
@@ -39,10 +40,17 @@ pub fn cited(answer: &str) -> Vec<String> {
 pub fn keep(app: &Shared, id: i64, t: &Turn, answer: &str) {
     let cited = json!(cited(answer)).to_string();
     let c = t.checks.as_ref();
+    let issue = (t.role == t.conv).then(|| super::key::take(&t.conv, answer)); // a judge's turn has none: its judge hands it the key of the turn it read
     app.insert(
-        "UPDATE turns SET cited = ?1, checks_passed = ?2, checks_total = ?3, checks = ?4 WHERE id = ?5",
-        params![cited, c.map(|c| c.0), c.map(|c| c.1), c.map(|c| &c.2), id],
+        "UPDATE turns SET cited = ?1, checks_passed = ?2, checks_total = ?3, checks = ?4, issue = ?5 WHERE id = ?6",
+        params![cited, c.map(|c| c.0), c.map(|c| c.1), c.map(|c| &c.2), issue.unwrap_or_default(), id],
     );
+}
+
+/// The judge's last turn in `conv` takes the issue key of the turn it judged: the one that has `event` (a turn.done), else `before` (what an owner's message was about).
+pub fn inherit(app: &Shared, (conv, judge): (&str, &str), event: i64, before: Option<i64>) {
+    let sql = "UPDATE turns SET issue = COALESCE((SELECT issue FROM turns WHERE (event = ?3 OR id = ?4) AND COALESCE(issue, '') != '' ORDER BY event = ?3 DESC LIMIT 1), '') WHERE id = (SELECT MAX(id) FROM turns WHERE conv = ?1 AND role = ?2) AND COALESCE(issue, '') = ''";
+    app.insert(sql, params![conv, judge, event, before]);
 }
 
 /// The last turn of conversation `conv` already kept: its own role's (the judge's turns on it are kept there too).

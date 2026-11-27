@@ -375,19 +375,30 @@ A plan item's cost is the sum of its lanes' runs; the cost per finished item is 
 ticked. It is shown in `neobot status` (per lane), `neobot plan show` (per item), `GET /api/state` (`spent` on each
 lane), `GET /api/plan/<project>` (`spent` on each item) and on the page (a lane's card and its details, a plan item).
 
-`neobot costs [--project P] [--since DATE] [--by item|lane|run|issue|model|day|project] [--format csv|json]` and
+`neobot costs [--project P] [--since DATE] [--by item|lane|run|issue|model|day|project|bot] [--format csv|json]` and
 `GET /api/costs?project=&since=&by=&format=` give one flat table for a BI tool: the grouping columns, then `runs`,
-`priced_runs`, `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write`, `cost_usd`. JSON adds `total`
+`priced_runs`, `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write`, `cost_usd`, and that cost split
+as `lane_cost_usd`, `bot_cost_usd` and `judge_cost_usd`. JSON adds `total`
 and `finished` (`finished_items`, `cost_per_finished_item_usd`). `--by issue` is what a later step joins with Jira
 story points on the key. The table is by team (project) and by bot (lane, agent, model): no person is recorded or
 exported. Anything that names a person is a decision for the owner, not a column.
+
+The bots' runs are in it, next to the lanes (`turns.rs`, `rows::turn_runs`), so the cost of an issue is complete: every
+row of `turns` of a bot's own role (kind `bot`) and every turn of a judge role (kind `judge`, whatever conversation it
+judged) that ended since `since`, with the issue key of that row (below) and its cost (`cost_usd`, from the price table
+when its agent gave none). A turn's project is the project of the lanes that worked on its issue (empty when none did),
+so `--by issue` is one row per issue, `project,issue` columns as before; `--project P` keeps the turns of its issues.
+`--by item` and `--by lane` list lanes alone (a turn has no plan item; `total` still has every run), `--by run` adds the
+columns `kind` (`lane`, `bot`, `judge`) and `bot` (the conversation key, empty for a lane), and `--by bot` is the cost
+per bot and kind. Turns of the managers, the CEO and the Coach are not in it.
 
 Files:
 
 - `api.rs`: `GET /api/costs`.
 - `cli.rs`: `neobot costs`.
 - `export.rs`: The report and its CSV.
-- `group.rs`: The runs added up by item, lane, run, issue key, model, day or project.
+- `group.rs`: The runs added up by item, lane, run, issue key, model, day, project or bot.
+- `turns.rs`: The bots' and judges' turns next to the lanes' runs.
 - `issue.rs`: The issue key an item's text starts with.
 - `keys.rs`: The columns of each way to group.
 - `read.rs`: What a run used, from the lane's log and Copilot's usage file.
@@ -1987,6 +1998,13 @@ Each row also carries its quality signals (`react.rs`, `signals.rs`, `checks.rs`
   posts to `POST /api/turns/checks`; the open turn of that conversation keeps them until its row is written, else its
   last kept turn gets them. `factory/prompts/bot.md` asks for it at the end of a routine whose skill has «Cómo validar»,
   with what it really checked.
+- `issue` (also in `GET /api/turns`): the issue key the turn's cost is counted under (`neobot costs --by issue`). In this order: the key the run
+  set with `neobot turn key ABC-123` (the bot calls it in its session, as `turn checks`: on the open turn, else on its
+  last kept turn; `POST /api/turns/key`, a bot only on its own conversation), a `[ABC-123]` (or `ABC-123:`) its final
+  answer starts with, the key its task or event names when it started (`costs::found`: the one the text starts with, else
+  the first in brackets, never a bare one inside a sentence, which would take `UTF-8` for a key). A judge's turn takes
+  the `issue` of the turn it judged (the one whose `event` it read; for an owner's message, the turn before it). A
+  turn with none has an empty one.
 - `cited` (JSON): the numbered notes, `[m<N>]` of its own memory and `[s<N>]` of the shared one, that its answer
   names, each once in order, read when its row is written.
 
@@ -2015,6 +2033,7 @@ Files:
 - `capture_keep.rs`: The captures on disk: written at a bot's turn's end, the last 10 runs of each routine kept, read back for a replay.
 - `capture_told.rs`: What was handed to a conversation's agent (never the memory), waiting for the turn it starts.
 - `checks.rs`: The bot's own validation, `neobot turn checks`, kept on the open turn of its conversation or the last one.
+- `key.rs`: The issue key of a turn: `neobot turn key`, the answer's tag, the task's key; a judge's turn takes its judged turn's.
 - `could_not.rs`: The judge's word that a routine's run could not do its task: that run becomes a failure.
 - `codex_log.rs`: Codex's own log of a thread, for the model a turn ran on.
 - `evidence.rs`: What a run's judge is shown of its calls: those that failed or printed an error and the last two, and what each gave, as data.

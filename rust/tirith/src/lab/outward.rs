@@ -10,7 +10,7 @@ static TIRITH: LazyLock<Regex> = LazyLock::new(|| {
 });
 /// The `tirith` commands that only read or report on their own run: (command, its word, or any when empty).
 const READS: [(&str, &str); 19] = [
-    ("turn", "checks"),
+    ("turn", ""), // checks, key
     ("safari", "read"),
     ("chrome", "read"),
     ("edge", "read"),

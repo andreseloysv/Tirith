@@ -1,4 +1,4 @@
-//! `GET /api/costs?project=<id>&since=<date>&by=<item|lane|run|issue|model|day|project>&format=<json|csv>`.
+//! `GET /api/costs?project=<id>&since=<date>&by=<item|lane|run|issue|model|day|project|bot>&format=<json|csv>`.
 use super::{export, group::BY};
 use crate::app::Shared;
 use axum::extract::{Query, State};

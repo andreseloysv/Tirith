@@ -1,4 +1,4 @@
-//! `neobot costs [--project P] [--since DATE] [--by item|lane|run|issue|model|day|project] [--format csv|json]`.
+//! `neobot costs [--project P] [--since DATE] [--by item|lane|run|issue|model|day|project|bot] [--format csv|json]`.
 use crate::client::{call, call_json, Flag};
 
 /// The command, or none for another module's.

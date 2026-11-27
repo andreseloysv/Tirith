@@ -65,6 +65,7 @@ pub fn handed(app: &Shared, conv: &str, by: By) {
 pub(super) fn open(app: &Shared, conv: &str, by: By) {
     let turn = Turn::new(app, conv, &app.chat_role(conv), by);
     super::interrupted::mark(app, &turn);
+    super::key::opened(conv);
     with(conv, |c| c.open = Some(turn));
 }
 /// True when no turn of `conv` is open or waiting to start.

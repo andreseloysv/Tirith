@@ -157,3 +157,80 @@ fn a_copilot_runs_cost_counts_its_fresh_input_once() {
         "{row}"
     );
 }
+
+#[test]
+fn a_message_names_its_key_leading_or_in_brackets() {
+    for (text, key) in [
+        ("ABC-123: do it", "ABC-123"),
+        ("Take the story [XY-7] from Jira", "XY-7"),
+        ("A pull request [skip ci] fixes UTF-8", ""),
+        ("[ab-1] then [CD-2]", "CD-2"),
+        ("", ""),
+    ] {
+        assert_eq!(super::issue::found(text), key, "{text}");
+    }
+}
+
+#[test]
+fn bot_and_judge_turns_count_next_to_the_lanes_by_issue() {
+    let app = app("turns");
+    let ws = app.home.join("lanes/p/slot-1");
+    fresh(&app, "l1");
+    let log = format!(
+        "{}now\n{}\n",
+        crate::lanes::RUN_START,
+        json!({"payload_type": "run.usage", "payload": {"models": [{"model": "model-a", "input_tokens": 1_000_000, "output_tokens": 0, "cached_tokens": 0}]}})
+    );
+    std::fs::write(app.home.join("logs/lanes/l1.log"), log).unwrap();
+    let mut l = lane("l1", "ABC-9: first item", &ws.display().to_string());
+    l.agent = "muse".into();
+    run_ended(&app, &l);
+    let turn = |role: &str, issue: &str, cost: f64| {
+        let sql = "INSERT INTO turns (conv, role, \"trigger\", started_at, ended_at, status, issue, cost_usd, tokens_in) VALUES ('bot-x', ?1, 'owner', '2026-11-26T10:00:00Z', '2026-11-26T10:01:00Z', 'ok', ?2, ?3, 10)";
+        app.insert(sql, rusqlite::params![role, issue, cost]);
+    };
+    turn("bot-x", "ABC-9", 0.25);
+    turn("judge", "ABC-9", 0.05);
+    turn("judge", "", 0.5); // a judge's turn on no issue: counted, in no issue
+    turn("manager", "ABC-9", 9.0); // not a bot's, not a judge's: never counted
+    let by_issue = report(&app, "", "", "issue");
+    let row = &by_issue["rows"][0];
+    assert_eq!(
+        (row["project"].as_str(), row["issue"].as_str()),
+        (Some("p"), Some("ABC-9"))
+    );
+    let near = |key: &str, want: f64| {
+        assert!(
+            (row[key].as_f64().unwrap() - want).abs() < 1e-9,
+            "{key}: {row}"
+        )
+    };
+    near("lane_cost_usd", 0.1);
+    near("bot_cost_usd", 0.25);
+    near("judge_cost_usd", 0.05);
+    near("cost_usd", 0.4);
+    let total = by_issue["total"]["cost_usd"].as_f64().unwrap();
+    assert!(
+        (total - 0.9).abs() < 1e-9,
+        "the total has every lane, bot and judge run: {total}"
+    );
+    let by_item = report(&app, "", "", "item");
+    assert_eq!(
+        by_item["rows"].as_array().unwrap().len(),
+        1,
+        "turns have no plan item"
+    );
+    let by_bot = report(&app, "", "", "bot");
+    assert_eq!(
+        by_bot["rows"].as_array().unwrap().len(),
+        3,
+        "lanes (no bot), the bot, its judge"
+    );
+    assert_eq!(
+        report(&app, "other", "", "issue")["rows"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+}

@@ -39,6 +39,7 @@ pub fn deliver(app: &Shared, project: &str, text: &str, phones: bool) {
 /// `deliver`, the turn it starts begun by `by` (the owner, a room), not by what waited.
 pub(super) fn hand(app: &Shared, project: &str, text: &str, phones: bool, by: Option<By>) {
     let job = text.is_empty().then(|| reserve(project)).flatten();
+    crate::turns::hint(project, job.as_ref().map_or(text, |j| &j.text)); // the issue key its task or event names
     job.iter().for_each(|j| start_run(app, project, j)); // its seat first: an experiment's B reads the branch's
     let says = !text.is_empty() || job.is_some() || talk(project, |t| t.notes_due);
     let memory = bots::handed(app, project, job.is_some(), says); // a bot's memory, read at every turn

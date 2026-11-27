@@ -3,7 +3,9 @@ use super::sum::{Run, Sum};
 use crate::app::Shared;
 use std::collections::{BTreeMap, HashMap};
 
-pub const BY: [&str; 7] = ["item", "lane", "run", "issue", "model", "day", "project"];
+pub const BY: [&str; 8] = [
+    "item", "lane", "run", "issue", "model", "day", "project", "bot",
+];
 
 /// One row: its grouping columns and what its runs add up to.
 pub struct Row {
@@ -38,7 +40,8 @@ pub fn group(runs: &[Run], by: &str, done: &HashMap<(String, String, String), bo
     let mut rows: BTreeMap<Vec<String>, Row> = BTreeMap::new();
     for (n, r) in runs.iter().enumerate() {
         let k = super::keys::of(r, by, done);
-        if by == "issue" && r.issue.is_empty() {
+        let plan = by == "item" || by == "lane"; // a plan item or a lane: only lanes have one
+        if (by == "issue" && r.issue.is_empty()) || (plan && r.kind != "lane") {
             continue;
         }
         let id = if by == "run" {
