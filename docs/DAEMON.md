@@ -877,7 +877,7 @@ Files:
 - `answer.rs`: The owner's answer to an open card or to a waiting lane.
 - `ask.rs`: `neobot ask-owner`: a new card for the owner.
 - `blocks.rs`: An assistant message of a stream-json session: its text and its tool calls, in the chat and on the phones.
-- `held.rs`: What a routine's run says waits for its end: on the phones only when the run was good and has news. A failed one is the one line of `expected/`.
+- `held.rs`: What a routine's run says waits for its end: on the phones only its last text, its final report, when the run was good and has news; its working notes stay in the bot's chat. A failed one is the one line of `expected/`.
 - `relayed.rs`: An agent's answer of a card; an approval or a payment takes the owner's own words written after it was asked, and is kept in those words; a card asking for a connector call is never the agent's to answer.
 - `owner_words.rs`: What the owner last wrote in each conversation (kv `owner_said:<conversation>`), kept as it comes in, never read back from the chat.
 - `cards.rs`: A card's end: its final state (an answered or closed approval ends the wait of the turns that waited for it, and settles a gateway call's permit), the line that says so, and closing one that is no longer needed.

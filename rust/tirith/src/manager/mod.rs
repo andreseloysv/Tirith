@@ -69,6 +69,9 @@ use {
     talk::talk, typing::typing_rooms,
 };
 #[cfg(test)]
+#[path = "../../checks/held.rs"]
+mod held_tests;
+#[cfg(test)]
 #[path = "../../checks/runs.rs"]
 mod runs_tests;
 #[cfg(test)]
